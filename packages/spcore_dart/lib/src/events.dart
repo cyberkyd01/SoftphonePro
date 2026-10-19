@@ -75,6 +75,8 @@ sealed class EngineEvent {
         return CallRedirectedEvent(j);
       case 'call.recording':
         return CallRecordingEvent(j);
+      case 'call.playDone':
+        return CallPlayDoneEvent(j);
       case 'call.stats':
         return CallStatsEvent(j);
       case 'buddy.state':
@@ -283,6 +285,17 @@ final class CallRecordingEvent extends CallEvent {
       file = asString(raw['file']);
   final bool recording;
   final String file;
+}
+
+/// A `call.playFile` playback ended (contract v1.1).
+final class CallPlayDoneEvent extends CallEvent {
+  CallPlayDoneEvent(super.raw)
+    : playId = asInt(raw['playId']),
+      file = asString(raw['file']),
+      reason = PlayDoneReason.parse(raw['reason']);
+  final int playId;
+  final String file;
+  final PlayDoneReason reason;
 }
 
 final class CallStatsEvent extends CallEvent {

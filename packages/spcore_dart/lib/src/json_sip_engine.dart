@@ -152,7 +152,8 @@ abstract class JsonSipEngine implements SipEngine {
   Future<void> hangupAll() => _v('call.hangupAll');
 
   @override
-  Future<void> hold(int cid) => _v('call.hold', {'cid': cid});
+  Future<void> hold(int cid, {HoldMusic? music}) =>
+      _v('call.hold', {'cid': cid, if (music != null) 'music': music.toJson()});
 
   @override
   Future<void> unhold(int cid) => _v('call.unhold', {'cid': cid});
@@ -231,11 +232,13 @@ abstract class JsonSipEngine implements SipEngine {
     int cid,
     String file, {
     RecordMix mix = RecordMix.both,
+    RecordFormat format = RecordFormat.wav,
   }) async => asString(
     (await _r('call.recordStart', {
       'cid': cid,
       'file': file,
       'mix': mix.wire,
+      if (format != RecordFormat.wav) 'format': format.wire,
     }))['file'],
   );
 
@@ -276,11 +279,27 @@ abstract class JsonSipEngine implements SipEngine {
   ).map((e) => CallInfo.fromJson(asMap(e))).toList();
 
   @override
-  Future<void> playFile(int cid, String file, {bool loop = false}) =>
-      _v('call.playFile', {'cid': cid, 'file': file, 'loop': loop});
+  Future<int> playFile(
+    int cid,
+    String file, {
+    bool loop = false,
+    double volume = 1.0,
+    bool localMonitor = false,
+    bool muteMic = false,
+  }) async => asInt(
+    (await _r('call.playFile', {
+      'cid': cid,
+      'file': file,
+      'loop': loop,
+      'volume': volume,
+      'localMonitor': localMonitor,
+      'muteMic': muteMic,
+    }))['playId'],
+  );
 
   @override
-  Future<void> stopFile(int cid) => _v('call.stopFile', {'cid': cid});
+  Future<void> stopFile(int cid, {int? playId}) =>
+      _v('call.stopFile', {'cid': cid, if (playId != null) 'playId': playId});
 
   // ---- media
   @override
@@ -371,6 +390,33 @@ abstract class JsonSipEngine implements SipEngine {
 
   @override
   Future<void> ringStop() => _v('media.ringStop');
+
+  @override
+  Future<VoiceIsolationResult> setVoiceIsolation({
+    VoiceIsolationSide? mic,
+    VoiceIsolationSide? incoming,
+  }) async => VoiceIsolationResult.fromJson(
+    await _r('media.setVoiceIsolation', {
+      if (mic != null) 'mic': mic.toJson(),
+      if (incoming != null) 'incoming': incoming.toJson(),
+    }),
+  );
+
+  @override
+  Future<VoiceIsolationStatus> voiceIsolationStatus() async =>
+      VoiceIsolationStatus.fromJson(await _r('media.voiceIsolationStatus'));
+
+  @override
+  Future<MediaFileInfo> fileInfo(String file) async =>
+      MediaFileInfo.fromJson(await _r('media.fileInfo', {'file': file}));
+
+  @override
+  Future<String> recordMicStart(String file) async =>
+      asString((await _r('media.recordMicStart', {'file': file}))['file']);
+
+  @override
+  Future<RecordingResult> recordMicStop() async =>
+      RecordingResult.fromJson(await _r('media.recordMicStop'));
 
   @override
   Future<void> loopback(bool enabled) =>

@@ -114,7 +114,10 @@ abstract class SipEngine {
   Future<void> processRedirect(int cid, RedirectAction action);
   Future<void> hangup(int cid, {int? code});
   Future<void> hangupAll();
-  Future<void> hold(int cid);
+
+  /// Puts the call on hold. With [music], a looping file is played to the
+  /// held party (client-side music on hold, contract v1.1).
+  Future<void> hold(int cid, {HoldMusic? music});
   Future<void> unhold(int cid);
   Future<void> mute(int cid, bool mute);
   Future<void> setCallLevels(int cid, {double rx = 1.0, double tx = 1.0});
@@ -146,6 +149,7 @@ abstract class SipEngine {
     int cid,
     String file, {
     RecordMix mix = RecordMix.both,
+    RecordFormat format = RecordFormat.wav,
   });
   Future<RecordingResult> recordStop(int cid);
   Future<void> updateCall(int cid, {bool useUpdate = false});
@@ -159,8 +163,20 @@ abstract class SipEngine {
   Future<CallInfo> callInfo(int cid);
   Future<CallStats> callStats(int cid);
   Future<List<CallInfo>> listCalls();
-  Future<void> playFile(int cid, String file, {bool loop = false});
-  Future<void> stopFile(int cid);
+
+  /// Plays a WAV/MP3 file into the call; returns the playId reported by
+  /// `call.playDone`.
+  Future<int> playFile(
+    int cid,
+    String file, {
+    bool loop = false,
+    double volume = 1.0,
+    bool localMonitor = false,
+    bool muteMic = false,
+  });
+
+  /// Stops one playback ([playId]) or, when null, all playback on the call.
+  Future<void> stopFile(int cid, {int? playId});
 
   // ---- media.*
   Future<AudioDevices> audioDevices();
@@ -193,6 +209,16 @@ abstract class SipEngine {
   });
   Future<void> ringStop();
   Future<void> loopback(bool enabled);
+  Future<VoiceIsolationResult> setVoiceIsolation({
+    VoiceIsolationSide? mic,
+    VoiceIsolationSide? incoming,
+  });
+  Future<VoiceIsolationStatus> voiceIsolationStatus();
+  Future<MediaFileInfo> fileInfo(String file);
+
+  /// Records only the microphone to WAV (works without a call).
+  Future<String> recordMicStart(String file);
+  Future<RecordingResult> recordMicStop();
 
   // ---- buddy.*
   Future<int> addBuddy({

@@ -73,6 +73,21 @@ class _Acc {
   bool isLan = false;
   bool isDirect = false;
 
+  /// Transport `auto` resolves to this (the fake's "DNS" result).
+  String autoTransport = 'udp';
+
+  String get _transport {
+    final t = asString(cfg['transport'], 'udp');
+    return t == 'auto' ? autoTransport : t;
+  }
+
+  String? get resolvedServer {
+    if (asString(cfg['transport'], 'udp') != 'auto') return null;
+    final port = autoTransport == 'tls' ? 5061 : 5060;
+    final host = asStringN(cfg['registrar']) ?? domain;
+    return '$host:$port';
+  }
+
   String get uid => asString(cfg['uid']);
   String get username => asString(cfg['username']);
   String get domain => asString(cfg['domain']);
@@ -99,7 +114,8 @@ class _Acc {
     'contact': regState == RegState.registered
         ? '<sip:$username@127.0.0.1:5060;ob>'
         : '',
-    'transport': asString(cfg['transport'], 'udp'),
+    'transport': _transport,
+    'resolvedServer': resolvedServer,
     'presence': presence.wire,
     'isLan': isLan,
     'isDirect': isDirect,
@@ -137,6 +153,12 @@ class _Call {
   DateTime? activeSince;
   int activeMsAcc = 0;
   String? playingFile;
+  final Map<int, _Play> plays = {};
+  HoldMusic? holdMusic;
+  AssertedIdentity? assertedIdentity;
+  List<DiversionEntry> diversion = const [];
+  String? referredBy;
+  RecordFormat recordFormat = RecordFormat.wav;
   bool pendingRedirect = false;
   bool ended = false;
   final String callId = 'call-id';
@@ -144,6 +166,14 @@ class _Call {
   final String remoteTag = 'rtag';
   int rxLevel = 120;
   int txLevel = 90;
+}
+
+class _Play {
+  _Play(this.id, this.file, this.loop, this.muteMic);
+  final int id;
+  final String file;
+  final bool loop;
+  final bool muteMic;
 }
 
 class _Task {
@@ -223,6 +253,38 @@ class FakeSipEngine extends JsonSipEngine {
   String userAgent = 'SoftphonePro/1.0';
   List<TlsPin> tlsPins = const [];
   List<String> nameservers = const [];
+
+  /// Transport that `transport: auto` accounts resolve to (set before
+  /// `addAccount`; applies to accounts added afterwards).
+  AccTransport autoTransportResult = AccTransport.udp;
+
+  /// Voice-isolation state (`media.setVoiceIsolation`).
+  VoiceIsolationSide voiceIsolationMic = const VoiceIsolationSide();
+  VoiceIsolationSide voiceIsolationIncoming = const VoiceIsolationSide();
+
+  /// Speech probability reported by `media.voiceIsolationStatus` while the
+  /// mic side is enabled.
+  double fakeVad = 0.5;
+
+  /// Overrides for `media.fileInfo`, by exact path. Other `.wav`/`.mp3`
+  /// paths get plausible defaults.
+  final Map<String, MediaFileInfo> fileInfos = {};
+
+  /// Music currently playing on a held call (cid -> music), for assertions.
+  Map<int, HoldMusic> get holdMusicPlaying => {
+    for (final c in _calls.values)
+      if (c.holdMusic != null) c.cid: c.holdMusic!,
+  };
+
+  int _nextPlayId = 1;
+  String? _micRecFile;
+  DateTime? _micRecStarted;
+
+  /// Playback ids active per cid (for assertions).
+  Map<int, List<int>> get activePlays => {
+    for (final c in _calls.values)
+      if (c.plays.isNotEmpty) c.cid: c.plays.keys.toList(),
+  };
 
   // ------------------------------------------------------------ SipEngine
 
@@ -403,6 +465,9 @@ class FakeSipEngine extends JsonSipEngine {
       'totalMs': now.difference(c.createdAt).inMilliseconds,
       'headers': c.headers,
       if (c.transferFrom != null) 'transferFrom': c.transferFrom,
+      'assertedIdentity': c.assertedIdentity?.toJson(),
+      'diversion': c.diversion.map((d) => d.toJson()).toList(),
+      'referredBy': c.referredBy,
     };
   }
 
@@ -417,6 +482,47 @@ class FakeSipEngine extends JsonSipEngine {
     if (c.localHold) return MediaStatus.localHold;
     if (c.remoteHold) return MediaStatus.remoteHold;
     return MediaStatus.active;
+  }
+
+  void _endPlay(_Call c, int playId, PlayDoneReason reason) {
+    final pl = c.plays.remove(playId);
+    if (pl == null) return;
+    if (c.plays.isEmpty) c.playingFile = null;
+    _emit('call.playDone', {
+      'cid': c.cid,
+      'playId': pl.id,
+      'file': pl.file,
+      'reason': reason.wire,
+    });
+  }
+
+  static int _recBytes(RecordFormat f, int ms) => switch (f) {
+    RecordFormat.wav => 44 + ms * 32,
+    RecordFormat.wavStereo => 44 + ms * 64,
+    RecordFormat.opus => ms * 3,
+  };
+
+  MediaFileInfo _fileInfo(String file) {
+    final o = fileInfos[file];
+    if (o != null) return o;
+    final f = file.toLowerCase();
+    if (f.endsWith('.wav')) {
+      return const MediaFileInfo(
+        format: 'wav',
+        durationMs: 3000,
+        sampleRate: 16000,
+        channels: 1,
+      );
+    }
+    if (f.endsWith('.mp3')) {
+      return const MediaFileInfo(
+        format: 'mp3',
+        durationMs: 30000,
+        sampleRate: 44100,
+        channels: 2,
+      );
+    }
+    throw _invalid('unreadable or unsupported media file "$file"');
   }
 
   void _trackActive(_Call c) {
@@ -456,6 +562,10 @@ class FakeSipEngine extends JsonSipEngine {
     if (code > 0) c.lastCode = code;
     if (s == CallState.confirmed) c.connectedAt = _now();
     if (s == CallState.disconnected) {
+      c.holdMusic = null;
+      for (final id in c.plays.keys.toList()) {
+        _endPlay(c, id, PlayDoneReason.hangup);
+      }
       if (c.recording) {
         c.recording = false;
         _emit('call.recording', {
@@ -672,8 +782,16 @@ class FakeSipEngine extends JsonSipEngine {
         return {};
       case 'call.hold':
         final c = _confirmed(p);
+        HoldMusic? music;
+        if (p['music'] != null) {
+          if (p['music'] is! Map) throw _invalid('"music" must be object');
+          music = HoldMusic.fromJson(asMap(p['music']));
+          if (music.file.isEmpty) throw _invalid('music.file required');
+          _fileInfo(music.file);
+        }
         if (!c.localHold) {
           c.localHold = true;
+          c.holdMusic = music;
           _emitMedia(c);
         }
         return {};
@@ -681,6 +799,7 @@ class FakeSipEngine extends JsonSipEngine {
         final c = _confirmed(p);
         if (c.localHold) {
           c.localHold = false;
+          c.holdMusic = null;
           _emitMedia(c);
         }
         return {};
@@ -742,6 +861,7 @@ class FakeSipEngine extends JsonSipEngine {
         for (final c in cs) {
           if (c.localHold) {
             c.localHold = false;
+            c.holdMusic = null;
             _emitMedia(c);
           }
           c.detached = false;
@@ -766,9 +886,14 @@ class FakeSipEngine extends JsonSipEngine {
         if (!RecordMix.values.any((m) => m.wire == mix)) {
           throw _invalid('bad mix');
         }
+        final fmt = asString(p['format'], 'wav');
+        if (!RecordFormat.values.any((m) => m.wire == fmt)) {
+          throw _invalid('bad format');
+        }
         if (c.recording) throw _err(ErrorCode.already, 'already recording');
         c.recording = true;
         c.recordFile = f;
+        c.recordFormat = RecordFormat.parse(fmt);
         c.recordStarted = _now();
         _emit('call.recording', {'cid': c.cid, 'recording': true, 'file': f});
         return {'file': f};
@@ -782,7 +907,12 @@ class FakeSipEngine extends JsonSipEngine {
           'recording': false,
           'file': c.recordFile,
         });
-        return {'file': c.recordFile, 'durationMs': dur};
+        return {
+          'file': c.recordFile,
+          'durationMs': dur,
+          'format': c.recordFormat.wire,
+          'bytes': _recBytes(c.recordFormat, dur),
+        };
       case 'call.update':
         final c = _confirmed(p);
         _emitMedia(c);
@@ -802,10 +932,31 @@ class FakeSipEngine extends JsonSipEngine {
         return {'calls': _calls.values.map(_callJson).toList()};
       case 'call.playFile':
         final c = _confirmed(p);
-        c.playingFile = _str(p, 'file');
-        return {};
+        final file = _str(p, 'file');
+        final info = _fileInfo(file);
+        final loop = asBool(p['loop'], false);
+        final vol = asDouble(p['volume'], 1.0);
+        if (vol < 0) throw _invalid('bad volume');
+        final id = _nextPlayId++;
+        c.plays[id] = _Play(id, file, loop, asBool(p['muteMic'], false));
+        c.playingFile = file;
+        if (!loop) {
+          _sched(Duration(milliseconds: info.durationMs), () {
+            if (!c.ended) _endPlay(c, id, PlayDoneReason.eof);
+          });
+        }
+        return {'playId': id};
       case 'call.stopFile':
-        _call(p).playingFile = null;
+        final c = _call(p);
+        if (p['playId'] != null) {
+          final id = _int(p, 'playId');
+          if (!c.plays.containsKey(id)) throw _invalid('no such playId $id');
+          _endPlay(c, id, PlayDoneReason.stopped);
+        } else {
+          for (final id in c.plays.keys.toList()) {
+            _endPlay(c, id, PlayDoneReason.stopped);
+          }
+        }
         return {};
       default:
         return _dispatchMedia(method, p);
@@ -913,6 +1064,61 @@ class FakeSipEngine extends JsonSipEngine {
       case 'media.loopback':
         loopbackEnabled = asBool(p['enabled']);
         return {};
+      case 'media.setVoiceIsolation':
+        for (final k in ['mic', 'incoming']) {
+          if (p[k] != null && p[k] is! Map) {
+            throw _invalid('"$k" must be object');
+          }
+        }
+        VoiceIsolationSide merge(VoiceIsolationSide cur, Object? v) {
+          if (v is! Map) return cur;
+          final m = asMap(v);
+          return VoiceIsolationSide(
+            enabled: m.containsKey('enabled')
+                ? asBool(m['enabled'])
+                : cur.enabled,
+            strength: m.containsKey('strength')
+                ? asDouble(m['strength'], cur.strength).clamp(0.0, 1.0)
+                : cur.strength,
+          );
+        }
+        voiceIsolationMic = merge(voiceIsolationMic, p['mic']);
+        voiceIsolationIncoming = merge(voiceIsolationIncoming, p['incoming']);
+        return const VoiceIsolationResult(
+          available: true,
+          engine: 'rnnoise',
+        ).toJson();
+      case 'media.voiceIsolationStatus':
+        return VoiceIsolationStatus(
+          mic: VoiceIsolationMicStatus(
+            enabled: voiceIsolationMic.enabled,
+            strength: voiceIsolationMic.strength,
+            vad: voiceIsolationMic.enabled ? fakeVad : 0.0,
+          ),
+          incoming: voiceIsolationIncoming,
+        ).toJson();
+      case 'media.fileInfo':
+        return _fileInfo(_str(p, 'file')).toJson();
+      case 'media.recordMicStart':
+        final f = _str(p, 'file');
+        if (_micRecFile != null) {
+          throw _err(ErrorCode.already, 'already recording microphone');
+        }
+        _micRecFile = f;
+        _micRecStarted = _now();
+        return {'file': f};
+      case 'media.recordMicStop':
+        final f = _micRecFile;
+        if (f == null) throw _invalid('not recording microphone');
+        final dur = _now().difference(_micRecStarted!).inMilliseconds;
+        _micRecFile = null;
+        _micRecStarted = null;
+        return {
+          'file': f,
+          'durationMs': dur,
+          'format': 'wav',
+          'bytes': _recBytes(RecordFormat.wav, dur),
+        };
       default:
         return _dispatchSocial(method, p);
     }
@@ -1016,6 +1222,8 @@ class FakeSipEngine extends JsonSipEngine {
     _coreCfg = p;
     final cfg = CoreConfig.fromJson(p);
     userAgent = cfg.userAgent;
+    voiceIsolationMic = cfg.media.voiceIsolation.mic;
+    voiceIsolationIncoming = cfg.media.voiceIsolation.incoming;
     if (cfg.statsIntervalMs > 0) {
       _statsTimer = Timer.periodic(
         Duration(milliseconds: cfg.statsIntervalMs),
@@ -1111,9 +1319,16 @@ class FakeSipEngine extends JsonSipEngine {
     if (asString(p['domain']).isEmpty && proto == 'sip') {
       throw _invalid('domain required');
     }
+    if (p['tlsClientCert'] != null) {
+      final cert = asMap(p['tlsClientCert']);
+      if (asString(cert['certFile']).isEmpty ||
+          asString(cert['keyFile']).isEmpty) {
+        throw _invalid('tlsClientCert needs certFile and keyFile');
+      }
+    }
     final a = _Acc(proto == 'iax2' ? 1000 + _nextAcc++ : _nextAcc++, {
       ...AccountConfig.fromJson(p).toJson(),
-    });
+    })..autoTransport = autoTransportResult.wire;
     _accs[a.id] = a;
     if (asBool(a.cfg['register'], true)) {
       _beginRegister(a);
@@ -1521,6 +1736,9 @@ class FakeSipEngine extends JsonSipEngine {
     Map<String, String> headers = const {},
     AutoAnswerHint? autoAnswerHint,
     int? replacesCid,
+    AssertedIdentity? assertedIdentity,
+    List<DiversionEntry> diversion = const [],
+    String? referredBy,
   }) {
     if (!_started) throw _err(ErrorCode.notStarted, 'engine not started');
     final a = _acc((acc ?? _defaultAccRef()).toJson());
@@ -1532,6 +1750,9 @@ class FakeSipEngine extends JsonSipEngine {
     c.remoteUser = _userOf(from);
     c.remoteDisplay = displayName;
     c.headers = Map.of(headers);
+    c.assertedIdentity = assertedIdentity;
+    c.diversion = List.of(diversion);
+    c.referredBy = referredBy;
     _emit('call.incoming', {
       ..._callJson(c),
       if (replacesCid != null) 'replacesCid': replacesCid,

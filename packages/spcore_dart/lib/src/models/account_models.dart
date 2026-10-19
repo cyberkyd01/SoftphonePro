@@ -170,6 +170,47 @@ class IaxConfig {
   String toString() => 'IaxConfig(${toJson()})';
 }
 
+/// Mutual-TLS client certificate for an account (contract v1.1).
+class TlsClientCert {
+  const TlsClientCert({this.certFile = '', this.keyFile = '', this.password});
+
+  final String certFile;
+  final String keyFile;
+  final String? password;
+
+  factory TlsClientCert.fromJson(Map<String, dynamic> j) => TlsClientCert(
+    certFile: asString(j['certFile'], ''),
+    keyFile: asString(j['keyFile'], ''),
+    password: asStringN(j['password']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'certFile': certFile,
+    'keyFile': keyFile,
+    if (password != null) 'password': password,
+  };
+
+  TlsClientCert copyWith({
+    String? certFile,
+    String? keyFile,
+    String? password,
+  }) => TlsClientCert(
+    certFile: certFile ?? this.certFile,
+    keyFile: keyFile ?? this.keyFile,
+    password: password ?? this.password,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is TlsClientCert && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'TlsClientCert(certFile: $certFile, keyFile: $keyFile)';
+}
+
 class AccountConfig {
   const AccountConfig({
     this.uid = '',
@@ -233,6 +274,7 @@ class AccountConfig {
     this.iax = const IaxConfig(),
     this.wsPath = '/ws',
     this.rtcpFb = false,
+    this.tlsClientCert,
   });
 
   final String uid;
@@ -300,6 +342,9 @@ class AccountConfig {
 
   /// Offer RTP/AVPF + rtcp-fb nack (WebRTC servers).
   final bool rtcpFb;
+
+  /// Mutual-TLS client certificate (contract v1.1), or null.
+  final TlsClientCert? tlsClientCert;
 
   factory AccountConfig.fromJson(Map<String, dynamic> j) => AccountConfig(
     uid: asString(j['uid'], ''),
@@ -376,6 +421,9 @@ class AccountConfig {
         : const IaxConfig(),
     wsPath: asString(j['wsPath'], '/ws'),
     rtcpFb: asBool(j['rtcpFb'], false),
+    tlsClientCert: j['tlsClientCert'] is Map
+        ? TlsClientCert.fromJson(asMap(j['tlsClientCert']))
+        : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -440,6 +488,7 @@ class AccountConfig {
     'iax': iax.toJson(),
     'wsPath': wsPath,
     'rtcpFb': rtcpFb,
+    if (tlsClientCert != null) 'tlsClientCert': tlsClientCert!.toJson(),
   };
 
   AccountConfig copyWith({
@@ -504,6 +553,7 @@ class AccountConfig {
     IaxConfig? iax,
     String? wsPath,
     bool? rtcpFb,
+    TlsClientCert? tlsClientCert,
   }) => AccountConfig(
     uid: uid ?? this.uid,
     proto: proto ?? this.proto,
@@ -567,6 +617,7 @@ class AccountConfig {
     iax: iax ?? this.iax,
     wsPath: wsPath ?? this.wsPath,
     rtcpFb: rtcpFb ?? this.rtcpFb,
+    tlsClientCert: tlsClientCert ?? this.tlsClientCert,
   );
 
   @override
@@ -600,6 +651,7 @@ class AccountInfo {
     this.presence = PresenceStatus.unknown,
     this.isLan = false,
     this.isDirect = false,
+    this.resolvedServer,
   });
 
   final int acc;
@@ -621,6 +673,9 @@ class AccountInfo {
   final bool isLan;
   final bool isDirect;
 
+  /// Server picked by `transport: auto` DNS resolution (contract v1.1).
+  final String? resolvedServer;
+
   factory AccountInfo.fromJson(Map<String, dynamic> j) => AccountInfo(
     acc: asInt(j['acc'], 0),
     uid: asString(j['uid'], ''),
@@ -640,6 +695,7 @@ class AccountInfo {
     presence: PresenceStatus.parse(j['presence'], PresenceStatus.unknown),
     isLan: asBool(j['isLan'], false),
     isDirect: asBool(j['isDirect'], false),
+    resolvedServer: asStringN(j['resolvedServer']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -661,6 +717,7 @@ class AccountInfo {
     'presence': presence.wire,
     'isLan': isLan,
     'isDirect': isDirect,
+    'resolvedServer': resolvedServer,
   };
 
   AccountInfo copyWith({
@@ -682,6 +739,7 @@ class AccountInfo {
     PresenceStatus? presence,
     bool? isLan,
     bool? isDirect,
+    String? resolvedServer,
   }) => AccountInfo(
     acc: acc ?? this.acc,
     uid: uid ?? this.uid,
@@ -701,6 +759,7 @@ class AccountInfo {
     presence: presence ?? this.presence,
     isLan: isLan ?? this.isLan,
     isDirect: isDirect ?? this.isDirect,
+    resolvedServer: resolvedServer ?? this.resolvedServer,
   );
 
   @override

@@ -233,3 +233,289 @@ class OpusParams {
   @override
   String toString() => 'OpusParams(${toJson()})';
 }
+
+/// One direction of AI noise suppression (docs/ENGINE_API.md 9.1).
+class VoiceIsolationSide {
+  const VoiceIsolationSide({this.enabled = false, this.strength = 1.0});
+
+  final bool enabled;
+  final double strength;
+
+  factory VoiceIsolationSide.fromJson(Map<String, dynamic> j) =>
+      VoiceIsolationSide(
+        enabled: asBool(j['enabled'], false),
+        strength: asDouble(j['strength'], 1.0).clamp(0.0, 1.0).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'strength': strength};
+
+  VoiceIsolationSide copyWith({bool? enabled, double? strength}) =>
+      VoiceIsolationSide(
+        enabled: enabled ?? this.enabled,
+        strength: strength ?? this.strength,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceIsolationSide && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'VoiceIsolationSide(${toJson()})';
+}
+
+/// `core.start` media.voiceIsolation (default: both off).
+class VoiceIsolationConfig {
+  const VoiceIsolationConfig({
+    this.mic = const VoiceIsolationSide(),
+    this.incoming = const VoiceIsolationSide(),
+  });
+
+  final VoiceIsolationSide mic;
+  final VoiceIsolationSide incoming;
+
+  factory VoiceIsolationConfig.fromJson(Map<String, dynamic> j) =>
+      VoiceIsolationConfig(
+        mic: j['mic'] is Map
+            ? VoiceIsolationSide.fromJson(asMap(j['mic']))
+            : const VoiceIsolationSide(),
+        incoming: j['incoming'] is Map
+            ? VoiceIsolationSide.fromJson(asMap(j['incoming']))
+            : const VoiceIsolationSide(),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'mic': mic.toJson(),
+    'incoming': incoming.toJson(),
+  };
+
+  VoiceIsolationConfig copyWith({
+    VoiceIsolationSide? mic,
+    VoiceIsolationSide? incoming,
+  }) => VoiceIsolationConfig(
+    mic: mic ?? this.mic,
+    incoming: incoming ?? this.incoming,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceIsolationConfig && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'VoiceIsolationConfig(${toJson()})';
+}
+
+/// Result of `media.setVoiceIsolation`.
+class VoiceIsolationResult {
+  const VoiceIsolationResult({this.available = false, this.engine = ''});
+
+  final bool available;
+  final String engine;
+
+  factory VoiceIsolationResult.fromJson(Map<String, dynamic> j) =>
+      VoiceIsolationResult(
+        available: asBool(j['available'], false),
+        engine: asString(j['engine'], ''),
+      );
+
+  Map<String, dynamic> toJson() => {'available': available, 'engine': engine};
+
+  VoiceIsolationResult copyWith({bool? available, String? engine}) =>
+      VoiceIsolationResult(
+        available: available ?? this.available,
+        engine: engine ?? this.engine,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceIsolationResult && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'VoiceIsolationResult(${toJson()})';
+}
+
+/// Mic side of `media.voiceIsolationStatus`; [vad] is speech probability 0-1.
+class VoiceIsolationMicStatus {
+  const VoiceIsolationMicStatus({
+    this.enabled = false,
+    this.strength = 1.0,
+    this.vad = 0.0,
+  });
+
+  final bool enabled;
+  final double strength;
+  final double vad;
+
+  factory VoiceIsolationMicStatus.fromJson(Map<String, dynamic> j) =>
+      VoiceIsolationMicStatus(
+        enabled: asBool(j['enabled'], false),
+        strength: asDouble(j['strength'], 1.0),
+        vad: asDouble(j['vad'], 0.0).clamp(0.0, 1.0).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'strength': strength,
+    'vad': vad,
+  };
+
+  VoiceIsolationMicStatus copyWith({
+    bool? enabled,
+    double? strength,
+    double? vad,
+  }) => VoiceIsolationMicStatus(
+    enabled: enabled ?? this.enabled,
+    strength: strength ?? this.strength,
+    vad: vad ?? this.vad,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceIsolationMicStatus && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'VoiceIsolationMicStatus(${toJson()})';
+}
+
+/// Result of `media.voiceIsolationStatus`.
+class VoiceIsolationStatus {
+  const VoiceIsolationStatus({
+    this.mic = const VoiceIsolationMicStatus(),
+    this.incoming = const VoiceIsolationSide(),
+  });
+
+  final VoiceIsolationMicStatus mic;
+  final VoiceIsolationSide incoming;
+
+  factory VoiceIsolationStatus.fromJson(Map<String, dynamic> j) =>
+      VoiceIsolationStatus(
+        mic: j['mic'] is Map
+            ? VoiceIsolationMicStatus.fromJson(asMap(j['mic']))
+            : const VoiceIsolationMicStatus(),
+        incoming: j['incoming'] is Map
+            ? VoiceIsolationSide.fromJson(asMap(j['incoming']))
+            : const VoiceIsolationSide(),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'mic': mic.toJson(),
+    'incoming': incoming.toJson(),
+  };
+
+  VoiceIsolationStatus copyWith({
+    VoiceIsolationMicStatus? mic,
+    VoiceIsolationSide? incoming,
+  }) => VoiceIsolationStatus(
+    mic: mic ?? this.mic,
+    incoming: incoming ?? this.incoming,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceIsolationStatus && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'VoiceIsolationStatus(${toJson()})';
+}
+
+/// Result of `media.fileInfo` (`format` is "wav" or "mp3").
+class MediaFileInfo {
+  const MediaFileInfo({
+    this.format = '',
+    this.durationMs = 0,
+    this.sampleRate = 0,
+    this.channels = 0,
+  });
+
+  final String format;
+  final int durationMs;
+  final int sampleRate;
+  final int channels;
+
+  factory MediaFileInfo.fromJson(Map<String, dynamic> j) => MediaFileInfo(
+    format: asString(j['format'], ''),
+    durationMs: asInt(j['durationMs'], 0),
+    sampleRate: asInt(j['sampleRate'], 0),
+    channels: asInt(j['channels'], 0),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'format': format,
+    'durationMs': durationMs,
+    'sampleRate': sampleRate,
+    'channels': channels,
+  };
+
+  MediaFileInfo copyWith({
+    String? format,
+    int? durationMs,
+    int? sampleRate,
+    int? channels,
+  }) => MediaFileInfo(
+    format: format ?? this.format,
+    durationMs: durationMs ?? this.durationMs,
+    sampleRate: sampleRate ?? this.sampleRate,
+    channels: channels ?? this.channels,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is MediaFileInfo && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'MediaFileInfo(${toJson()})';
+}
+
+/// Client-side music on hold (`call.hold` music param).
+class HoldMusic {
+  const HoldMusic({this.file = '', this.loop = true, this.volume = 1.0});
+
+  final String file;
+  final bool loop;
+  final double volume;
+
+  factory HoldMusic.fromJson(Map<String, dynamic> j) => HoldMusic(
+    file: asString(j['file'], ''),
+    loop: asBool(j['loop'], true),
+    volume: asDouble(j['volume'], 1.0),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'file': file,
+    'loop': loop,
+    'volume': volume,
+  };
+
+  HoldMusic copyWith({String? file, bool? loop, double? volume}) => HoldMusic(
+    file: file ?? this.file,
+    loop: loop ?? this.loop,
+    volume: volume ?? this.volume,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is HoldMusic && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'HoldMusic(${toJson()})';
+}

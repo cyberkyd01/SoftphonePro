@@ -453,3 +453,34 @@ enum RedirectAction implements WireEnum {
   static RedirectAction parse(Object? v, [RedirectAction? fallback]) =>
       parseEnum(values, v, fallback ?? RedirectAction.accept);
 }
+
+enum RecordFormat implements WireEnum {
+  wav('wav'),
+  wavStereo('wavStereo'),
+  opus('opus');
+
+  const RecordFormat(this.wire);
+  @override
+  final String wire;
+
+  /// Parses a wire string; unknown values yield [wav].
+  static RecordFormat parse(Object? v, [RecordFormat? fallback]) =>
+      parseEnum(values, v, fallback ?? RecordFormat.wav);
+}
+
+/// Why a `call.playFile` playback ended (`call.playDone`).
+enum PlayDoneReason implements WireEnum {
+  eof('eof'),
+  stopped('stopped'),
+  hangup('hangup'),
+  error('error'),
+  unknown('unknown');
+
+  const PlayDoneReason(this.wire);
+  @override
+  final String wire;
+
+  /// Parses a wire string; unknown values yield [unknown].
+  static PlayDoneReason parse(Object? v, [PlayDoneReason? fallback]) =>
+      parseEnum(values, v, fallback ?? PlayDoneReason.unknown);
+}

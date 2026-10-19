@@ -40,6 +40,95 @@ class AutoAnswerHint {
   String toString() => 'AutoAnswerHint(${toJson()})';
 }
 
+/// P-Asserted-Identity / Remote-Party-ID (contract v1.1).
+class AssertedIdentity {
+  const AssertedIdentity({this.display = '', this.user = '', this.uri = ''});
+
+  final String display;
+  final String user;
+  final String uri;
+
+  factory AssertedIdentity.fromJson(Map<String, dynamic> j) => AssertedIdentity(
+    display: asString(j['display'], ''),
+    user: asString(j['user'], ''),
+    uri: asString(j['uri'], ''),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'display': display,
+    'user': user,
+    'uri': uri,
+  };
+
+  AssertedIdentity copyWith({String? display, String? user, String? uri}) =>
+      AssertedIdentity(
+        display: display ?? this.display,
+        user: user ?? this.user,
+        uri: uri ?? this.uri,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is AssertedIdentity && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'AssertedIdentity(${toJson()})';
+}
+
+/// One Diversion / History-Info hop (contract v1.1).
+class DiversionEntry {
+  const DiversionEntry({
+    this.uri = '',
+    this.user = '',
+    this.reason = '',
+    this.counter = 0,
+  });
+
+  final String uri;
+  final String user;
+  final String reason;
+  final int counter;
+
+  factory DiversionEntry.fromJson(Map<String, dynamic> j) => DiversionEntry(
+    uri: asString(j['uri'], ''),
+    user: asString(j['user'], ''),
+    reason: asString(j['reason'], ''),
+    counter: asInt(j['counter'], 0),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'uri': uri,
+    'user': user,
+    'reason': reason,
+    'counter': counter,
+  };
+
+  DiversionEntry copyWith({
+    String? uri,
+    String? user,
+    String? reason,
+    int? counter,
+  }) => DiversionEntry(
+    uri: uri ?? this.uri,
+    user: user ?? this.user,
+    reason: reason ?? this.reason,
+    counter: counter ?? this.counter,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DiversionEntry && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'DiversionEntry(${toJson()})';
+}
+
 class CallInfo {
   const CallInfo({
     this.cid = 0,
@@ -74,6 +163,9 @@ class CallInfo {
     this.totalMs = 0,
     this.headers = const <String, String>{},
     this.transferFrom,
+    this.assertedIdentity,
+    this.diversion = const <DiversionEntry>[],
+    this.referredBy,
   });
 
   final int cid;
@@ -109,6 +201,15 @@ class CallInfo {
   final Map<String, String> headers;
   final int? transferFrom;
 
+  /// P-Asserted-Identity / Remote-Party-ID, or null (contract v1.1).
+  final AssertedIdentity? assertedIdentity;
+
+  /// Diversion / History-Info hops, earliest first.
+  final List<DiversionEntry> diversion;
+
+  /// `Referred-By` URI for calls resulting from a transfer.
+  final String? referredBy;
+
   factory CallInfo.fromJson(Map<String, dynamic> j) => CallInfo(
     cid: asInt(j['cid'], 0),
     call: asInt(j['call'], 0),
@@ -142,6 +243,13 @@ class CallInfo {
     totalMs: asInt(j['totalMs'], 0),
     headers: asStringMap(j['headers']),
     transferFrom: asIntN(j['transferFrom']),
+    assertedIdentity: j['assertedIdentity'] is Map
+        ? AssertedIdentity.fromJson(asMap(j['assertedIdentity']))
+        : null,
+    diversion: asList(
+      j['diversion'],
+    ).map((e) => DiversionEntry.fromJson(asMap(e))).toList(),
+    referredBy: asStringN(j['referredBy']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -177,6 +285,9 @@ class CallInfo {
     'totalMs': totalMs,
     'headers': headers,
     'transferFrom': transferFrom,
+    'assertedIdentity': assertedIdentity?.toJson(),
+    'diversion': diversion.map((e) => e.toJson()).toList(),
+    'referredBy': referredBy,
   };
 
   CallInfo copyWith({
@@ -212,6 +323,9 @@ class CallInfo {
     int? totalMs,
     Map<String, String>? headers,
     int? transferFrom,
+    AssertedIdentity? assertedIdentity,
+    List<DiversionEntry>? diversion,
+    String? referredBy,
   }) => CallInfo(
     cid: cid ?? this.cid,
     call: call ?? this.call,
@@ -245,6 +359,9 @@ class CallInfo {
     totalMs: totalMs ?? this.totalMs,
     headers: headers ?? this.headers,
     transferFrom: transferFrom ?? this.transferFrom,
+    assertedIdentity: assertedIdentity ?? this.assertedIdentity,
+    diversion: diversion ?? this.diversion,
+    referredBy: referredBy ?? this.referredBy,
   );
 
   @override

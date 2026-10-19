@@ -576,3 +576,77 @@ Phone-number cleanup is done by Dart dial rules.
   `rtcpFb:true`.
 * **Limitation:** `core.start` still needs at least one of udp/tcp/tls
   enabled.
+
+## 9. Voice isolation, media files, announcements, recording formats (contract v1.1)
+
+### 9.1 Voice isolation (AI noise suppression)
+Noise suppression uses RNNoise (BSD-3), bundled in spcore.
+* **Microphone path:** a processing port is inserted between the sound-device
+  port (slot 0) and every call. The topology code uses a "mic source" slot
+  that is either slot 0 or the denoise port.
+* **Incoming path:** an optional processing port per call, placed between
+  the call's port and the speaker.
+* **Format:** RNNoise works on 48 kHz, 10 ms frames. Resampling to and from
+  the bridge rate is internal.
+
+`strength` (0.0–1.0) blends the original and denoised signal, and also
+attenuates non-speech frames by up to `30 dB × strength`, using RNNoise's
+voice-activity probability.
+
+| method | params | result |
+|---|---|---|
+| `media.setVoiceIsolation` | `{mic?:{enabled:b, strength:f}, incoming?:{enabled:b, strength:f}}` | `{available:b, engine:"rnnoise"}`. Takes effect live, for current and future calls. Omitted parts are unchanged. |
+| `media.voiceIsolationStatus` | `{}` | `{mic:{enabled, strength, vad:f}, incoming:{enabled, strength}}`; `vad` is the latest speech probability (0–1), for UI meters |
+
+`core.start` media accepts `voiceIsolation` with the same shape. The default
+is off.
+
+### 9.2 Media files and playback
+`call.playFile` and music on hold accept these formats:
+* WAV: PCM16, µ-law or A-law, mono or stereo, any rate;
+* MP3, decoded with minimp3 (CC0).
+
+| method | params | result |
+|---|---|---|
+| `call.playFile` | `{cid, file:s, loop?:b=false, volume?:f=1.0, localMonitor?:b=false, muteMic?:b=false}` | `{playId:i}`. `localMonitor` also plays the file to the local speaker. `muteMic` mutes the mic towards this call while the file plays and restores it afterwards. |
+| `call.stopFile` | `{cid, playId?:i}` | `{}`; with no playId, stops all playback on the call |
+| `media.fileInfo` | `{file:s}` | `{format:"wav\|mp3", durationMs, sampleRate, channels}`, or `INVALID_PARAM` if the file is unreadable or unsupported |
+| `media.recordMicStart` | `{file:s}` | `{file}`. Records only the microphone to WAV, for example a user-recorded announcement. Works with no call (opens the sound device). |
+| `media.recordMicStop` | `{}` | `{file, durationMs}` |
+
+New event: `call.playDone {cid, playId, file, reason:"eof|stopped|hangup|error"}`.
+
+### 9.3 Music on hold (client side)
+`call.hold {cid, music?:{file:s, loop?:b=true, volume?:f=1.0}}`.
+* The hold re-INVITE uses `sendonly`, so we still transmit. After the hold
+  is acknowledged, the core connects a looping player to the held call.
+* Music stops on unhold, hangup or conference merge.
+* With no `music`, the call holds normally, and the PBX can play its own
+  hold music.
+
+### 9.4 Recording formats
+`call.recordStart` adds a format: `{cid, file, mix?, format?:"wav"|"wavStereo"|"opus"}`.
+
+| format | content |
+|---|---|
+| `wav` (default) | Mono PCM16 at the bridge rate. `mix` applies. |
+| `wavStereo` | Left channel = local microphone, right channel = remote party. `mix` is ignored. |
+| `opus` | Ogg Opus, mono, about 24 kbps, 48 kHz granule, with `mix` semantics. The file extension should be `.ogg` or `.opus`. |
+
+`call.recordStop` returns `{file, durationMs, format, bytes}`.
+
+### 9.5 Caller identity (CallInfo additions)
+* **`assertedIdentity`:** `{display, user, uri}` or null. It comes from
+  `P-Asserted-Identity`, or from `Remote-Party-ID` (privacy honoured).
+* **`diversion`:** `[{uri, user, reason, counter}]`, taken from `Diversion`
+  or `History-Info`. Earliest diversion first.
+* **`referredBy`:** the `Referred-By` URI, for calls that result from a
+  transfer.
+
+### 9.6 Accounts: TLS client certificates and automatic transport
+AccountConfig additions:
+
+| field | meaning |
+|---|---|
+| `tlsClientCert: {certFile:s, keyFile:s, password?:s}` | Mutual TLS. The account gets a dedicated TLS transport that presents this certificate. Also used for wss. |
+| `transport: "auto"` | The core picks the transport from DNS. It tries the SRV records `_sips._tcp` (tls), then `_sip._tcp` (tcp), then `_sip._udp` (udp), in order of preference, and falls back to udp/5060. The result appears in `AccountInfo.transport` and `AccountInfo.resolvedServer`. |

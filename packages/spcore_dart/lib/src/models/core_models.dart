@@ -283,6 +283,7 @@ class MediaConfig {
     this.rtpPortRange = 0,
     this.sndMode = SndMode.auto,
     this.noAudioDevice = false,
+    this.voiceIsolation = const VoiceIsolationConfig(),
   });
 
   final int clockRate;
@@ -297,6 +298,7 @@ class MediaConfig {
   final int rtpPortRange;
   final SndMode sndMode;
   final bool noAudioDevice;
+  final VoiceIsolationConfig voiceIsolation;
 
   factory MediaConfig.fromJson(Map<String, dynamic> j) => MediaConfig(
     clockRate: asInt(j['clockRate'], 0),
@@ -311,6 +313,9 @@ class MediaConfig {
     rtpPortRange: asInt(j['rtpPortRange'], 0),
     sndMode: SndMode.parse(j['sndMode'], SndMode.auto),
     noAudioDevice: asBool(j['noAudioDevice'], false),
+    voiceIsolation: j['voiceIsolation'] is Map
+        ? VoiceIsolationConfig.fromJson(asMap(j['voiceIsolation']))
+        : const VoiceIsolationConfig(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -326,6 +331,7 @@ class MediaConfig {
     'rtpPortRange': rtpPortRange,
     'sndMode': sndMode.wire,
     'noAudioDevice': noAudioDevice,
+    'voiceIsolation': voiceIsolation.toJson(),
   };
 
   MediaConfig copyWith({
@@ -341,6 +347,7 @@ class MediaConfig {
     int? rtpPortRange,
     SndMode? sndMode,
     bool? noAudioDevice,
+    VoiceIsolationConfig? voiceIsolation,
   }) => MediaConfig(
     clockRate: clockRate ?? this.clockRate,
     sndClockRate: sndClockRate ?? this.sndClockRate,
@@ -354,6 +361,7 @@ class MediaConfig {
     rtpPortRange: rtpPortRange ?? this.rtpPortRange,
     sndMode: sndMode ?? this.sndMode,
     noAudioDevice: noAudioDevice ?? this.noAudioDevice,
+    voiceIsolation: voiceIsolation ?? this.voiceIsolation,
   );
 
   @override
@@ -816,17 +824,47 @@ class CallRef {
 }
 
 class RecordingResult {
-  const RecordingResult({this.file = '', this.durationMs = 0});
+  const RecordingResult({
+    this.file = '',
+    this.durationMs = 0,
+    this.format = RecordFormat.wav,
+    this.bytes = 0,
+  });
 
   final String file;
   final int durationMs;
 
+  /// Recording format (contract v1.1); `wav` when the engine omits it.
+  final RecordFormat format;
+
+  /// File size in bytes (contract v1.1); 0 when unknown.
+  final int bytes;
+
   factory RecordingResult.fromJson(Map<String, dynamic> j) => RecordingResult(
     file: asString(j['file'], ''),
     durationMs: asInt(j['durationMs'], 0),
+    format: RecordFormat.parse(j['format']),
+    bytes: asInt(j['bytes'], 0),
   );
 
-  Map<String, dynamic> toJson() => {'file': file, 'durationMs': durationMs};
+  Map<String, dynamic> toJson() => {
+    'file': file,
+    'durationMs': durationMs,
+    'format': format.wire,
+    'bytes': bytes,
+  };
+
+  RecordingResult copyWith({
+    String? file,
+    int? durationMs,
+    RecordFormat? format,
+    int? bytes,
+  }) => RecordingResult(
+    file: file ?? this.file,
+    durationMs: durationMs ?? this.durationMs,
+    format: format ?? this.format,
+    bytes: bytes ?? this.bytes,
+  );
 
   @override
   bool operator ==(Object other) =>

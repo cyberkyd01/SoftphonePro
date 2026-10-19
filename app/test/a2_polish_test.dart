@@ -52,9 +52,23 @@ class RecEngine extends FakeSipEngine {
   }
 
   @override
-  Future<void> playFile(int cid, String file, {bool loop = false}) {
+  Future<int> playFile(
+    int cid,
+    String file, {
+    bool loop = false,
+    double volume = 1.0,
+    bool localMonitor = false,
+    bool muteMic = false,
+  }) {
     playedFiles.add(file);
-    return super.playFile(cid, file, loop: loop);
+    return super.playFile(
+      cid,
+      file,
+      loop: loop,
+      volume: volume,
+      localMonitor: localMonitor,
+      muteMic: muteMic,
+    );
   }
 
   @override
