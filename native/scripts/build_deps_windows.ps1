@@ -149,7 +149,7 @@ function Build-OpenSSL {
 
 # ------------------------------------------------------------------ CMake sub-projects (Opus, bcg729)
 function Build-CMake($name, $extra) {
-  $d = $Deps[$name]; $key = "$($d.Version)|static-crt"
+  $d = $Deps[$name]; $key = "$($d.Version)|static-crt-v2"
   $lib = if ($name -eq 'opus') { 'opus.lib' } else { 'bcg729.lib' }
   if ((StampOk $name $key) -and (Test-Path "$Out\lib\$lib")) { Log "${name}: up to date"; return }
   Log "$name $($d.Version)"
@@ -186,7 +186,7 @@ $PjProjects = @(
 
 function Build-PjProject {
   $cs = (Get-FileHash $ConfigSite -Algorithm SHA256).Hash.ToLower()
-  $key = "$($Deps.pjproject.Version)|$cs|msbuild-v143-Release-Static"
+  $key = "$($Deps.pjproject.Version)|$cs|msbuild-v143-Release-Static-srtpossl-v2"
   if ((StampOk 'pjproject' $key) -and (Test-Path "$Out\lib\pjsua-lib.lib")) { Log 'pjproject: up to date'; return }
   Log "pjproject $($Deps.pjproject.Version) (MSBuild, Release-Static|x64)"
   $src = Join-Path $Bld 'src\pjproject'; Extract 'pjproject' $src
@@ -210,6 +210,11 @@ function Build-PjProject {
 #ifndef PJMEDIA_HAS_WEBRTC_AEC3
 #  define PJMEDIA_HAS_WEBRTC_AEC3 1
 #endif
+/* bcg729 is linked statically: without this its headers declare the API __declspec(dllimport) and
+   pjmedia-codec fails with unresolved __imp_initBcg729EncoderChannel. */
+#ifndef BCG729_STATIC
+#  define BCG729_STATIC 1
+#endif
 #ifndef PJMEDIA_AUDIO_DEV_HAS_WMME
 #  define PJMEDIA_AUDIO_DEV_HAS_WMME 1
 #endif
@@ -218,6 +223,31 @@ function Build-PjProject {
 #endif
 '@
   Add-Content -Path $dst -Value $trailer
+
+  # libsrtp: the stock project builds its own OpenSSL-less crypto, which has no AES-GCM (-> unresolved
+  # srtp_aes_gcm_128/256 from pjmedia). Switch Release-Static|x64 to the OpenSSL backend
+  # (aes_gcm_ossl / aes_icm_ossl / hmac_ossl, defines OPENSSL + GCM) so AEAD_AES_128/256_GCM work here too.
+  $srtpProj = Join-Path $src 'third_party\build\srtp\libsrtp.vcxproj'
+  $x = Get-Content $srtpProj -Raw
+  $cond = '''$(Configuration)|$(Platform)''==''Release-Static|x64'''
+  $condRx = [regex]::Escape($cond)
+  foreach ($n in 'aes_gcm_ossl','aes_icm_ossl','hmac_ossl') {
+    $rx = '(?s)(<ClCompile Include="[^"]*\\' + $n + '\.c">)(.*?)(</ClCompile>)'
+    if ($x -notmatch $rx) { Die "libsrtp.vcxproj: $n.c entry not found" }
+    $x = [regex]::Replace($x, $rx, {
+      param($m)
+      $m.Groups[1].Value + [regex]::Replace($m.Groups[2].Value, '(?m)^\s*<ExcludedFromBuild Condition="' + $condRx + '">true</ExcludedFromBuild>\r?\n', '') + $m.Groups[3].Value
+    })
+  }
+  foreach ($n in 'aes_icm','hmac') {
+    $rx = '<ClCompile Include="([^"]*\\' + $n + '\.c)" />'
+    if ($x -notmatch $rx) { Die "libsrtp.vcxproj: $n.c entry not found" }
+    $x = [regex]::Replace($x, $rx, ('<ClCompile Include="$1"><ExcludedFromBuild Condition="' + $cond + '">true</ExcludedFromBuild></ClCompile>'))
+  }
+  $rxDef = '(?s)(<ItemDefinitionGroup Condition="' + $condRx + '">.*?<PreprocessorDefinitions>)(_LIB;HAVE_CONFIG_H;)'
+  if ($x -notmatch $rxDef) { Die 'libsrtp.vcxproj: Release-Static|x64 definitions not found' }
+  $x = [regex]::Replace($x, $rxDef, '${1}_LIB;HAVE_CONFIG_H;OPENSSL;GCM;')
+  Set-Content -Path $srtpProj -Value $x -NoNewline
 
   # bcg729.c / opus.c are compiled by pjmedia_codec.vcxproj: it needs the headers, found via INCLUDE.
   $env:INCLUDE = "$Out\include;$Out\include\opus;$env:INCLUDE"
@@ -282,7 +312,7 @@ function Write-DepsCmake {
 }
 
 Build-OpenSSL
-Build-CMake 'opus'   @('-DOPUS_BUILD_SHARED_LIBRARY=OFF','-DOPUS_BUILD_PROGRAMS=OFF','-DOPUS_BUILD_TESTING=OFF')
+Build-CMake 'opus'   @('-DOPUS_BUILD_SHARED_LIBRARY=OFF','-DOPUS_BUILD_PROGRAMS=OFF','-DOPUS_BUILD_TESTING=OFF','-DOPUS_STATIC_RUNTIME=ON')
 Build-CMake 'bcg729' @('-DENABLE_SHARED=NO','-DENABLE_STATIC=YES','-DENABLE_UNIT_TESTS=NO','-DENABLE_STRICT=NO')
 Build-PjProject
 Write-DepsCmake
