@@ -665,8 +665,8 @@ anti-aliased when down-sampling). Decoding runs on a helper thread per play; the
 bridge's clock thread only copies decoded samples from memory, so it never
 waits for file I/O. If decoding is momentarily behind playback (huge file, slow
 disk), silence is played until samples are ready. **Limits:** 30 minutes of
-audio and 200 MB (the file for MP3, the decoded PCM16 at the bridge rate for all
-formats); longer files are rejected with `INVALID_PARAM`. At most 16 concurrent
+audio and 200 MB (the decoded PCM16 at the bridge rate for all formats; MP3 input files are
+additionally capped at 64 MB); longer files are rejected with `INVALID_PARAM`. At most 16 concurrent
 plays per call.
 
 | method | params | result |

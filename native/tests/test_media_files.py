@@ -645,5 +645,106 @@ class TestRecording(MediaBase):
         self.assertLess(info["ms"], 2500)
 
 
+
+
+# ---------------------------------------------------------------- hostile WAV headers (wav_open chunk walker)
+def _riff(chunks, riff_size=None):
+    """chunks: list of (id, declared_size, payload bytes) -> RIFF/WAVE bytes (declared sizes may lie)"""
+    body = b"WAVE"
+    for cid, size, payload in chunks:
+        body += cid + struct.pack("<I", size) + payload
+    return b"RIFF" + struct.pack("<I", len(body) if riff_size is None else riff_size) + body
+
+
+FMT16 = struct.pack("<HHIIHH", 1, 1, 8000, 16000, 2, 16)
+
+
+class TestHostileWav(Base):
+    def probe(self, name, data):
+        path = os.path.join(TMP, "hostile_%s.wav" % name)
+        with open(path, "wb") as f:
+            f.write(data)
+        c = self.c
+        t0 = time.time()
+        r = c.raw("media.fileInfo", {"file": path}, timeout=10)
+        dt = time.time() - t0
+        self.assertLess(dt, 1.0, "%s: media.fileInfo took %.2fs" % (name, dt))
+        if not r["ok"]:
+            self.assertEqual(r["error"]["code"], "INVALID_PARAM", (name, r))
+        t0 = time.time()
+        c.req("core.ping", timeout=2)
+        self.assertLess(time.time() - t0, 2.0)
+        return r
+
+    def setUp(self):
+        super().setUp()
+        self.c = self.cli()
+        self.c.req("core.ping")                 # process start-up (ASan) must not count against the 1 s budget
+
+    def test_huge_and_negative_chunk_sizes(self):
+        for size in (0xFFFFFFF8, 0x80000000, 0x7FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE, 0x80000001):
+            self.assertFalse(self.probe("junk_%x" % size, _riff([(b"JUNK", size, b"\0" * 16), (b"fmt ", 16, FMT16),
+                                                                 (b"data", 4, b"\0\0\0\0")]))["ok"], hex(size))
+            self.assertFalse(self.probe("fmt_%x" % size, _riff([(b"fmt ", size, FMT16), (b"data", 4, b"\0\0\0\0")]))["ok"], hex(size))
+            self.probe("fmtthen_%x" % size, _riff([(b"fmt ", 16, FMT16), (b"LIST", size, b"abcd")]))
+
+    def test_data_chunk_sizes_lie(self):
+        for size in (0xFFFFFFF8, 0x80000000, 0xFFFFFFFF, 1000000):
+            r = self.probe("data_%x" % size, _riff([(b"fmt ", 16, FMT16), (b"data", size, b"\x01\x00" * 800)]))
+            if r["ok"]:                                     # clamped to what the file really holds: 800 frames @ 8 kHz
+                self.assertEqual((r.get("result") or r.get("data") or r)["durationMs"], 100)
+
+    def test_odd_sizes_and_padding(self):
+        r = self.probe("odd_ok", _riff([(b"JUNK", 3, b"abc\0"), (b"fmt ", 16, FMT16), (b"LIST", 5, b"hello\0"),
+                                         (b"data", 8, b"\x01\x00" * 4)]))
+        self.assertTrue(r["ok"], r)
+        self.probe("odd_trunc", _riff([(b"JUNK", 7, b"abc")]))
+        self.probe("odd_only_pad", _riff([(b"fmt ", 17, FMT16 + b"\0")]))
+
+    def test_fmt_after_data_and_missing(self):
+        self.assertFalse(self.probe("fmt_after_data", _riff([(b"data", 4, b"\0\0\0\0"), (b"fmt ", 16, FMT16)]))["ok"])
+        self.assertFalse(self.probe("no_fmt", _riff([(b"LIST", 4, b"abcd")]))["ok"])
+        self.assertFalse(self.probe("no_data", _riff([(b"fmt ", 16, FMT16)]))["ok"])
+
+    def test_truncated_headers(self):
+        full = _riff([(b"fmt ", 16, FMT16), (b"data", 8, b"\x01\x00" * 4)])
+        for n in range(0, len(full)):
+            self.probe("trunc_%d" % n, full[:n])
+
+    def test_zero_length_data_and_zero_size_chunks(self):
+        self.probe("zero_data", _riff([(b"fmt ", 16, FMT16), (b"data", 0, b"")]))
+        self.assertFalse(self.probe("zero_chunks", _riff([(b"ZERO", 0, b"")] * 50))["ok"])
+        self.assertFalse(self.probe("fmt_zero", _riff([(b"fmt ", 0, b""), (b"data", 0, b"")]))["ok"])
+
+    def test_many_tiny_chunks(self):
+        tiny = [(b"JUNK", 0, b"")] * 10000
+        self.probe("tiny_no_audio", _riff(tiny))
+        self.probe("tiny_then_fmt", _riff(tiny + [(b"fmt ", 16, FMT16), (b"data", 4, b"\0\0\0\0")]))     # fmt past the chunk cap
+        self.probe("tiny_small", _riff([(b"JUNK", 0, b"")] * 100 + [(b"fmt ", 16, FMT16), (b"data", 4, b"\x01\x00\x01\x00")]))
+
+    def test_hostile_wav_in_call_paths(self):
+        path = os.path.join(TMP, "hostile_call.wav")
+        with open(path, "wb") as f:
+            f.write(_riff([(b"JUNK", 0xFFFFFFF8, b"\0" * 16), (b"fmt ", 16, FMT16), (b"data", 4, b"\0\0\0\0")]))
+        a, b = self.cli("A"), self.cli("B")
+        a.start_core()
+        rb = b.start_core()
+        port = [t for t in rb["transports"] if t["type"] == "udp"][0]["local"].split(":")[1]
+        mb = b.mark()
+        cid_a = a.req("call.make", {"acc": -1, "uri": "sip:127.0.0.1:%s" % port})["cid"]
+        inc = b.wait_event("call.incoming", 15, mb)
+        self.assertIsNotNone(inc)
+        b.req("call.answer", {"cid": inc["cid"]})
+        self.assertIsNotNone(a.wait_event("call.state", 15, 0, cid=cid_a, state="confirmed"))
+        t0 = time.time()
+        r = a.raw("call.playFile", {"cid": cid_a, "file": path}, timeout=10)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error"]["code"], "INVALID_PARAM")
+        r = a.raw("call.hold", {"cid": cid_a, "music": {"file": path}}, timeout=10)
+        self.assertLess(time.time() - t0, 3.0)
+        a.req("core.ping", timeout=2)
+        a.req("call.hangup", {"cid": cid_a})
+
+
 if __name__ == "__main__":
     unittest.main()

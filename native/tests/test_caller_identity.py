@@ -8,7 +8,7 @@ import socket
 import time
 import unittest
 
-from run_tests import Base
+from run_tests import Base, RpcError
 
 
 class Ident(Base):
@@ -251,6 +251,156 @@ class Ident(Base):
         sock.close()
         # still healthy
         b.req("core.ping")
+
+
+    # ---- liveness regressions: malformed History-Info index values used to spin the pjsua thread forever ----
+    def core_port(self, b):
+        self._rejected = set()
+        rb = b.start_core()
+        return [t for t in rb["transports"] if t["type"] == "udp"][0]["local"].split(":")[1]
+
+    def assert_alive(self, b, port, tag):
+        """core.ping alone is answered by the request worker even when the pjsua thread is wedged, so also push a
+        canary INVITE through the pjsua thread: call.incoming must still be delivered (timeout based)."""
+        t0 = time.time()
+        try:
+            b.req("core.ping", timeout=2)
+        except TimeoutError:
+            self.fail("engine did not answer core.ping within 2 s after %s" % tag)
+        self.assertLess(time.time() - t0, 2.0)
+        mb = b.mark()
+        self._canary = getattr(self, "_canary", 0) + 1
+        sock = self.raw_invite(port, ["X-Canary: 1"], call_id="canary-%s-%d" % (abs(hash(tag)) % 100000, self._canary))
+        inc = b.wait_event("call.incoming", 5, mb)
+        if inc is None:
+            try:
+                ncalls = "%s incoming-events=%d list=%s" % ("", len(b.events("call.incoming")), [(c["cid"], c["state"], c.get("lastCode")) for c in b.req("call.list", timeout=3)["calls"]])
+            except Exception as ex:
+                ncalls = "call.list failed: %s" % ex
+            self.fail("no call.incoming for canary INVITE after %s (calls=%s) lastrejerr=%s; stderr=%s" % (tag, ncalls, getattr(self, '_rej_err', None), "".join(b.stderr[-8:])))
+        b.req("call.reject", {"cid": inc["cid"], "code": 603}, timeout=5)
+        self.ack_finals(sock, port)
+        sock.close()
+
+    def ack_finals(self, sock, port):
+        """ACK every final response (>= 300) to our INVITE so the engine's server transaction ends and the call slot
+        is freed; without it the slots stay busy for the 32 s transaction timeout (PJSUA_MAX_CALLS is 32)."""
+        sock.settimeout(0.05)
+        try:
+            while True:
+                data, _ = sock.recvfrom(65535)
+                txt = data.decode("latin1", "replace")
+                lines = txt.split("\r\n")
+                m = lines[0].split(" ")
+                if len(m) < 2 or not m[1].isdigit() or int(m[1]) < 300:
+                    continue
+                h = {}
+                for ln in lines[1:]:
+                    if ":" in ln:
+                        k, v = ln.split(":", 1)
+                        h.setdefault(k.strip().lower(), v.strip())
+                if not all(k in h for k in ("via", "from", "to", "call-id", "cseq")):
+                    continue
+                ack = ("ACK sip:test@127.0.0.1:%s SIP/2.0\r\nVia: %s\r\nMax-Forwards: 70\r\nFrom: %s\r\nTo: %s\r\n"
+                       "Call-ID: %s\r\nCSeq: %s ACK\r\nContent-Length: 0\r\n\r\n") % (
+                    port, h["via"], h["from"], h["to"], h["call-id"], h["cseq"].split()[0])
+                sock.sendto(ack.encode(), ("127.0.0.1", int(port)))
+        except (socket.timeout, OSError):
+            pass
+
+    def reject_all_incoming(self, b):
+        for e in b.events("call.incoming"):
+            if e["cid"] in self._rejected:
+                continue
+            try:
+                b.req("call.reject", {"cid": e["cid"], "code": 603}, timeout=5)
+                self._rejected.add(e["cid"])
+            except RpcError as ex:
+                self._rejected.add(e["cid"])
+                self._rej_err = str(ex)
+
+    def test_raw_history_info_malformed_index_no_hang(self):
+        b = self.cli("B")
+        port = self.core_port(b)
+        long_dotted = ".".join(str(i % 10) for i in range(300))
+        cases = [
+            ["<sip:a@x.example>;index=a", "<sip:b@x.example>;index=b"],
+            ["<sip:a@x.example>;index=1.a", "<sip:b@x.example>;index=1.b"],
+            ["<sip:a@x.example>;index=-", "<sip:b@x.example>;index=-"],
+            ["<sip:a@x.example>;index=..", "<sip:b@x.example>;index=.."],
+            ["<sip:a@x.example>;index=1..2", "<sip:b@x.example>;index=1..2", "<sip:c@x.example>;index=1...3"],
+            ["<sip:a@x.example>;index=%s" % long_dotted, "<sip:b@x.example>;index=%s.1" % long_dotted],
+            ["<sip:a@x.example>;index=1.2.x", "<sip:b@x.example>;index=1.2", "<sip:c@x.example>;index=zz",
+             "<sip:d@x.example>;index=1.1.1", "<sip:e@x.example>;index=+1", "<sip:f@x.example>;index=0x10",
+             "<sip:g@x.example>;index=1e5", "<sip:h@x.example>;index=\"a\""],
+            ["<sip:a@x.example>;index=a", "<sip:b@x.example>;index=1", "<sip:c@x.example>;index=b", "<sip:d@x.example>;index=2"],
+        ]
+        for n, entries in enumerate(cases):
+            # as one comma separated header and as separate header lines
+            for style in ("single", "multi"):
+                lines = ["History-Info: " + ", ".join(entries)] if style == "single" else ["History-Info: " + e for e in entries]
+                sock = self.raw_invite(port, lines, call_id="hi-malformed-%d-%s" % (n, style))
+                self.assert_alive(b, port, "History-Info case %d (%s): %s" % (n, style, entries[0][:40]))
+                self.reject_all_incoming(b)
+                time.sleep(0.2)
+                self.ack_finals(sock, port)
+                sock.close()
+
+    def test_raw_history_info_valid_order_survives_sanitising(self):
+        b = self.cli("B")
+        port = self.core_port(b)
+        mb = b.mark()
+        sock = self.raw_invite(port, ["History-Info: <sip:c@x.example>;index=1.1.1, <sip:a@x.example>;index=1, "
+                                      "<sip:b@x.example>;index=1.1"], call_id="hi-valid-1")
+        inc = b.wait_event("call.incoming", 10, mb)
+        self.assertIsNotNone(inc)
+        self.assertEqual([d["user"] for d in inc["diversion"]], ["a", "b"])
+        b.req("call.reject", {"cid": inc["cid"], "code": 603})
+        sock.close()
+
+    def test_raw_identity_fuzz_liveness(self):
+        import random
+        rnd = random.Random(0x5EC0DE)
+        b = self.cli("B")
+        port = self.core_port(b)
+        alphabet = list("ab01.-_;,<>\"'=:@ \t%+xyz()[]\\/?&#") + ["index=", ";reason=", ";counter=", "sip:", "tel:", "<sip:", ">;",
+                                                                    "cause%3D", "cause=", "privacy=", "Reason=SIP%3Bcause%3D", "1.1.", "..", ";index="]
+
+        def garbage(maxlen):
+            return "".join(rnd.choice(alphabet) for _ in range(rnd.randint(0, maxlen)))
+
+        def hi_entry():
+            idx = rnd.choice(["", "a", "b", "1.a", "-", "..", "1..2", "%d" % rnd.randint(0, 9), "1.%d" % rnd.randint(0, 9),
+                              "1.%d.%d" % (rnd.randint(0, 3), rnd.randint(0, 3)), garbage(12)])
+            return "<sip:u%d@h%d.example%s>;index=%s%s" % (rnd.randint(0, 9), rnd.randint(0, 3),
+                                                       rnd.choice(["", "?Reason=SIP%3Bcause%3D486", "?" + garbage(10)]), idx, rnd.choice(["", ";" + garbage(8)]))
+
+        total = 0
+        for batch in range(30):
+            socks = []
+            for k in range(10):
+                lines = []
+                for _ in range(rnd.randint(1, 5)):
+                    kind = rnd.choice(["History-Info", "Diversion", "P-Asserted-Identity", "Remote-Party-ID", "Referred-By", "Privacy"])
+                    if kind == "History-Info":
+                        val = ", ".join(hi_entry() for _ in range(rnd.randint(1, 12)))
+                    elif rnd.random() < 0.5:
+                        val = garbage(200)
+                    else:
+                        val = ", ".join("%s<sip:%s@x.example>%s" % (rnd.choice(["", "\"N\" ", garbage(5)]), garbage(6), rnd.choice(["", ";reason=" + garbage(5), ";counter=" + garbage(4)]))
+                                        for _ in range(rnd.randint(1, 6)))
+                    lines.append("%s: %s" % (kind, val.replace("\r", " ").replace("\n", " ")))
+                socks.append(self.raw_invite(port, lines, call_id="fuzz-%d-%d" % (batch, k)))
+                total += 1
+            self.assert_alive(b, port, "fuzz batch %d" % batch)
+            self.reject_all_incoming(b)
+            for wait in (0.2, 0.7):                     # second pass catches 603 retransmissions (T1 = 500 ms)
+                time.sleep(wait)
+                for sk in socks:
+                    self.ack_finals(sk, port)
+            for sk in socks:
+                sk.close()
+        self.assertEqual(total, 300)
 
 
 if __name__ == "__main__":

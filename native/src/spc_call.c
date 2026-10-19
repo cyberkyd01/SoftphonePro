@@ -280,8 +280,16 @@ static const char* id_reason_from_cause(int cause, char* buf, size_t n)
 /* History-Info index "1.2.3" -> comparable key (dotted numeric compare) */
 static int id_index_cmp(const char* a, const char* b)
 {
-    while (*a || *b) {
-        long x = strtol(a, (char**)&a, 10), y = strtol(b, (char**)&b, 10);
+    int guard = 0;
+    while ((*a || *b) && guard++ < 64) {
+        char *ea, *eb;
+        long x = strtol(a, &ea, 10), y = strtol(b, &eb, 10);
+        /* no progress and not at a separator: malformed -> never loop, fall back to plain string compare */
+        if ((ea == a && *a && *a != '.') || (eb == b && *b && *b != '.')) {
+            int r = strcmp(a, b);
+            return r < 0 ? -1 : (r > 0 ? 1 : 0);
+        }
+        a = ea; b = eb;
         if (x != y) return x < y ? -1 : 1;
         if (*a == '.') a++;
         if (*b == '.') b++;
@@ -290,6 +298,13 @@ static int id_index_cmp(const char* a, const char* b)
         if (!*b) return 1;
     }
     return 0;
+}
+
+/* History-Info index must be [0-9.]+ ; anything else is treated as "no index" */
+static void id_sanitize_index(char* s)
+{
+    char* p;
+    for (p = s; *p; p++) if (!((*p >= '0' && *p <= '9') || *p == '.')) { s[0] = 0; return; }
 }
 
 typedef struct { char idx[32]; spc_div d; char cause[16]; } id_he;
@@ -418,6 +433,7 @@ found_pai:
                 id_fill_div_uri(&he[nh].d, val);
                 if (!he[nh].d.uri[0]) continue;
                 if (!id_param(val, "index", he[nh].idx, sizeof(he[nh].idx))) he[nh].idx[0] = 0;
+                id_sanitize_index(he[nh].idx);
                 /* embedded Reason: sip:u@h?Reason=SIP%3Bcause%3D486 */
                 r = strstr(val, "cause%3D");
                 if (!r) r = strstr(val, "cause%3d");

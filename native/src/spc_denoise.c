@@ -62,6 +62,7 @@ static spc_dn* g_mic_dn;
 static int g_mic_slot = -1;
 static volatile long g_warm_once;
 static volatile int g_started;
+static volatile long g_stopping;         /* 1 between spc_denoise_shutdown and the next spc_denoise_start: no new processors */
 
 static void mtx_init_once(void) { spc_mutex_init(&g_mtx); }
 
@@ -273,17 +274,17 @@ int spc_denoise_mic_slot(void)
     unsigned rate, S;
     spc_dn* d;
     int slot = -1, s;
-    if (!spc_denoise_mic_wanted()) return -1;
+    if (!spc_denoise_mic_wanted() || a_get(&g_stopping)) return -1;
     if ((s = spc_denoise_mic_slot_peek()) >= 0) return s;
     if (bridge_fmt(&rate, &S) != 0) return -1;
     d = dn_create(DN_MIC, rate, S);
     if (!d) return -1;
     if (dn_register(d, &slot) != 0) { dn_free(d); return -1; }
     spc_mutex_lock(&g_mtx);
-    if (g_mic_slot < 0) { g_mic_dn = d; g_mic_slot = slot; d = NULL; }
+    if (g_mic_slot < 0 && !a_get(&g_stopping)) { g_mic_dn = d; g_mic_slot = slot; d = NULL; }
     s = g_mic_slot;
     spc_mutex_unlock(&g_mtx);
-    if (d) { pjsua_conf_remove_port(slot); dn_free(d); }      /* lost the creation race */
+    if (d) { pjsua_conf_remove_port(slot); dn_free(d); }      /* lost the creation race (or shutting down) */
     return s;
 }
 
@@ -291,7 +292,7 @@ void* spc_denoise_in_create(int* slot)
 {
     unsigned rate, S;
     spc_dn* d;
-    if (bridge_fmt(&rate, &S) != 0) return NULL;
+    if (a_get(&g_stopping) || bridge_fmt(&rate, &S) != 0) return NULL;
     d = dn_create(DN_IN, rate, S);
     if (!d) return NULL;
     if (dn_register(d, slot) != 0) { dn_free(d); return NULL; }
@@ -352,6 +353,10 @@ void spc_denoise_start(void)
 {
     spc_once(&g_mtx_once, mtx_init_once);
     spc_once(&g_warm_once, warm_fn);
+    spc_mutex_lock(&g_mtx);
+    g_mic_dn = NULL; g_mic_slot = -1;            /* nothing survives a core.stop (shutdown destroyed it) */
+    spc_mutex_unlock(&g_mtx);
+    a_set(&g_stopping, 0);
     g_started = 1;
 }
 
@@ -360,10 +365,12 @@ void spc_denoise_shutdown(void)
     spc_dn* d;
     int slot;
     spc_once(&g_mtx_once, mtx_init_once);
+    a_set(&g_stopping, 1);
     spc_mutex_lock(&g_mtx);
     d = g_mic_dn; slot = g_mic_slot; g_mic_dn = NULL; g_mic_slot = -1;
     spc_mutex_unlock(&g_mtx);
     if (d) spc_denoise_in_destroy(d, slot);      /* per-call incoming ports are destroyed with their calls */
+    a_set(&g_en[DN_MIC], 0); a_set(&g_en[DN_IN], 0);
     g_started = 0;
 }
 

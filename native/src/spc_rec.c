@@ -279,8 +279,8 @@ static void opus_finish(spc_rec* r)
 static void rec_thread(void* arg)
 {
     spc_rec* r = (spc_rec*)arg;
-    int16_t* tmp = (int16_t*)malloc(sizeof(int16_t) * XFER * 2);
-    int16_t* tmp1 = (int16_t*)malloc(sizeof(int16_t) * XFER);
+    int16_t tmp[XFER * 2];          /* stack buffers (24 KB): no allocation that could fail in the writer thread */
+    int16_t tmp1[XFER];
     int i;
     for (;;) {
         int stopping, got = 0, k;
@@ -355,7 +355,6 @@ static void rec_thread(void* arg)
         }
         if (stopping && got == 0) break;
     }
-    free(tmp); free(tmp1);
 }
 
 /* ---- lifecycle ---- */

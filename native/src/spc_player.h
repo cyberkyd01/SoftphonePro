@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 #define SPC_PLAY_MAX_MS      (30 * 60 * 1000)          /* longest decodable file */
+#define SPC_PLAY_MAX_MP3_BYTES (64u * 1024u * 1024u)   /* MP3 input file size cap (held in memory; duration is estimated from headers) */
 #define SPC_PLAY_MAX_BYTES   (200u * 1024u * 1024u)    /* decoded PCM16 at the bridge rate / input file size cap */
 
 typedef struct {

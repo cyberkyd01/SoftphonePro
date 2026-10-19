@@ -420,6 +420,40 @@ class TestVoiceIsolationCalls(Base):
         b.req("call.hangup", {"cid": cb})
         self.assertIsNotNone(a.wait_event("call.state", 10, 0, cid=ca, state="disconnected"))
 
+    def test_stop_start_cycles_with_isolation(self):
+        """core.stop / core.start x20 with mic+incoming isolation on: no stale mic slot or enable flag survives a
+        restart, and a call works after every restart (MINOR 1)"""
+        a, b = self.cli("A"), self.cli("B")
+        a.start_core()
+        media = {"voiceIsolation": {"mic": {"enabled": True}, "incoming": {"enabled": True}}}
+        for i in range(20):
+            rb = b.start_core(media=media)
+            port = [t for t in rb["transports"] if t["type"] == "udp"][0]["local"].split(":")[1]
+            st = b.req("media.voiceIsolationStatus")
+            self.assertTrue(st["mic"]["enabled"], i)
+            mb = b.mark()
+            cid_a = a.req("call.make", {"acc": -1, "uri": "sip:127.0.0.1:%s" % port})["cid"]
+            inc = b.wait_event("call.incoming", 15, mb)
+            self.assertIsNotNone(inc, "iteration %d: no incoming call" % i)
+            b.req("call.answer", {"cid": inc["cid"]})
+            self.assertIsNotNone(a.wait_event("call.state", 15, 0, cid=cid_a, state="confirmed"), i)
+            self.assertIsNotNone(b.wait_event("call.state", 15, mb, cid=inc["cid"], state="confirmed"), i)
+            self.wait_media(b, inc["cid"])
+            b.req("call.mute", {"cid": inc["cid"], "mute": True})
+            b.req("call.mute", {"cid": inc["cid"], "mute": False})
+            if i % 2:
+                b.req("call.hangup", {"cid": inc["cid"]})       # alternate: hang up first, or stop with the call up
+                self.assertIsNotNone(a.wait_event("call.state", 10, 0, cid=cid_a, state="disconnected"), i)
+            b.req("core.stop", {"graceful": True}, timeout=20)
+            b.started = False
+            if not i % 2:
+                a.req("call.hangup", {"cid": cid_a}) if a.events("call.state", cid=cid_a, state="disconnected") == [] else None
+        # defaults after restart without isolation config
+        b.start_core()
+        st = b.req("media.voiceIsolationStatus")
+        self.assertFalse(st["mic"]["enabled"])
+        self.assertFalse(st["incoming"]["enabled"])
+
     def sample_speaker_max(self, b, seconds):
         return max(self.sample_speaker(b, seconds))
 

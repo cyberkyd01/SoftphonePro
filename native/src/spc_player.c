@@ -162,35 +162,50 @@ static int16_t alaw2lin(uint8_t b)
     return (int16_t)((a & 0x80) ? t : -t);
 }
 
+#if defined(_MSC_VER) || defined(_WIN32)
+#define SPC_FSEEK64(f, o, w) _fseeki64((f), (__int64)(o), (w))
+#define SPC_FTELL64(f) ((int64_t)_ftelli64(f))
+#else
+#define SPC_FSEEK64(f, o, w) fseeko((f), (off_t)(o), (w))
+#define SPC_FTELL64(f) ((int64_t)ftello(f))
+#endif
+#define WAV_MAX_CHUNKS 1000
+
 static int wav_open(spc_src* s, FILE* f, char* err, size_t en)
 {
     uint8_t h[12], ck[8], fmt[40];
-    int have_fmt = 0;
-    long data_off = -1;
+    int have_fmt = 0, nchunks = 0;
+    int64_t data_off = -1, fsize, pos, avail;
     uint32_t dsize = 0;
-    long fsize, avail;
     if (fread(h, 1, 12, f) != 12 || (memcmp(h, "RIFF", 4) && memcmp(h, "RF64", 4)) || memcmp(h + 8, "WAVE", 4)) {
         snprintf(err, en, "not a WAV file");
         return -1;
     }
-    fseek(f, 0, SEEK_END); fsize = ftell(f); fseek(f, 12, SEEK_SET);
-    for (;;) {
+    if (SPC_FSEEK64(f, 0, SEEK_END) != 0) { snprintf(err, en, "cannot read file"); return -1; }
+    fsize = SPC_FTELL64(f);
+    if (fsize < 12 || SPC_FSEEK64(f, 12, SEEK_SET) != 0) { snprintf(err, en, "not a WAV file"); return -1; }
+    pos = 12;
+    while (nchunks++ < WAV_MAX_CHUNKS) {
         uint32_t sz;
-        if (fread(ck, 1, 8, f) != 8) break;
+        int64_t body, next;
+        if (pos + 8 > fsize || fread(ck, 1, 8, f) != 8) break;
         sz = rd32(ck + 4);
+        body = pos + 8;
+        next = body + (int64_t)sz + (int64_t)(sz & 1);          /* chunks are word aligned */
+        if (!memcmp(ck, "data", 4)) {
+            data_off = body; dsize = sz;
+            break;
+        }
         if (!memcmp(ck, "fmt ", 4)) {
             size_t n = sz < sizeof(fmt) ? sz : sizeof(fmt);
+            if (body + (int64_t)n > fsize) { snprintf(err, en, "bad WAV fmt chunk"); return -1; }
             memset(fmt, 0, sizeof(fmt));
             if (n < 16 || fread(fmt, 1, n, f) != n) { snprintf(err, en, "bad WAV fmt chunk"); return -1; }
             have_fmt = 1;
-            if (sz > n) fseek(f, (long)(sz - n), SEEK_CUR);
-            if (sz & 1) fseek(f, 1, SEEK_CUR);
-        } else if (!memcmp(ck, "data", 4)) {
-            data_off = ftell(f); dsize = sz;
-            break;
-        } else {
-            if (fseek(f, (long)sz + (long)(sz & 1), SEEK_CUR) != 0) break;
         }
+        if (next <= pos || next > fsize) break;                  /* chunk claims to extend past the file */
+        if (SPC_FSEEK64(f, next, SEEK_SET) != 0) break;
+        pos = next;
     }
     if (!have_fmt || data_off < 0) { snprintf(err, en, "WAV has no fmt/data chunk"); return -1; }
     s->tag = rd16(fmt);
@@ -206,6 +221,7 @@ static int wav_open(spc_src* s, FILE* f, char* err, size_t en)
     s->block = s->ch * (s->bits / 8);
     avail = fsize - data_off;
     if (avail < 0) avail = 0;
+    if (avail > 0xFFFFFFFFLL) avail = 0xFFFFFFFFLL;
     if (dsize == 0 || dsize > (uint32_t)avail || dsize == 0xFFFFFFFFu) dsize = (uint32_t)avail;
     s->remain = dsize;
     s->frames = dsize / s->block;
@@ -229,11 +245,13 @@ static int src_open(spc_src* s, const char* path, char* err, size_t en)
         return 0;
     }
     {   /* MP3: read the (small) file into memory; minimp3 scans it for the duration */
-        long sz;
+        int64_t sz;
         uint64_t total = 0;
-        fseek(f, 0, SEEK_END); sz = ftell(f); fseek(f, 0, SEEK_SET);
+        if (SPC_FSEEK64(f, 0, SEEK_END) != 0) { fclose(f); snprintf(err, en, "cannot read file"); return -1; }
+        sz = SPC_FTELL64(f);
+        SPC_FSEEK64(f, 0, SEEK_SET);
         if (sz <= 0) { fclose(f); snprintf(err, en, "file is empty"); return -1; }
-        if ((uint64_t)sz > SPC_PLAY_MAX_BYTES) { fclose(f); snprintf(err, en, "file too large (max 200 MB)"); return -1; }
+        if ((uint64_t)sz > SPC_PLAY_MAX_MP3_BYTES) { fclose(f); snprintf(err, en, "file too large (max 64 MB for MP3)"); return -1; }
         s->mp3buf = (uint8_t*)malloc((size_t)sz);
         if (!s->mp3buf || fread(s->mp3buf, 1, (size_t)sz, f) != (size_t)sz) {
             fclose(f); free(s->mp3buf); memset(s, 0, sizeof(*s));
