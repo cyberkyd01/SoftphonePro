@@ -58,6 +58,12 @@ object Hub {
         while (queue.isNotEmpty()) s.success(queue.removeFirst())
     }
 
+    /** The Dart side is being replaced: forget the old sink; events queue until the new isolate listens. */
+    fun resetForNewEngine() {
+        sink = null
+        dartAttached = false
+    }
+
     fun detach() {
         sink = null
     }

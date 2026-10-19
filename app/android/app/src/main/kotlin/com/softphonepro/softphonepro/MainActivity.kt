@@ -33,9 +33,14 @@ class MainActivity : FlutterFragmentActivity() {
         var launchLink: String? = null
     }
 
-    override fun provideFlutterEngine(context: Context): FlutterEngine {
-        return EngineHolder.ensure(context)
+    // Always attach to the process-wide cached engine (never one owned by this activity/fragment),
+    // so FlutterFragment treats it as externally owned and does not destroy it on host destroy.
+    override fun getCachedEngineId(): String {
+        EngineHolder.ensure(this)
+        return EngineHolder.ID
     }
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine = EngineHolder.ensure(context)
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -47,6 +52,9 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         Hub.init(this)
         Hub.activity = this
+        // A fragment restored after process death looks the engine up by id inside super.onCreate,
+        // before getCachedEngineId() would run, so make sure a live engine is cached first.
+        EngineHolder.ensure(this)
         super.onCreate(savedInstanceState)
         handleIntent(intent, cold = !Hub.dartAttached)
         PlatformBridge.applyKeepScreenOn()
