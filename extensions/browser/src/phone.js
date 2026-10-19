@@ -143,7 +143,10 @@
       if (CURRENCY_AFTER_RE.test(after)) continue;
       if (!plausible(cand)) continue;
 
-      out.push({ start, end, text: text.slice(start, end), candidate: cand, ext });
+      // "(+44) 20 7946 0958": keep the opening parenthesis inside the match so the markup stays balanced.
+      let from = start;
+      if (cand[0] === '+' && prev === '(' && cand.includes(')')) from = start - 1;
+      out.push({ start: from, end, text: text.slice(from, end), candidate: cand, ext });
       re.lastIndex = end;
     }
     return out;

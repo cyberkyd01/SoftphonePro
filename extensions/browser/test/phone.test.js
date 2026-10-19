@@ -195,3 +195,9 @@ test('settings.pushRecent: dedupe, newest first, max 20', () => {
   assert.equal(l.filter((r) => r.number === '+440000010').length, 1);
   assert.equal(l.length, 20);
 });
+
+test('regression: "(+44) 20 7946 0958" keeps balanced parentheses', () => {
+  const f = P.findPhoneNumbers('Call (+44) 20 7946 0958 now');
+  assert.deepEqual(f.map((m) => m.text), ['(+44) 20 7946 0958']);
+  assert.equal(P.normalizeNumber(f[0].candidate), '+442079460958');
+});
