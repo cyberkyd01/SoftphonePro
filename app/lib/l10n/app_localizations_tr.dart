@@ -6717,10 +6717,78 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Bu bağlantı yalnızca bir dosyadan veya komut satırından ayarlanabilen \"$setting\" ayarını değiştirmeye çalışıyor. Hiçbir şey içe aktarılmadı.';
+    return 'Bu içe aktarma, bağlantı, QR kodu, yapıştırılan metin veya dosya ile asla ayarlanamayan \"$setting\" ayarını değiştirmeye çalışıyor. Bunun yerine bu bilgisayarda --provision komut satırı seçeneğini kullanın. Hiçbir şey içe aktarılmadı.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Eşleştirilmiş cihazlar interkom araması isteyebilir; her seferinde size sorulur (Ayarlar > LAN bölümünden değiştirilebilir).';
+
+  @override
+  String get callLinkUnsupportedScheme => 'Bu tür bağlantı desteklenmiyor.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Aramaları otomatik olarak kaydeder';
+
+  @override
+  String get linkImportFlagBlocklist => 'Arama engelleme listenizi değiştirir';
+
+  @override
+  String get linkImportFlagEmergency => 'Acil durum numaralarınızı değiştirir';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Hızlı arama numaraları ayarlar';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Eski kayıtları otomatik olarak siler';
+
+  @override
+  String get linkImportFlagFeatureCodes =>
+      'Özel santral özellik kodlarını arar';
+
+  @override
+  String get linkImportAllowAutoRecord => 'Otomatik arama kaydına izin ver';
+
+  @override
+  String get importIgnoredHeader =>
+      'Yok sayıldı (içe aktarmada izin verilmez):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - sunucu $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxy\'ler: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN aktarıcı: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Özel SIP başlıkları: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'Arayan kimliği: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'Medya şifrelemesi yok (SRTP kapalı)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Adres: $host:$port';
+  }
 }

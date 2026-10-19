@@ -6768,12 +6768,83 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Este link tenta alterar «$setting», que só pode ser definido a partir de um ficheiro ou da linha de comandos. Nada foi importado.';
+    return 'Esta importação tenta alterar \"$setting\", que nunca pode ser definido por ligação, código QR, texto colado ou ficheiro. Utilize antes a opção de linha de comandos --provision neste computador. Nada foi importado.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Os dispositivos emparelhados podem pedir uma chamada de intercomunicador; será perguntado antes de cada uma (altere em Definições > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme =>
+      'Este tipo de ligação não é suportado.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Grava as chamadas automaticamente';
+
+  @override
+  String get linkImportFlagBlocklist =>
+      'Altera a sua lista de bloqueio de chamadas';
+
+  @override
+  String get linkImportFlagEmergency => 'Altera os seus números de emergência';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Define números de marcação rápida';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Elimina automaticamente as gravações antigas';
+
+  @override
+  String get linkImportFlagFeatureCodes =>
+      'Marca códigos de funcionalidades PBX personalizados';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Permitir a gravação automática de chamadas';
+
+  @override
+  String get importIgnoredHeader => 'Ignorado (não permitido em importações):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - servidor $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxies: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'Retransmissor TURN: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Cabeçalhos SIP personalizados: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'ID do autor da chamada: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff =>
+      'Sem cifragem de multimédia (SRTP desativado)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Endereço: $host:$port';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13540,10 +13611,80 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Este link tenta alterar \"$setting\", que só pode ser definido por um arquivo ou pela linha de comando. Nada foi importado.';
+    return 'Esta importação tenta alterar \"$setting\", que nunca pode ser definido por link, código QR, texto colado ou arquivo. Use a opção de linha de comando --provision neste computador. Nada foi importado.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Dispositivos pareados podem pedir uma chamada de interfone; você será perguntado antes de cada uma (altere em Configurações > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme => 'Este tipo de link não é suportado.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Grava as chamadas automaticamente';
+
+  @override
+  String get linkImportFlagBlocklist =>
+      'Altera sua lista de bloqueio de chamadas';
+
+  @override
+  String get linkImportFlagEmergency => 'Altera seus números de emergência';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Define números de discagem rápida';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Exclui automaticamente gravações antigas';
+
+  @override
+  String get linkImportFlagFeatureCodes =>
+      'Disca códigos de recursos PBX personalizados';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Permitir a gravação automática de chamadas';
+
+  @override
+  String get importIgnoredHeader => 'Ignorado (não permitido em importações):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - servidor $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxies: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'Relay TURN: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Cabeçalhos SIP personalizados: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'ID do chamador: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff =>
+      'Sem criptografia de mídia (SRTP desativado)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Endereço: $host:$port';
+  }
 }

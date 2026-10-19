@@ -6685,10 +6685,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'This link tries to change \"$setting\", which can only be set from a file or the command line. Nothing was imported.';
+    return 'This import tries to change \"$setting\", which can never be set by a link, QR code, pasted text or file. Use the --provision command-line option on this computer instead. Nothing was imported.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme => 'This kind of link is not supported.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Records calls automatically';
+
+  @override
+  String get linkImportFlagBlocklist => 'Changes your call blocklist';
+
+  @override
+  String get linkImportFlagEmergency => 'Changes your emergency numbers';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Sets speed-dial numbers';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Automatically deletes old recordings';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'Dials custom PBX feature codes';
+
+  @override
+  String get linkImportAllowAutoRecord => 'Allow automatic call recording';
+
+  @override
+  String get importIgnoredHeader => 'Ignored (not allowed from imports):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - server $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxies: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN relay: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Custom SIP headers: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'Caller ID: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'No media encryption (SRTP off)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Address: $host:$port';
+  }
 }

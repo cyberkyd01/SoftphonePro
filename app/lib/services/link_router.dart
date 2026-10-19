@@ -45,13 +45,14 @@ class RejectedLinkAction extends LinkAction {
 }
 
 /// Why a link was rejected; see [linkRejectionText].
-enum LinkRejection { missingArgument, httpsRequired, invalidLan, notLocal }
+enum LinkRejection { missingArgument, httpsRequired, invalidLan, notLocal, unsupportedScheme }
 
 String linkRejectionText(AppLocalizations l, LinkRejection r) => switch (r) {
   LinkRejection.missingArgument => l.callLinkMissingArgument,
   LinkRejection.httpsRequired => l.callLinkHttpsRequired,
   LinkRejection.invalidLan => l.callLinkInvalidLan,
   LinkRejection.notLocal => l.callLinkNotLocal,
+  LinkRejection.unsupportedScheme => l.callLinkUnsupportedScheme,
 };
 
 /// https only; plain http is accepted for localhost testing.
@@ -92,7 +93,7 @@ LinkAction classifyLink(Uri uri, {bool isLocal = false}) {
     }
   }
   if (!kLinkSchemes.contains(uri.scheme.toLowerCase())) {
-    return const RejectedLinkAction(LinkRejection.notLocal);
+    return const RejectedLinkAction(LinkRejection.unsupportedScheme);
   }
   return DialLinkAction(dialTargetFromLink(uri));
 }

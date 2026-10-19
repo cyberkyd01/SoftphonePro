@@ -6746,10 +6746,75 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'يحاول هذا الرابط تغيير \"$setting\"، وهو إعداد لا يمكن ضبطه إلا من ملف أو من سطر الأوامر. لم يُستورد شيء.';
+    return 'يحاول هذا الاستيراد تغيير \"$setting\"، وهو إعداد لا يمكن ضبطه أبدًا عبر رابط أو رمز QR أو نص ملصق أو ملف. استخدم بدلًا من ذلك خيار سطر الأوامر --provision على هذا الكمبيوتر. لم يتم استيراد أي شيء.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'يمكن للأجهزة المقترنة طلب مكالمة داخلية؛ سيُطلب منك الإذن قبل كل واحدة (غيّر ذلك من الإعدادات > الشبكة المحلية).';
+
+  @override
+  String get callLinkUnsupportedScheme => 'هذا النوع من الروابط غير مدعوم.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'يسجّل المكالمات تلقائيًا';
+
+  @override
+  String get linkImportFlagBlocklist => 'يغيّر قائمة حظر المكالمات لديك';
+
+  @override
+  String get linkImportFlagEmergency => 'يغيّر أرقام الطوارئ لديك';
+
+  @override
+  String get linkImportFlagSpeedDial => 'يضبط أرقام الاتصال السريع';
+
+  @override
+  String get linkImportFlagRecordingDelete => 'يحذف التسجيلات القديمة تلقائيًا';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'يطلب رموز ميزات PBX مخصصة';
+
+  @override
+  String get linkImportAllowAutoRecord => 'السماح بتسجيل المكالمات تلقائيًا';
+
+  @override
+  String get importIgnoredHeader => 'تم التجاهل (غير مسموح في الاستيراد):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - الخادم $server، $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'الوكلاء: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'مرحّل TURN: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'ترويسات SIP مخصصة: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'معرّف المتصل: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'بدون تشفير الوسائط (SRTP متوقف)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'العنوان: $host:$port';
+  }
 }

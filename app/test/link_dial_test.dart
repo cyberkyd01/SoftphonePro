@@ -159,11 +159,12 @@ void main() {
       addTearDown(container.dispose);
       final ref = container.read(_refProvider);
       final r = Provisioning.parse('{"settings":{"automationEnabled":true,"automationToken":"x","dnd":true}}');
-      await importProvisioningResult(ref, r);
+      // Untrusted: the whole import is refused (automation* never applies).
+      await expectLater(importProvisioningResult(ref, r), throwsA(isA<ProvisioningException>()));
       var s = container.read(settingsProvider);
       expect(s.automationEnabled, isFalse);
       expect(s.automationToken, '');
-      expect(s.dnd, isTrue);
+      expect(s.dnd, isFalse);
       await importProvisioningResult(ref, r, allowAutomation: true);
       s = container.read(settingsProvider);
       expect(s.automationEnabled, isTrue);

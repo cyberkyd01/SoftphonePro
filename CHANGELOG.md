@@ -80,7 +80,8 @@ Found by the independent reviews and the device runs before release:
   * Android intents that other installed apps could use to place, provision or answer calls;
   * an engine hang on crafted WAV files on Windows;
   * the automation token appearing in settings exports;
-  * dangerous settings in web-link provisioning not being shown to the user;
+  * provisioning imports changing dangerous settings: links, QR codes, pasted text, files and Settings URL fetches now share one allowlist-based import with a single confirmation dialog; TLS pins, custom CA, DNS servers, the automation API, the app lock and all file paths cannot be imported, and auto-answer and automatic recording stay off unless ticked (only the local `--provision` command line is trusted);
+  * macOS URL events being parsed as command-line flags, `a=ice-pwd` and JSON secrets in exported traces, and LAN pairing prompts built from unescaped peer names;
   * secrets in the diagnostic bundle's engine log.
 
   Each fix has a regression test. See [docs/reviews/2026-10-19-final-review.md](docs/reviews/2026-10-19-final-review.md).

@@ -6514,10 +6514,75 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'このリンクは、ファイルまたはコマンドラインからのみ設定できる「$setting」を変更しようとしています。何もインポートされませんでした。';
+    return 'このインポートは「$setting」を変更しようとしていますが、リンク、QR コード、貼り付けたテキスト、ファイルでは設定できません。代わりにこのコンピューターで --provision コマンドラインオプションを使用してください。何もインポートされませんでした。';
   }
 
   @override
   String get lanPairIntercomNote =>
       'ペアリング済みのデバイスはインターコム通話を要求できます。毎回確認が表示されます（設定 > LAN で変更できます）。';
+
+  @override
+  String get callLinkUnsupportedScheme => 'この種類のリンクはサポートされていません。';
+
+  @override
+  String get linkImportFlagAutoRecord => '通話を自動的に録音します';
+
+  @override
+  String get linkImportFlagBlocklist => '通話ブロックリストを変更します';
+
+  @override
+  String get linkImportFlagEmergency => '緊急番号を変更します';
+
+  @override
+  String get linkImportFlagSpeedDial => '短縮ダイヤル番号を設定します';
+
+  @override
+  String get linkImportFlagRecordingDelete => '古い録音を自動的に削除します';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'カスタム PBX 機能コードをダイヤルします';
+
+  @override
+  String get linkImportAllowAutoRecord => '通話の自動録音を許可する';
+
+  @override
+  String get importIgnoredHeader => '無視されました（インポートでは許可されていません）：';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name（$address）- サーバー $server、$transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'プロキシ：$proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN リレー：$server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'カスタム SIP ヘッダー：$headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return '発信者番号：$callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'メディア暗号化なし（SRTP オフ）';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'アドレス：$host:$port';
+  }
 }

@@ -7,6 +7,7 @@ import 'package:lan_link/lan_link.dart' as ll;
 import '../l10n/l10n.dart';
 import '../lan/lan_controller.dart';
 import '../ui/router.dart';
+import '../ui/widgets/import_confirm_dialog.dart';
 import 'app_services.dart';
 import 'calls_controller.dart';
 import 'dial_ready.dart';
@@ -53,7 +54,7 @@ Future<void> handleIncomingLink(Ref ref, Uri uri, {bool isLocal = false}) async 
           final r = await loadProvisioningSource(ref, source);
           // A command line is local intent: it may also configure the local
           // automation API (a web link never can).
-          await importProvisioningResult(ref, r, allowAutomation: true);
+          await applyTrustedImport(ref.read, r);
           _leaveOnboarding(ref, r);
         } on ProvisioningException catch (e) {
           notices.error(e.message);
@@ -65,13 +66,23 @@ Future<void> handleIncomingLink(Ref ref, Uri uri, {bool isLocal = false}) async 
       // A web page or another app can deliver this link: never connect silently.
       final ctx = await _rootContext();
       if (ctx == null || !ctx.mounted) return;
-      final shown = (target.name?.trim().isNotEmpty ?? false) ? '${target.name} (${target.host})' : target.host;
+      // The peer name comes from the link: show it as plain text, capped.
+      final name = (target.name ?? '').replaceAll(RegExp(r'[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]'), ' ').trim();
+      final shown = name.isEmpty ? target.host : (name.length > 40 ? '${name.substring(0, 40)}...' : name);
       final go = await showDialog<bool>(
         context: ctx,
         builder: (c) => AlertDialog(
           key: const Key('link-lan-confirm'),
-          title: Text(l.linkLanConnectTitle(shown)),
-          content: Text(l.linkLanConnectBody),
+          title: Text(l.linkLanConnectTitle(shown), maxLines: 3, overflow: TextOverflow.ellipsis),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.linkLanConnectBody),
+              const SizedBox(height: 8),
+              Text(l.linkLanConnectAddress(target.host, '${target.port}'), key: const Key('link-lan-address')),
+            ],
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: Text(l.actionCancel)),
             FilledButton(key: const Key('link-lan-yes'), onPressed: () => Navigator.pop(c, true), child: Text(l.linkLanConnectAction)),
@@ -132,15 +143,6 @@ Future<void> _dial(Ref ref, String target, {required bool immediately}) async {
   await ref.read(callsProvider.notifier).dial(target);
 }
 
-String _flagText(AppLocalizations l, ImportFlag f) => switch (f.kind) {
-  ImportFlagKind.autoAnswer => l.linkImportFlagAutoAnswer,
-  ImportFlagKind.forwarding => l.linkImportFlagForwarding(f.arg ?? ''),
-  ImportFlagKind.intercom => l.linkImportFlagIntercom,
-  ImportFlagKind.dialRewrite => l.linkImportFlagDialRewrite,
-  ImportFlagKind.linksImmediately => l.linkImportFlagLinksImmediately,
-  ImportFlagKind.diagnostics => l.linkImportFlagDiagnostics,
-};
-
 Future<void> _provisionFromLink(Ref ref, Uri url) async {
   final notices = ref.read(noticeProvider.notifier);
   final l = ref.read(l10nProvider);
@@ -151,73 +153,18 @@ Future<void> _provisionFromLink(Ref ref, Uri url) async {
     );
     final client = ref.read(provisioningClientProvider);
     final fetched = await Provisioning.fetch(url, vars: vars, client: client);
-    final refused = refusedWebSetting(fetched);
-    if (refused != null) {
-      notices.error(l.linkImportRefused(refused));
+    // UNTRUSTED: the shared gate + dialog (also used by the Settings screen).
+    final plan = prepareUntrustedImport(fetched);
+    if (plan.refusedKey != null) {
+      notices.error(l.linkImportRefused(plan.refusedKey!));
       return;
     }
     final ctx = await _rootContext();
     if (ctx == null || !ctx.mounted) return;
-    final r0 = sanitizeForWebLink(fetched, allowAutoAnswer: true);
-    final flags = sensitiveImportFlags(r0);
-    final hasAutoAnswer = flags.any((f) => f.kind == ImportFlagKind.autoAnswer);
-    var allowAutoAnswer = false;
-    final ok = await showDialog<bool>(
-      context: ctx,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setState) => AlertDialog(
-          key: const Key('link-import-confirm'),
-          title: Text(l.callLinkImportTitle),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r0.settings.isEmpty
-                      ? l.callLinkImportBody(url.host, r0.accounts.length)
-                      : l.callLinkImportBodyWithSettings(url.host, r0.accounts.length, r0.settings.length),
-                ),
-                if (flags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(l.linkImportSensitiveHeader, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  for (final f in flags)
-                    Padding(
-                      key: Key('link-import-flag-${f.kind.name}'),
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 18, color: Theme.of(c).colorScheme.error),
-                          const SizedBox(width: 6),
-                          Expanded(child: Text(_flagText(l, f))),
-                        ],
-                      ),
-                    ),
-                ],
-                if (hasAutoAnswer)
-                  CheckboxListTile(
-                    key: const Key('link-import-allow-autoanswer'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: allowAutoAnswer,
-                    title: Text(l.linkImportAllowAutoAnswer),
-                    onChanged: (v) => setState(() => allowAutoAnswer = v ?? false),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: Text(l.actionCancel)),
-            FilledButton(key: const Key('link-import-yes'), onPressed: () => Navigator.pop(c, true), child: Text(l.actionImport)),
-          ],
-        ),
-      ),
-    );
-    if (ok != true) return;
-    final r = sanitizeForWebLink(fetched, allowAutoAnswer: allowAutoAnswer);
-    await importProvisioningResult(ref, r);
-    _leaveOnboarding(ref, r);
+    final decision = await showImportConfirmDialog(ctx, plan, host: url.host);
+    if (decision == null) return;
+    await applyImportPlan(ref.read, plan, decision);
+    _leaveOnboarding(ref, plan.resolve(decision));
   } on ProvisioningException catch (e) {
     notices.error(e.message);
   }

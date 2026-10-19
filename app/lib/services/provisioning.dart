@@ -166,7 +166,8 @@ class Provisioning {
 
   /// User-facing settings that a provisioning export may carry. Everything else
   /// (automation token / origins, app lock, instance id, update state,
-  /// onboarding flag, machine-specific paths) never leaves the device.
+  /// onboarding flag, machine-specific paths, TLS verification / pins / custom
+  /// DNS resolvers, which no untrusted import may carry) never leaves the device.
   static const exportableSettings = <String>{
     'themeMode', 'accent', 'compactDensity', 'language',
     'dnd', 'dndRejectCode', 'callWaiting', 'busyRejectCode',
@@ -174,8 +175,8 @@ class Provisioning {
     'blocklist', 'ringtone', 'ringerVolume', 'emergencyNumbers', 'defaultCountryPrefix',
     'micLevel', 'speakerLevel', 'ecAlgo', 'ecTailMs', 'noiseSuppression', 'agc', 'vad',
     'codecOrder', 'codecsDisabled', 'opusBitrate', 'opusFec', 'opusDtx', 'opusCbr', 'opusComplexity',
-    'udpEnabled', 'udpPort', 'tcpEnabled', 'tcpPort', 'tlsEnabled', 'tlsPort', 'tlsVerify',
-    'stunServers', 'ipv6', 'qos', 'dnsServers', 'tlsPins', 'rtpPort', 'rtpPortRange',
+    'udpEnabled', 'udpPort', 'tcpEnabled', 'tcpPort', 'tlsEnabled', 'tlsPort',
+    'stunServers', 'ipv6', 'qos', 'rtpPort', 'rtpPortRange',
     'autoRecord', 'recordBeep', 'recordFormat', 'recordRule', 'recordNotice',
     'recordAutoDeleteDays', 'recordContinueTransfers',
     'minimizeToTray', 'sendTyping', 'dialRules', 'stripPrefix', 'plusReplacement',

@@ -6690,10 +6690,77 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'यह लिंक \"$setting\" बदलने की कोशिश करता है, जिसे केवल फ़ाइल या कमांड लाइन से सेट किया जा सकता है। कुछ भी इम्पोर्ट नहीं हुआ।';
+    return 'यह आयात \"$setting\" बदलने का प्रयास करता है, जिसे लिंक, QR कोड, चिपकाए गए टेक्स्ट या फ़ाइल से कभी सेट नहीं किया जा सकता। इसके बजाय इस कंप्यूटर पर --provision कमांड-लाइन विकल्प का उपयोग करें। कुछ भी आयात नहीं किया गया।';
   }
 
   @override
   String get lanPairIntercomNote =>
       'पेयर किए गए डिवाइस इंटरकॉम कॉल का अनुरोध कर सकते हैं; हर बार आपसे पूछा जाएगा (सेटिंग > LAN में बदलें)।';
+
+  @override
+  String get callLinkUnsupportedScheme => 'इस प्रकार का लिंक समर्थित नहीं है।';
+
+  @override
+  String get linkImportFlagAutoRecord => 'कॉल अपने-आप रिकॉर्ड करता है';
+
+  @override
+  String get linkImportFlagBlocklist => 'आपकी कॉल ब्लॉकलिस्ट बदलता है';
+
+  @override
+  String get linkImportFlagEmergency => 'आपके आपातकालीन नंबर बदलता है';
+
+  @override
+  String get linkImportFlagSpeedDial => 'स्पीड-डायल नंबर सेट करता है';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'पुरानी रिकॉर्डिंग अपने-आप हटाता है';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'कस्टम PBX फ़ीचर कोड डायल करता है';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'स्वचालित कॉल रिकॉर्डिंग की अनुमति दें';
+
+  @override
+  String get importIgnoredHeader => 'अनदेखा किया गया (आयात में अनुमत नहीं):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - सर्वर $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'प्रॉक्सी: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN रिले: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'कस्टम SIP हेडर: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'कॉलर आईडी: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'मीडिया एन्क्रिप्शन नहीं (SRTP बंद)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'पता: $host:$port';
+  }
 }

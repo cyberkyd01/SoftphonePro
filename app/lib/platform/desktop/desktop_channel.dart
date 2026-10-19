@@ -9,8 +9,11 @@ import 'launch_args.dart';
 ///  * macOS: URL (Apple) events and the login-item API (MainFlutterWindow.swift)
 ///  * Windows: command lines forwarded by a second launch (WM_COPYDATA)
 class DesktopChannel {
-  DesktopChannel([MethodChannel? channel])
-    : _channel = channel ?? const MethodChannel('softphonepro/desktop');
+  DesktopChannel([MethodChannel? channel, bool? isMacOS])
+    : _channel = channel ?? const MethodChannel('softphonepro/desktop'),
+      _isMacOS = isMacOS ?? (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS);
+
+  final bool _isMacOS;
 
   final MethodChannel _channel;
   final _links = StreamController<Uri>.broadcast();
@@ -71,8 +74,30 @@ class DesktopChannel {
     return null;
   }
 
+  /// Handles a payload from the native runner.
+  ///
+  /// macOS: Apple-event URLs are plain strings from other apps / web pages, so
+  /// they go through [parseLink] ONLY (sip/sips/tel/callto/softphonepro) and are
+  /// never split into command-line flags: a URL can not become `--provision`.
+  ///
+  /// Windows: the payload is the argv of a second launch (WM_COPYDATA) and is
+  /// parsed as a command line, so `--provision` / `--dial` are honoured. That
+  /// is the same-user privilege level as launching the program yourself, which
+  /// is acceptable (any process of this user can already run it with flags).
   void _handlePayload(String payload, {bool startup = false}) {
-    // macOS delivers a bare URL; Windows delivers newline separated args.
+    if (_isMacOS) {
+      final link = parseLink(payload);
+      if (link != null) {
+        if (startup) {
+          _initial.add(link);
+        } else {
+          _emit(link);
+        }
+      } else if (!startup) {
+        _showRequests.add(null);
+      }
+      return;
+    }
     final p = parseForwardedArgs(payload);
     if (p.link != null) {
       if (startup) {

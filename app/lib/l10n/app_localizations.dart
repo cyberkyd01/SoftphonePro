@@ -11287,10 +11287,10 @@ abstract class AppLocalizations {
   /// **'Allow auto-answer for the imported account(s)'**
   String get linkImportAllowAutoAnswer;
 
-  /// Security hardening (final review).
+  /// Security hardening: untrusted provisioning imports.
   ///
   /// In en, this message translates to:
-  /// **'This link tries to change \"{setting}\", which can only be set from a file or the command line. Nothing was imported.'**
+  /// **'This import tries to change \"{setting}\", which can never be set by a link, QR code, pasted text or file. Use the --provision command-line option on this computer instead. Nothing was imported.'**
   String linkImportRefused(String setting);
 
   /// Security hardening (final review).
@@ -11298,6 +11298,107 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).'**
   String get lanPairIntercomNote;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'This kind of link is not supported.'**
+  String get callLinkUnsupportedScheme;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Records calls automatically'**
+  String get linkImportFlagAutoRecord;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes your call blocklist'**
+  String get linkImportFlagBlocklist;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes your emergency numbers'**
+  String get linkImportFlagEmergency;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Sets speed-dial numbers'**
+  String get linkImportFlagSpeedDial;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically deletes old recordings'**
+  String get linkImportFlagRecordingDelete;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Dials custom PBX feature codes'**
+  String get linkImportFlagFeatureCodes;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow automatic call recording'**
+  String get linkImportAllowAutoRecord;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignored (not allowed from imports):'**
+  String get importIgnoredHeader;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({address}) - server {server}, {transport}'**
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  );
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxies: {proxies}'**
+  String importAccountProxies(String proxies);
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'TURN relay: {server}'**
+  String importAccountTurn(String server);
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom SIP headers: {headers}'**
+  String importAccountHeaders(String headers);
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Caller ID: {callerId}'**
+  String importAccountCallerId(String callerId);
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'No media encryption (SRTP off)'**
+  String get importAccountSrtpOff;
+
+  /// Security hardening: untrusted provisioning imports.
+  ///
+  /// In en, this message translates to:
+  /// **'Address: {host}:{port}'**
+  String linkLanConnectAddress(String host, String port);
 }
 
 class _AppLocalizationsDelegate

@@ -6774,10 +6774,78 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Dieser Link versucht, „$setting“ zu ändern; das ist nur per Datei oder Befehlszeile möglich. Es wurde nichts importiert.';
+    return 'Dieser Import versucht, „$setting“ zu ändern; das lässt sich nie per Link, QR-Code, eingefügtem Text oder Datei setzen. Verwenden Sie stattdessen die Befehlszeilenoption --provision auf diesem Computer. Es wurde nichts importiert.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Gekoppelte Geräte können eine Gegensprechverbindung anfragen; vor jeder werden Sie gefragt (änderbar unter Einstellungen > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme =>
+      'Diese Art von Link wird nicht unterstützt.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Zeichnet Anrufe automatisch auf';
+
+  @override
+  String get linkImportFlagBlocklist => 'Ändert Ihre Anrufsperrliste';
+
+  @override
+  String get linkImportFlagEmergency => 'Ändert Ihre Notrufnummern';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Legt Kurzwahlnummern fest';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Löscht alte Aufnahmen automatisch';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'Wählt eigene PBX-Funktionscodes';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Automatische Anrufaufzeichnung erlauben';
+
+  @override
+  String get importIgnoredHeader => 'Ignoriert (bei Importen nicht erlaubt):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - Server $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxys: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN-Relay: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Eigene SIP-Header: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'Anruferkennung: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'Keine Medienverschlüsselung (SRTP aus)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Adresse: $host:$port';
+  }
 }

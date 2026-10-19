@@ -219,7 +219,6 @@ void main() {
             'lanAllowIntercom': true,
             'sipTrace': true,
             'ptime': 30,
-            'automationToken': 'x' * 32,
             'instanceMac': 'zz',
           },
         }),
@@ -283,19 +282,23 @@ void main() {
         await settle(tester, env.engine);
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('link-import-confirm')), findsNothing);
-        expect(find.textContaining('file or the command line'), findsOneWidget);
+        expect(find.textContaining('--provision'), findsOneWidget);
         expect(containerOf(tester).read(accountsProvider).profiles, isEmpty);
         expect(containerOf(tester).read(settingsProvider).tlsVerify, isTrue);
         expect(containerOf(tester).read(settingsProvider).customCaFile, '');
       });
     }
 
-    test('refusedWebSetting / sanitizeForWebLink', () {
-      expect(refusedWebSetting(const ProvisioningResult(settings: {'tlsVerify': true})), isNull);
-      expect(refusedWebSetting(const ProvisioningResult(settings: {'tlsVerify': false})), 'tlsVerify');
-      expect(refusedWebSetting(const ProvisioningResult(settings: {'customCaFile': ''})), isNull);
-      final r = sanitizeForWebLink(const ProvisioningResult(settings: {'appLock': true, 'updateCheck': false, 'onboardingDone': true, 'ptime': 40}), allowAutoAnswer: false);
-      expect(r.settings, {'ptime': 40});
+    test('refusedImportSetting / prepareUntrustedImport', () {
+      expect(refusedImportSetting({'tlsVerify': true}), isNull);
+      expect(refusedImportSetting({'tlsVerify': false}), 'tlsVerify');
+      expect(refusedImportSetting({'customCaFile': ''}), isNull);
+      expect(refusedImportSetting({'customCaFile': '/x'}), 'customCaFile');
+      final p = prepareUntrustedImport(const ProvisioningResult(settings: {'appLockMinutes': 3, 'updateCheck': false, 'onboardingDone': true, 'ptime': 40}));
+      expect(p.refusedKey, 'appLockMinutes');
+      final q = prepareUntrustedImport(const ProvisioningResult(settings: {'updateCheck': false, 'onboardingDone': true, 'ptime': 40}));
+      expect(q.safeSettings, {'ptime': 40});
+      expect(q.ignored, ['updateCheck', 'onboardingDone']);
     });
   });
 
@@ -331,10 +334,31 @@ void main() {
       await settle(tester, env.engine);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('link-lan-confirm')), findsOneWidget);
-      expect(find.textContaining('Connect to device Desk (192.168.1.20)?'), findsOneWidget);
+      expect(find.textContaining('Connect to device Desk?'), findsOneWidget);
+      expect(find.text('Address: 192.168.1.20:4711'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('link-lan-confirm')), findsNothing);
+    });
+  });
+
+  group('LAN confirm dialog renders the peer name as capped plain text', () {
+    testWidgets('markup and control characters are inert, long names are cut, host:port is separate', (tester) async {
+      final env = await TestEnv.create();
+      final platform = _LinkPlatform();
+      await _pump(tester, env, [platformServicesProvider.overrideWithValue(platform)]);
+      final name = '<b>Boss</b>\n${'x' * 200}';
+      platform.links.add(Uri.parse('softphonepro://lan?h=192.168.1.20&p=4711&id=ab&n=${Uri.encodeComponent(name)}'));
+      await settle(tester, env.engine);
+      await tester.pumpAndSettle();
+      final title = tester.widget<AlertDialog>(find.byKey(const Key('link-lan-confirm'))).title as Text;
+      expect(title.data!.length, lessThan(100));
+      expect(title.data, contains('<b>Boss</b>'));
+      expect(title.data, isNot(contains('\n')));
+      expect(title.data, contains('...'));
+      expect(find.text('Address: 192.168.1.20:4711'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
     });
   });
 

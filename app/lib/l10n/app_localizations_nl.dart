@@ -6761,10 +6761,79 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Deze link probeert „$setting” te wijzigen; dat kan alleen via een bestand of de opdrachtregel. Er is niets geïmporteerd.';
+    return 'Deze import probeert \"$setting\" te wijzigen, wat nooit via een link, QR-code, geplakte tekst of bestand kan worden ingesteld. Gebruik in plaats daarvan de opdrachtregeloptie --provision op deze computer. Er is niets geïmporteerd.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Gekoppelde apparaten kunnen een intercomgesprek aanvragen; u wordt eerst gevraagd (te wijzigen onder Instellingen > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme =>
+      'Dit soort link wordt niet ondersteund.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Neemt gesprekken automatisch op';
+
+  @override
+  String get linkImportFlagBlocklist =>
+      'Wijzigt uw blokkeerlijst voor gesprekken';
+
+  @override
+  String get linkImportFlagEmergency => 'Wijzigt uw alarmnummers';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Stelt snelkiesnummers in';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Verwijdert oude opnames automatisch';
+
+  @override
+  String get linkImportFlagFeatureCodes => 'Kiest eigen PBX-functiecodes';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Automatisch opnemen van gesprekken toestaan';
+
+  @override
+  String get importIgnoredHeader => 'Genegeerd (niet toegestaan bij import):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - server $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxy\'s: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN-relay: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Eigen SIP-headers: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'Beller-ID: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'Geen mediaversleuteling (SRTP uit)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Adres: $host:$port';
+  }
 }

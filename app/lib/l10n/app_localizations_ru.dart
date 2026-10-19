@@ -6799,10 +6799,78 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Эта ссылка пытается изменить «$setting», что можно задать только из файла или командной строки. Ничего не импортировано.';
+    return 'Этот импорт пытается изменить «$setting», что нельзя задать ссылкой, QR-кодом, вставленным текстом или файлом. Используйте на этом компьютере параметр командной строки --provision. Ничего не импортировано.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'Сопряжённые устройства могут запросить интерком-вызов; перед каждым вас спросят (меняется в Настройки > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme => 'Этот тип ссылок не поддерживается.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Автоматически записывает звонки';
+
+  @override
+  String get linkImportFlagBlocklist => 'Изменяет список блокировки звонков';
+
+  @override
+  String get linkImportFlagEmergency => 'Изменяет экстренные номера';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Задаёт номера быстрого набора';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Автоматически удаляет старые записи';
+
+  @override
+  String get linkImportFlagFeatureCodes =>
+      'Набирает пользовательские служебные коды АТС';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Разрешить автоматическую запись звонков';
+
+  @override
+  String get importIgnoredHeader => 'Игнорируется (импорт этого не разрешает):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - сервер $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Прокси: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'Ретранслятор TURN: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Пользовательские заголовки SIP: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'Идентификатор вызывающего: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => 'Без шифрования медиа (SRTP выключен)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Адрес: $host:$port';
+  }
 }

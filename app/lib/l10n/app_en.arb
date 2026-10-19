@@ -9130,9 +9130,9 @@
   "@linkImportAllowAutoAnswer": {
     "description": "Security hardening (final review)."
   },
-  "linkImportRefused": "This link tries to change \"{setting}\", which can only be set from a file or the command line. Nothing was imported.",
+  "linkImportRefused": "This import tries to change \"{setting}\", which can never be set by a link, QR code, pasted text or file. Use the --provision command-line option on this computer instead. Nothing was imported.",
   "@linkImportRefused": {
-    "description": "Security hardening (final review).",
+    "description": "Security hardening: untrusted provisioning imports.",
     "placeholders": {
       "setting": {
         "type": "String"
@@ -9142,5 +9142,111 @@
   "lanPairIntercomNote": "Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).",
   "@lanPairIntercomNote": {
     "description": "Security hardening (final review)."
+  },
+  "callLinkUnsupportedScheme": "This kind of link is not supported.",
+  "@callLinkUnsupportedScheme": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagAutoRecord": "Records calls automatically",
+  "@linkImportFlagAutoRecord": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagBlocklist": "Changes your call blocklist",
+  "@linkImportFlagBlocklist": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagEmergency": "Changes your emergency numbers",
+  "@linkImportFlagEmergency": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagSpeedDial": "Sets speed-dial numbers",
+  "@linkImportFlagSpeedDial": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagRecordingDelete": "Automatically deletes old recordings",
+  "@linkImportFlagRecordingDelete": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportFlagFeatureCodes": "Dials custom PBX feature codes",
+  "@linkImportFlagFeatureCodes": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkImportAllowAutoRecord": "Allow automatic call recording",
+  "@linkImportAllowAutoRecord": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "importIgnoredHeader": "Ignored (not allowed from imports):",
+  "@importIgnoredHeader": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "importAccountLine": "{name} ({address}) - server {server}, {transport}",
+  "@importAccountLine": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      },
+      "server": {
+        "type": "String"
+      },
+      "transport": {
+        "type": "String"
+      }
+    }
+  },
+  "importAccountProxies": "Proxies: {proxies}",
+  "@importAccountProxies": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "proxies": {
+        "type": "String"
+      }
+    }
+  },
+  "importAccountTurn": "TURN relay: {server}",
+  "@importAccountTurn": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "importAccountHeaders": "Custom SIP headers: {headers}",
+  "@importAccountHeaders": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "headers": {
+        "type": "String"
+      }
+    }
+  },
+  "importAccountCallerId": "Caller ID: {callerId}",
+  "@importAccountCallerId": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "callerId": {
+        "type": "String"
+      }
+    }
+  },
+  "importAccountSrtpOff": "No media encryption (SRTP off)",
+  "@importAccountSrtpOff": {
+    "description": "Security hardening: untrusted provisioning imports."
+  },
+  "linkLanConnectAddress": "Address: {host}:{port}",
+  "@linkLanConnectAddress": {
+    "description": "Security hardening: untrusted provisioning imports.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "String"
+      }
+    }
   }
 }

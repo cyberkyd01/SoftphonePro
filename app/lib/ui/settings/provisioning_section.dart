@@ -11,44 +11,25 @@ import '../../services/provisioning_import.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../../models/app_settings.dart';
+import '../widgets/import_confirm_dialog.dart';
 import '../widgets/qr_payload.dart';
 import '../widgets/qr_scanner_sheet.dart';
 import '../widgets/settings_tiles.dart';
 
-/// Applies a parsed provisioning result after user confirmation.
+/// Applies a parsed provisioning result after user confirmation. Every source
+/// reachable from the Settings screen (QR, URL, pasted JSON, file, clipboard)
+/// is UNTRUSTED: it goes through [prepareUntrustedImport] and the shared
+/// confirmation dialog, never straight into the stores.
 Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningResult r) async {
   final l = context.l10n;
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(l.provisioningImportTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l.provisioningSummary(r.accounts.length, r.settings.length)),
-          for (final a in r.accounts) Text('• ${a.name}  (${a.address})'),
-          if (r.warnings.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            for (final w in r.warnings) Text(w, style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.actionCancel)),
-        FilledButton(key: const Key('apply-import'), onPressed: r.accounts.isEmpty && r.settings.isEmpty ? null : () => Navigator.pop(ctx, true), child: Text(l.actionImport)),
-      ],
-    ),
-  );
-  if (ok != true) return 0;
-  for (final a in r.accounts) {
-    await ref.read(accountsProvider.notifier).add(a);
+  final plan = prepareUntrustedImport(r);
+  if (plan.refusedKey != null) {
+    ref.read(noticeProvider.notifier).error(l.linkImportRefused(plan.refusedKey!));
+    return 0;
   }
-  if (r.settings.isNotEmpty || r.accounts.isNotEmpty) {
-    await ref.read(settingsProvider.notifier).update({...r.settings, if (r.accounts.isNotEmpty) 'onboardingDone': true});
-  }
-  ref.read(noticeProvider.notifier).show(l.provisioningImportedAccounts(r.accounts.length));
-  return r.accounts.length;
+  final decision = await showImportConfirmDialog(context, plan);
+  if (decision == null) return 0;
+  return applyImportPlan(ref.read, plan, decision);
 }
 
 /// Asks for a URL or pasted JSON and imports it. Returns accounts added.
@@ -69,6 +50,7 @@ Future<int> importProvisioningText(BuildContext context, WidgetRef ref, String t
       QrProvisionUrl(:final url) => await Provisioning.fetch(
         url,
         l10n: l,
+        client: ref.read(provisioningClientProvider),
         vars: await provisioningVars(
           settings: ref.read(settingsProvider).toJson(),
           save: ref.read(settingsProvider.notifier).update,

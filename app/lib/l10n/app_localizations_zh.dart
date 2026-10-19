@@ -6461,9 +6461,74 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return '此链接试图更改“$setting”，该项只能通过文件或命令行设置。未导入任何内容。';
+    return '此导入试图更改“$setting”，该设置无法通过链接、二维码、粘贴文本或文件设置。请改用本机上的 --provision 命令行选项。未导入任何内容。';
   }
 
   @override
   String get lanPairIntercomNote => '已配对的设备可以请求对讲通话；每次都会先询问您（可在 设置 > 局域网 中更改）。';
+
+  @override
+  String get callLinkUnsupportedScheme => '不支持此类链接。';
+
+  @override
+  String get linkImportFlagAutoRecord => '自动录制通话';
+
+  @override
+  String get linkImportFlagBlocklist => '更改您的通话黑名单';
+
+  @override
+  String get linkImportFlagEmergency => '更改您的紧急号码';
+
+  @override
+  String get linkImportFlagSpeedDial => '设置快速拨号号码';
+
+  @override
+  String get linkImportFlagRecordingDelete => '自动删除旧录音';
+
+  @override
+  String get linkImportFlagFeatureCodes => '拨打自定义 PBX 功能码';
+
+  @override
+  String get linkImportAllowAutoRecord => '允许自动通话录音';
+
+  @override
+  String get importIgnoredHeader => '已忽略（导入不允许）：';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name（$address）- 服务器 $server，$transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return '代理：$proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'TURN 中继：$server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return '自定义 SIP 头：$headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return '主叫号码：$callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff => '无媒体加密（SRTP 关闭）';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return '地址：$host:$port';
+  }
 }

@@ -139,6 +139,32 @@ These are replaced on the device when the file is imported:
   `SoftphonePro --provision <file-or-url>`. This imports without a prompt,
   so it suits deployment scripts.
 
+**What an import may and may not change**
+
+Everything except the desktop command line is treated as untrusted: links,
+QR codes, pasted JSON or URLs, files and URLs fetched from Settings. The app
+shows one confirmation dialog for all of them. It lists each account's
+server, registrar, proxies, transport and headers, warns about sensitive items
+(auto-answer, automatic recording, call forwarding and its target, intercom,
+dial-plan rewriting, the blocklist, emergency numbers, speed dial, logging)
+and lists what it ignores.
+
+* *Applied:* appearance and language, call-handling preferences, audio
+  processing, codecs, jitter buffer, recording format, and the sensitive items
+  above once you confirm. Auto-answer and automatic recording stay off unless
+  you tick their checkboxes.
+* *Ignored (listed in the dialog):* every file or folder path, audio device
+  names, ports and transports, STUN servers, LAN sharing, hotkeys, start at
+  login, update settings, client-certificate files of accounts, and anything
+  the app does not know.
+* *Refused (nothing is imported):* turning TLS verification off, a custom CA
+  file, certificate pins, custom DNS servers, the local automation API and the
+  app lock.
+
+The desktop command line (`SoftphonePro --provision <file-or-url>`) is the
+only trusted path. It applies the whole file, including the settings that
+untrusted imports refuse.
+
 **Settings → Provisioning → Export** copies the current configuration as
 JSON (*Copy configuration (JSON)*) or shows it as a QR code (*QR code →
 Account*), with or without passwords (*Include passwords*).

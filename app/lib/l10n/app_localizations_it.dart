@@ -6772,10 +6772,82 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String linkImportRefused(String setting) {
-    return 'Questo link tenta di modificare «$setting», impostabile solo da un file o dalla riga di comando. Non è stato importato nulla.';
+    return 'Questa importazione tenta di modificare «$setting», che non può mai essere impostato tramite link, codice QR, testo incollato o file. Usa invece l\'opzione da riga di comando --provision su questo computer. Non è stato importato nulla.';
   }
 
   @override
   String get lanPairIntercomNote =>
       'I dispositivi associati possono chiedere una chiamata interfono; ti verrà chiesto prima di ognuna (modificabile in Impostazioni > LAN).';
+
+  @override
+  String get callLinkUnsupportedScheme =>
+      'Questo tipo di link non è supportato.';
+
+  @override
+  String get linkImportFlagAutoRecord => 'Registra le chiamate automaticamente';
+
+  @override
+  String get linkImportFlagBlocklist =>
+      'Modifica la tua lista di blocco chiamate';
+
+  @override
+  String get linkImportFlagEmergency => 'Modifica i tuoi numeri di emergenza';
+
+  @override
+  String get linkImportFlagSpeedDial => 'Imposta numeri di chiamata rapida';
+
+  @override
+  String get linkImportFlagRecordingDelete =>
+      'Elimina automaticamente le vecchie registrazioni';
+
+  @override
+  String get linkImportFlagFeatureCodes =>
+      'Compone codici funzione PBX personalizzati';
+
+  @override
+  String get linkImportAllowAutoRecord =>
+      'Consenti la registrazione automatica delle chiamate';
+
+  @override
+  String get importIgnoredHeader =>
+      'Ignorato (non consentito nelle importazioni):';
+
+  @override
+  String importAccountLine(
+    String name,
+    String address,
+    String server,
+    String transport,
+  ) {
+    return '$name ($address) - server $server, $transport';
+  }
+
+  @override
+  String importAccountProxies(String proxies) {
+    return 'Proxy: $proxies';
+  }
+
+  @override
+  String importAccountTurn(String server) {
+    return 'Relay TURN: $server';
+  }
+
+  @override
+  String importAccountHeaders(String headers) {
+    return 'Intestazioni SIP personalizzate: $headers';
+  }
+
+  @override
+  String importAccountCallerId(String callerId) {
+    return 'ID chiamante: $callerId';
+  }
+
+  @override
+  String get importAccountSrtpOff =>
+      'Nessuna cifratura dei media (SRTP disattivato)';
+
+  @override
+  String linkLanConnectAddress(String host, String port) {
+    return 'Indirizzo: $host:$port';
+  }
 }
