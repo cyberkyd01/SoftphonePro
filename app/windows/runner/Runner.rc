@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.softphonepro" "\0"
-            VALUE "FileDescription", "softphonepro" "\0"
+            VALUE "CompanyName", "SoftphonePro contributors" "\0"
+            VALUE "FileDescription", "SoftphonePro SIP softphone" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "softphonepro" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.softphonepro. All rights reserved." "\0"
+            VALUE "InternalName", "SoftphonePro" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 SoftphonePro contributors. Licensed under the GNU GPL." "\0"
             VALUE "OriginalFilename", "softphonepro.exe" "\0"
-            VALUE "ProductName", "softphonepro" "\0"
+            VALUE "ProductName", "SoftphonePro" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

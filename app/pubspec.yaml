@@ -55,6 +55,11 @@ dependencies:
   audioplayers: ^6.6.0
   spcore_flutter:
     path: ../packages/spcore_flutter
+  tray_manager: ^0.5.3
+  local_notifier: ^0.1.6
+  launch_at_startup: ^0.5.1
+  hotkey_manager: ^0.2.3
+  screen_retriever: ^0.2.2
 
 dev_dependencies:
   flutter_test:

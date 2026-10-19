@@ -10,6 +10,8 @@ import 'history_controller.dart';
 import 'messages_controller.dart';
 import 'presence_controller.dart';
 import 'providers.dart';
+import '../platform/desktop/desktop_shell.dart';
+import '../platform/desktop/launch_args.dart';
 
 /// Text in the dial field; shared so other screens can prefill it.
 class DialInputController extends Notifier<String> {
@@ -52,17 +54,12 @@ final appServicesProvider = Provider<void>((ref) {
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
 
+  // Desktop: tray / menu bar, hotkeys, close-to-tray, window geometry (no-op elsewhere).
+  ref.read(desktopShellProvider);
+
   // Incoming sip:/tel:/callto: links fill the dialer.
   Future<void> handleLink(Uri uri) async {
-    final s = uri.toString();
-    if (uri.scheme == 'softphonepro') {
-      final target = uri.queryParameters['number'] ?? uri.host + uri.path;
-      ref.read(dialInputProvider.notifier).set(target);
-      return;
-    }
-    var n = s.replaceFirst(RegExp(r'^(sips?|tel|callto):(//)?', caseSensitive: false), '');
-    n = Uri.decodeComponent(n.split('?').first);
-    ref.read(dialInputProvider.notifier).set(n);
+    ref.read(dialInputProvider.notifier).set(dialTargetFromLink(uri));
     ref.read(dialFocusProvider.notifier).request();
   }
 
