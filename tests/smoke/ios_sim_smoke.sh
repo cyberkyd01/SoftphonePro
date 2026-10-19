@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Boots an iPhone simulator, installs + launches the simulator build of the app, verifies it is still
+# alive after ~25 s, takes a screenshot and captures the device log.
+#   tests/smoke/ios_sim_smoke.sh <Runner.app> <outdir>
+set -euo pipefail
+APP="${1:?Runner.app}"; OUT="${2:?outdir}"
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+echo "bundle id: $BUNDLE_ID"
+
+xcrun simctl list runtimes available
+ARCHS_APP="$(lipo -archs "$APP/Runner")"
+echo "app archs: $ARCHS_APP"
+# An x86_64-only app needs Rosetta, which only iOS <= 18 simulator runtimes provide on Apple silicon.
+export ARCHS_APP
+UDID="$(xcrun simctl list devices available -j | python3 -c '
+import json,os,sys
+x86_only = "arm64" not in os.environ["ARCHS_APP"].split() and os.uname().machine == "arm64"
+d=json.load(sys.stdin)["devices"]
+c=[]
+for rt,devs in d.items():
+    if "iOS" not in rt: continue
+    ver=tuple(int(x) for x in rt.split("iOS-")[-1].split("-") if x.isdigit())
+    if x86_only and ver[0] > 18: continue
+    for x in devs:
+        if x["name"].startswith("iPhone") and x.get("isAvailable",True): c.append((ver,x["name"],x["udid"]))
+c.sort()
+print(c[-1][2] if c else "")
+')"
+[ -n "$UDID" ] || { echo "no available iPhone simulator"; xcrun simctl list devices available; exit 1; }
+echo "using simulator $UDID"
+xcrun simctl boot "$UDID" || true
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl install "$UDID" "$APP"
+
+START_TS="$(date '+%Y-%m-%d %H:%M:%S')"
+LAUNCH_OUT=""
+for i in 1 2 3 4 5 6; do
+  if LAUNCH_OUT="$(xcrun simctl launch --stdout="$OUT/stdout.log" --stderr="$OUT/stderr.log" "$UDID" "$BUNDLE_ID" 2>"$OUT/launch-err.log")"; then break; fi
+  echo "launch attempt $i failed (SpringBoard not ready?): $(tr '\n' ' ' < "$OUT/launch-err.log" | cut -c1-200)"
+  LAUNCH_OUT=""; sleep 20
+done
+if [ -z "$LAUNCH_OUT" ]; then
+  xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png" || true
+  echo "--- diagnostics"
+  ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || true
+  for f in ~/Library/Logs/DiagnosticReports/Runner*; do [ -f "$f" ] && { cp "$f" "$OUT/"; head -c 6000 "$f"; }; done
+  xcrun simctl spawn "$UDID" log show --last 5m --style compact --predicate 'eventMessage CONTAINS[c] "softphonepro" OR process == "Runner"' > "$OUT/device.log" 2>&1 || true
+  tail -n 60 "$OUT/device.log"
+  set +e +o pipefail
+  echo "--- run the binary directly to surface dyld errors"
+  xcrun simctl spawn "$UDID" "$APP/Runner" > "$OUT/spawn.log" 2>&1 &
+  SP=$!; sleep 12; kill "$SP" 2>/dev/null; head -c 4000 "$OUT/spawn.log"
+  vtool -show-build "$APP/Runner" 2>&1 | grep -E "platform|minos"
+  for fw in "$APP"/Frameworks/*.framework; do echo "$(basename "$fw"): $(vtool -show-build "$fw/$(basename "$fw" .framework)" 2>&1 | grep -E "platform|minos" | tr -s ' \n' ' ')"; done
+  codesign -dv "$APP" 2>&1 | head -5
+  echo "FAIL: could not launch"; exit 1
+fi
+echo "$LAUNCH_OUT"
+PID="${LAUNCH_OUT##*: }"
+alive() { kill -0 "$1" 2>/dev/null; }
+sleep 5
+if alive "$PID"; then A5=yes; else A5=no; fi
+echo "app pid $PID alive after 5 s: $A5"
+sleep 20
+if alive "$PID"; then A25=yes; else A25=no; fi
+echo "app pid $PID alive after 25 s: $A25"
+xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png"
+xcrun simctl spawn "$UDID" log show --start "$START_TS" --style compact --info --debug --predicate 'process == "Runner"' > "$OUT/device.log" 2>&1 || true
+sleep 2
+ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | tail -5 || true
+
+echo "--- stdout/stderr tail"; tail -n 30 "$OUT/stdout.log" "$OUT/stderr.log" || true
+echo "--- engine-related log lines"; grep -i -E 'spcore|engine|flutter' "$OUT/device.log" | head -20 || true
+echo "--- last device log lines"; tail -n 25 "$OUT/device.log" || true
+
+FAIL=0
+[ "$A25" = yes ] || { echo "FAIL: app is not running after 25 s"; FAIL=1; }
+if ls ~/Library/Logs/DiagnosticReports/Runner* >/dev/null 2>&1; then echo "FAIL: crash report found"; cp ~/Library/Logs/DiagnosticReports/Runner* "$OUT/"; FAIL=1; fi
+[ -s "$OUT/ios-simulator.png" ] || { echo "FAIL: no screenshot"; FAIL=1; }
+xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+[ "$FAIL" = 0 ] && echo "IOS SMOKE OK"
+exit "$FAIL"

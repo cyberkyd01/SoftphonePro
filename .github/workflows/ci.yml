@@ -226,6 +226,40 @@ jobs:
           path: dist/*.apk
 
   # ---------------------------------------------------------------------------------------------
+  android-smoke:
+    continue-on-error: true
+    needs: android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: apks
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Smoke - x86_64 emulator (API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: tests/smoke/android_smoke.sh "$(ls apks/*-android-x86_64.apk | head -1)" smoke-logs/android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-smoke
+          path: smoke-logs/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------------------------
   windows:
     needs: meta
     runs-on: windows-2022
@@ -277,6 +311,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'iscc failed' }
           Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath "dist\SoftphonePro-$env:VERSION-windows-x64-portable.zip"
           Get-ChildItem dist
+      - name: Smoke - run the built exe (provision, automation API, DND)
+        shell: pwsh
+        run: ./tests/smoke/windows_smoke.ps1 -Exe app\build\windows\x64\runner\Release\softphonepro.exe -OutDir smoke-logs\portable -ExpectedVersion '${{ needs.meta.outputs.build_name }}'
+      - name: Smoke - silent install, protocol handlers, run installed exe, uninstall
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\SoftphonePro-Setup-*-x64.exe | Select-Object -First 1).FullName
+          ./tests/smoke/windows_installer_smoke.ps1 -Installer $setup -OutDir smoke-logs\installer -ExpectedVersion '${{ needs.meta.outputs.build_name }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-smoke-logs
+          path: smoke-logs/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
@@ -319,6 +367,14 @@ jobs:
           flutter pub get
           flutter build macos --release --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
           test -d build/macos/Build/Products/Release/softphonepro.app/Contents/Frameworks/spcore.framework
+      - name: Smoke - launch the built .app with --provision and drive the automation API
+        run: python3 tests/smoke/macos_smoke.py --app app/build/macos/Build/Products/Release/softphonepro.app --out smoke-logs/macos --version "${{ needs.meta.outputs.build_name }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-smoke-logs
+          path: smoke-logs/
+          if-no-files-found: ignore
       - name: DMG (ad-hoc signed, or Developer ID + notarized when secrets exist)
         env:
           APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
@@ -380,6 +436,61 @@ jobs:
         with:
           name: ios-ipa
           path: dist/*.ipa
+
+  # ---------------------------------------------------------------------------------------------
+  # Simulator smoke on an Intel runner: the app's simulator build is x86_64-only (Google ML Kit pods ship
+  # no arm64 simulator slice) and x86_64 apps do not launch in the simulator on the arm64 runners.
+  ios-sim-smoke:
+    needs: [meta, ios]
+    continue-on-error: true  # informational until the simulator path is proven stable
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install build tools
+        run: brew install ninja cmake || true
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/ios-arm64
+            native/out/ios-sim-arm64
+            native/out/ios-sim-x86_64
+            native/deps/src
+          key: deps-ios-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies (device + simulators)
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_ios.sh all
+      - name: Build spcore.xcframework
+        run: native/scripts/build_spcore.sh ios
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build Flutter iOS app for the simulator (debug)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build ios --simulator --debug --config-only --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+          set -o pipefail
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build/ios/sim-dd build > xcodebuild.log 2>&1 || { grep -E "error:|warning: .*mobile_scanner" xcodebuild.log | head -40; tail -n 40 xcodebuild.log; exit 1; }
+          cp -R build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app build/ios/Runner.app
+          lipo -archs build/ios/Runner.app/Runner
+      - name: Smoke - boot simulator, install, launch, screenshot
+        run: tests/smoke/ios_sim_smoke.sh app/build/ios/Runner.app smoke-logs/ios
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-smoke
+          path: smoke-logs/
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------------------------
   browser-extension:
