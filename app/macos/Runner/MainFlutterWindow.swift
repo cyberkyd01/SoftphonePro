@@ -1,12 +1,62 @@
 import Cocoa
 import Contacts
+import CoreServices
 import FlutterMacOS
 import ServiceManagement
 
+/// Receives sip:/tel:/callto:/softphonepro: links (GetURL Apple events) and
+/// buffers them until Dart has called `ready`; afterwards forwards them live.
+///
+/// The handler must be installed in applicationDidFinishLaunching or later:
+/// NSApplication installs its own kAEGetURL handler while it finishes
+/// launching and replaces one registered earlier (for example from a window's
+/// awakeFromNib), which silently dropped links sent to the running app.
+final class LinkBuffer: NSObject {
+  static let shared = LinkBuffer()
+  var channel: FlutterMethodChannel?
+  private var ready = false
+  private var pending: [String] = []
+  private var installed = false
+
+  func install() {
+    if installed { return }
+    installed = true
+    NSAppleEventManager.shared().setEventHandler(
+      self,
+      andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+      forEventClass: AEEventClass(kInternetEventClass),
+      andEventID: AEEventID(kAEGetURL))
+    NSLog("SoftphonePro: GetURL handler installed")
+  }
+
+  @objc func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+    guard let s = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue else {
+      NSLog("SoftphonePro: GetURL event without a URL")
+      return
+    }
+    deliver(s)
+  }
+
+  func deliver(_ link: String) {
+    NSLog("SoftphonePro: link received %@ (dartReady=%@)", link, ready ? "yes" : "no")
+    if ready, let ch = channel {
+      ch.invokeMethod("onLink", arguments: link)
+    } else {
+      pending.append(link)
+    }
+  }
+
+  /// Called when Dart is ready; returns the links that arrived before.
+  func markReady() -> [String] {
+    ready = true
+    let p = pending
+    pending = []
+    return p
+  }
+}
+
 class MainFlutterWindow: NSWindow {
   private var channel: FlutterMethodChannel?
-  private var dartReady = false
-  private var pendingLinks: [String] = []
   private var launchedAtLogin = false
   private let startTime = Date()
 
@@ -32,13 +82,12 @@ class MainFlutterWindow: NSWindow {
     let ch = FlutterMethodChannel(
       name: "softphonepro/desktop", binaryMessenger: controller.engine.binaryMessenger)
     channel = ch
+    LinkBuffer.shared.channel = ch
     ch.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { return result(FlutterMethodNotImplemented) }
       switch call.method {
       case "ready":
-        self.dartReady = true
-        let pending = self.pendingLinks
-        self.pendingLinks = []
+        let pending = LinkBuffer.shared.markReady()
         result(["pending": pending, "launchedAtLogin": self.launchedAtLogin])
       case "setLoginItem":
         let enable = (call.arguments as? Bool) ?? false
@@ -49,23 +98,22 @@ class MainFlutterWindow: NSWindow {
         self.requestContactsAccess { result($0) }
       case "readContacts":
         self.readContacts { result($0) }
+      case "defaultHandlers":
+        result(self.defaultHandlers())
+      case "setDefaultHandler":
+        self.setDefaultHandler { result($0) }
       default:
         result(FlutterMethodNotImplemented)
       }
     }
 
-    // sip:, sips:, tel:, callto:, softphonepro: (CFBundleURLTypes) arrive as a
-    // GetURL Apple event, also when the app was launched by the link.
-    NSAppleEventManager.shared().setEventHandler(
-      self,
-      andSelector: #selector(handleGetURL(_:withReplyEvent:)),
-      forEventClass: AEEventClass(kInternetEventClass),
-      andEventID: AEEventID(kAEGetURL))
-
     NotificationCenter.default.addObserver(
       forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: nil
     ) { [weak self] _ in
       guard let self = self else { return }
+      // sip:, sips:, tel:, callto:, softphonepro: (CFBundleURLTypes) arrive as
+      // a GetURL Apple event, also when the app was launched by the link.
+      LinkBuffer.shared.install()
       if let ev = NSAppleEventManager.shared().currentAppleEvent,
         ev.eventID == AEEventID(kAEOpenApplication),
         let d = ev.paramDescriptor(forKeyword: AEKeyword(keyAEPropData)),
@@ -86,17 +134,6 @@ class MainFlutterWindow: NSWindow {
       {
         self.makeKeyAndOrderFront(nil)
       }
-    }
-  }
-
-  @objc func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
-    guard let s = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue else {
-      return
-    }
-    if dartReady, let ch = channel {
-      ch.invokeMethod("onLink", arguments: s)
-    } else {
-      pendingLinks.append(s)
     }
   }
 
@@ -139,6 +176,66 @@ class MainFlutterWindow: NSWindow {
       }
       DispatchQueue.main.async { done(out) }
     }
+  }
+
+  // MARK: - default handler for sip:, tel:, callto:
+
+  private static let handlerSchemes = ["sip", "tel", "callto"]
+
+  /// Current handler of each scheme: `{scheme: {name, bundleId, isSelf}}`.
+  /// Read only; never changes the user's configuration.
+  private func defaultHandlers() -> [String: [String: Any]] {
+    var out: [String: [String: Any]] = [:]
+    let me = Bundle.main.bundleIdentifier ?? ""
+    for scheme in MainFlutterWindow.handlerSchemes {
+      var entry: [String: Any] = ["name": "", "bundleId": "", "isSelf": false]
+      var bundleId = ""
+      if let url = URL(string: "\(scheme):0"),
+        let app = NSWorkspace.shared.urlForApplication(toOpen: url)
+      {
+        var name = FileManager.default.displayName(atPath: app.path)
+        if name.hasSuffix(".app") { name = String(name.dropLast(4)) }
+        entry["name"] = name
+        bundleId = Bundle(url: app)?.bundleIdentifier ?? ""
+      }
+      if bundleId.isEmpty,
+        let h = LSCopyDefaultHandlerForURLScheme(scheme as CFString)?.takeRetainedValue() as String?
+      {
+        bundleId = h
+      }
+      entry["bundleId"] = bundleId
+      entry["isSelf"] = !me.isEmpty && bundleId.caseInsensitiveCompare(me) == .orderedSame
+      out[scheme] = entry
+    }
+    return out
+  }
+
+  /// Makes this app the default handler of sip:, tel: and callto:. macOS may
+  /// ask the user to confirm. Completes with `{ok, failed: [schemes]}`.
+  private func setDefaultHandler(_ done: @escaping ([String: Any]) -> Void) {
+    let schemes = MainFlutterWindow.handlerSchemes
+    var failed: [String] = []
+    let group = DispatchGroup()
+    for scheme in schemes {
+      if #available(macOS 12.0, *) {
+        group.enter()
+        NSWorkspace.shared.setDefaultApplication(
+          at: Bundle.main.bundleURL, toOpenURLsWithScheme: scheme
+        ) { error in
+          if let error = error {
+            NSLog("SoftphonePro: default handler for %@ failed: %@", scheme, "\(error)")
+            DispatchQueue.main.async { failed.append(scheme) }
+          }
+          group.leave()
+        }
+      } else if let id = Bundle.main.bundleIdentifier {
+        let rc = LSSetDefaultHandlerForURLScheme(scheme as CFString, id as CFString)
+        if rc != noErr { failed.append(scheme) }
+      } else {
+        failed.append(scheme)
+      }
+    }
+    group.notify(queue: .main) { done(["ok": failed.isEmpty, "failed": failed]) }
   }
 
   // MARK: - login item (SMAppService, works inside the sandbox)

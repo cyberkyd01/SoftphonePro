@@ -42,11 +42,23 @@ Future<Map<String, String>> provisioningVars({
 
 /// Adds the accounts / settings of [r], marks onboarding complete when an
 /// account was provisioned. Returns the number of accounts added.
-Future<int> importProvisioningResult(Ref ref, ProvisioningResult r) async {
+///
+/// Settings under the `automation` prefix (local automation API: enable flag,
+/// port, token, origins) are only applied when [allowAutomation] is set, i.e.
+/// for local command-line provisioning. Configuration downloaded through a
+/// web link or the Settings screen cannot switch the API on or choose its token.
+Future<int> importProvisioningResult(
+  Ref ref,
+  ProvisioningResult r, {
+  bool allowAutomation = false,
+}) async {
   for (final a in r.accounts) {
     await ref.read(accountsProvider.notifier).add(a);
   }
   final changes = {...r.settings};
+  if (!allowAutomation) {
+    changes.removeWhere((k, _) => k.startsWith('automation'));
+  }
   if (r.accounts.isNotEmpty) changes['onboardingDone'] = true;
   if (changes.isNotEmpty) {
     await ref.read(settingsProvider.notifier).update(changes);

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../automation/automation_service.dart';
 import '../diagnostics/diagnostics_hub.dart';
 import '../diagnostics/sip_trace_controller.dart';
 import '../lan/lan_controller.dart';
@@ -65,6 +66,9 @@ final appServicesProvider = Provider<void>((ref) {
   ref.read(lanUiCoordinatorProvider);
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
+
+  // Local automation API (off unless enabled in Settings > Advanced).
+  ref.read(automationServiceProvider);
 
   // Desktop: tray / menu bar, hotkeys, close-to-tray, window geometry (no-op elsewhere).
   ref.read(desktopShellProvider);
