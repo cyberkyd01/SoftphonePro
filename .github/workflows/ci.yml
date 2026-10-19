@@ -424,26 +424,6 @@ jobs:
         run: |
           flutter pub get
           flutter build ios --release --no-codesign --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
-      - name: Build Flutter iOS app for the simulator (debug, arm64)
-        # `flutter build ios --simulator` produces x86_64 (the pods exclude arm64 for the simulator), and an
-        # x86_64 app does not launch in the simulator on the arm64 runners. Configure with flutter, then build
-        # arm64 with xcodebuild, overriding the pods' EXCLUDED_ARCHS.
-        working-directory: app
-        run: |
-          flutter build ios --simulator --debug --config-only --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO EXCLUDED_ARCHS=i386 \
-            CODE_SIGNING_ALLOWED=NO -derivedDataPath build/ios/sim-dd build 2>&1 | tail -n 40
-          test -d build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app
-          lipo -archs build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app/Runner
-      - name: Smoke - boot simulator, install, launch, screenshot
-        run: tests/smoke/ios_sim_smoke.sh app/build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app smoke-logs/ios
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ios-smoke
-          path: smoke-logs/
-          if-no-files-found: ignore
       - name: Package unsigned IPA
         run: |
           mkdir -p dist ipa/Payload
@@ -454,6 +434,55 @@ jobs:
         with:
           name: ios-ipa
           path: dist/*.ipa
+
+  # ---------------------------------------------------------------------------------------------
+  # Simulator smoke on an Intel runner: the app's simulator build is x86_64-only (Google ML Kit pods ship
+  # no arm64 simulator slice) and x86_64 apps do not launch in the simulator on the arm64 runners.
+  ios-sim-smoke:
+    needs: [meta, ios]
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install build tools
+        run: brew install ninja cmake || true
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/ios-arm64
+            native/out/ios-sim-arm64
+            native/out/ios-sim-x86_64
+            native/deps/src
+          key: deps-ios-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies (device + simulators)
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_ios.sh all
+      - name: Build spcore.xcframework
+        run: native/scripts/build_spcore.sh ios
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build Flutter iOS app for the simulator (debug)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build ios --simulator --debug --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+          lipo -archs build/ios/iphonesimulator/Runner.app/Runner
+      - name: Smoke - boot simulator, install, launch, screenshot
+        run: tests/smoke/ios_sim_smoke.sh app/build/ios/iphonesimulator/Runner.app smoke-logs/ios
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-smoke
+          path: smoke-logs/
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------------------------
   browser-extension:

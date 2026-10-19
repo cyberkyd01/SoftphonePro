@@ -15,7 +15,7 @@ echo "app archs: $ARCHS_APP"
 export ARCHS_APP
 UDID="$(xcrun simctl list devices available -j | python3 -c '
 import json,os,sys
-x86_only = "arm64" not in os.environ["ARCHS_APP"].split()
+x86_only = "arm64" not in os.environ["ARCHS_APP"].split() and os.uname().machine == "arm64"
 d=json.load(sys.stdin)["devices"]
 c=[]
 for rt,devs in d.items():
