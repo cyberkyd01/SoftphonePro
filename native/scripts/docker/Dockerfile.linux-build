@@ -1,0 +1,15 @@
+# Build image for the Linux native dependencies (used for CI tests of spcore).
+# ubuntu:24.04 ships CMake 3.28, which is exactly the minimum pjproject 2.17's CMake build needs.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake ninja-build pkg-config perl curl ca-certificates \
+      git file xz-utils python3 \
+      libasound2-dev uuid-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# Builds run as the invoking host user (--user uid:gid); give them a writable HOME.
+ENV HOME=/tmp
+WORKDIR /work

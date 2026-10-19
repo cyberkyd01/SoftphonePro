@@ -1,0 +1,16 @@
+# Smoke test project:  cmake -S native/scripts/smoke -B <bld> -DSPC_PREFIX=native/out/<target> [toolchain args]
+cmake_minimum_required(VERSION 3.20)
+project(spc_smoke C CXX)
+set(SPC_PREFIX "" CACHE PATH "dependency prefix (native/out/<target>)")
+if(NOT EXISTS "${SPC_PREFIX}/spc_deps.cmake")
+  message(FATAL_ERROR "SPC_PREFIX must contain spc_deps.cmake (got '${SPC_PREFIX}')")
+endif()
+include("${SPC_PREFIX}/spc_deps.cmake")
+add_executable(smoke smoke.c)
+# The project's config_site.h is force-included, exactly like spcore does it.
+if(MSVC)
+  target_compile_options(smoke PRIVATE /FI "${SPC_PREFIX}/include/pj/config_site.h")
+else()
+  target_compile_options(smoke PRIVATE -include "${SPC_PREFIX}/include/pj/config_site.h")
+endif()
+target_link_libraries(smoke PRIVATE spc::deps)
