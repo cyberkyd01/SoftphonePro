@@ -266,6 +266,15 @@ void main() {
     final i = e.simulateIncomingCall();
     await e.answer(i.cid);
     final n = e.simulateTransferRequest(i.cid, 'sip:1003@pbx.test');
+    expect(evs.whereType<CallTransferRequestEvent>().single.accepted, isTrue);
+    expect(
+      evs
+          .whereType<CallStateEvent>()
+          .firstWhere((x) => x.cid == n.cid)
+          .call
+          .transferFrom,
+      i.cid,
+    );
     await e.settle();
     expect((await e.callInfo(n.cid)).state, CallState.confirmed);
     final r = e.simulateReplaced(n.cid);
@@ -313,7 +322,7 @@ void main() {
     await e.optionsPing(AccountRef.id(a));
     await e.settle();
     expect(
-      evs.whereType<DiagNatTypeEvent>().single.info.type,
+      evs.whereType<DiagNatTypeEvent>().single.info.natType,
       NatType.fullCone,
     );
     expect(evs.whereType<DiagOptionsEvent>().single.result.code, 200);

@@ -32,6 +32,7 @@ CoreConfig testCoreConfig({int statsMs = 0}) => CoreConfig(
   stunServers: const [],
   nameservers: const [],
   statsIntervalMs: statsMs,
+  publicAddr: pbxHost == '127.0.0.1' ? '127.0.0.1' : null,
   transports: const TransportConfig(
     udp: TransportPort(port: 0),
     tcp: TransportPort(port: 0),

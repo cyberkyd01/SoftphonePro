@@ -213,6 +213,30 @@ void main() {
     );
   });
 
+  test('contract rev3 keys', () {
+    expect(
+      const CoreConfig(publicAddr: '127.0.0.1').toJson()['publicAddr'],
+      '127.0.0.1',
+    );
+    final t = TransportStateInfo.fromJson({
+      'transport': 'tls',
+      'state': 'connected',
+    });
+    expect(t.transport, 'tls');
+    expect(t.toJson()['transport'], 'tls');
+    expect(
+      NatTypeInfo.fromJson({'natType': 'fullCone'}).natType,
+      NatType.fullCone,
+    );
+    expect(CallInfo.fromJson({'transferFrom': 7}).transferFrom, 7);
+    final r = EngineEvent.fromJson({
+      'event': 'call.transferRequest',
+      'cid': 1,
+      'accepted': true,
+    });
+    expect((r as CallTransferRequestEvent).accepted, isTrue);
+  });
+
   test('CoreStartResult parses direct/lan', () {
     final r = CoreStartResult.fromJson({
       'version': '1',

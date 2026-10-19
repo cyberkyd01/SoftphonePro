@@ -242,10 +242,13 @@ final class CallTransferRequestEvent extends CallEvent {
   CallTransferRequestEvent(super.raw)
     : target = asString(raw['target']),
       referredBy = asString(raw['referredBy']),
-      newCid = asIntN(raw['newCid']);
+      accepted = asBool(raw['accepted']);
   final String target;
   final String referredBy;
-  final int? newCid;
+
+  /// REFER accepted (referPolicy accept). The spawned call's call.state
+  /// events carry `transferFrom`.
+  final bool accepted;
 }
 
 final class CallTransferStatusEvent extends CallEvent {

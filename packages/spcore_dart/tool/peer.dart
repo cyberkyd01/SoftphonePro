@@ -44,7 +44,7 @@ Future<void> main(List<String> args) async {
     if (method == 'peer.exit') {
       await Future.wait(pending);
       try {
-        await engine.stop(graceful: false);
+        await engine.stop();
       } catch (_) {}
       await engine.dispose();
       out({'type': 'response', 'id': id, 'ok': true, 'result': {}});

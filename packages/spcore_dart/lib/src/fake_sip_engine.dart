@@ -132,6 +132,7 @@ class _Call {
   final Set<int> conferenceWith = {};
   final Set<int> bridgedWith = {};
   Map<String, String> headers = {};
+  int? transferFrom;
   DateTime? connectedAt;
   DateTime? activeSince;
   int activeMsAcc = 0;
@@ -401,6 +402,7 @@ class FakeSipEngine extends JsonSipEngine {
           : now.difference(c.connectedAt!).inMilliseconds,
       'totalMs': now.difference(c.createdAt).inMilliseconds,
       'headers': c.headers,
+      if (c.transferFrom != null) 'transferFrom': c.transferFrom,
     };
   }
 
@@ -972,7 +974,7 @@ class FakeSipEngine extends JsonSipEngine {
         _sched(
           timings.diag,
           () => _emit('diag.natType', {
-            'type': natTypeResult.wire,
+            'natType': natTypeResult.wire,
             'description': 'Fake NAT detection',
             'stun': 'stun.example.org:3478',
           }),
@@ -1592,7 +1594,7 @@ class FakeSipEngine extends JsonSipEngine {
   }
 
   /// Incoming REFER on [cid]: creates the new outgoing call and emits
-  /// `call.transferRequest` (with `newCid`).
+  /// `call.transferRequest` (`accepted: true`); the new call's states carry `transferFrom`.
   CallRef simulateTransferRequest(
     int cid,
     String target, {
@@ -1602,11 +1604,12 @@ class FakeSipEngine extends JsonSipEngine {
     final n = _newCall(c.acc, CallRole.caller);
     n.remoteUri = target;
     n.remoteUser = _userOf(target);
+    n.transferFrom = cid;
     _emit('call.transferRequest', {
       'cid': cid,
       'target': target,
       'referredBy': referredBy,
-      'newCid': n.cid,
+      'accepted': true,
     });
     _setState(n, CallState.calling, 0, 'Calling');
     _sched(timings.ring, () {
@@ -1775,7 +1778,7 @@ class FakeSipEngine extends JsonSipEngine {
 
   void simulateTransportState(String type, String state, {int status = 0}) =>
       _emit('transport.state', {
-        'type': type,
+        'transport': type,
         'local': '127.0.0.1:5060',
         'remote': '127.0.0.1:5060',
         'state': state,

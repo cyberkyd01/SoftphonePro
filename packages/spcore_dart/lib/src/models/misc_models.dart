@@ -82,7 +82,7 @@ class TlsInfo {
 
 class TransportStateInfo {
   const TransportStateInfo({
-    this.type = '',
+    this.transport = '',
     this.local = '',
     this.remote = '',
     this.state = TransportStateKind.unknown,
@@ -90,7 +90,7 @@ class TransportStateInfo {
     this.tls,
   });
 
-  final String type;
+  final String transport;
   final String local;
   final String remote;
   final TransportStateKind state;
@@ -99,7 +99,7 @@ class TransportStateInfo {
 
   factory TransportStateInfo.fromJson(Map<String, dynamic> j) =>
       TransportStateInfo(
-        type: asString(j['type'], ''),
+        transport: asString(j['transport'], ''),
         local: asString(j['local'], ''),
         remote: asString(j['remote'], ''),
         state: TransportStateKind.parse(j['state'], TransportStateKind.unknown),
@@ -108,7 +108,7 @@ class TransportStateInfo {
       );
 
   Map<String, dynamic> toJson() => {
-    'type': type,
+    'transport': transport,
     'local': local,
     'remote': remote,
     'state': state.wire,
@@ -171,23 +171,23 @@ class TlsVerifyInfo {
 
 class NatTypeInfo {
   const NatTypeInfo({
-    this.type = NatType.unknown,
+    this.natType = NatType.unknown,
     this.description = '',
     this.stun = '',
   });
 
-  final NatType type;
+  final NatType natType;
   final String description;
   final String stun;
 
   factory NatTypeInfo.fromJson(Map<String, dynamic> j) => NatTypeInfo(
-    type: NatType.parse(j['type'], NatType.unknown),
+    natType: NatType.parse(j['natType'], NatType.unknown),
     description: asString(j['description'], ''),
     stun: asString(j['stun'], ''),
   );
 
   Map<String, dynamic> toJson() => {
-    'type': type.wire,
+    'natType': natType.wire,
     'description': description,
     'stun': stun,
   };

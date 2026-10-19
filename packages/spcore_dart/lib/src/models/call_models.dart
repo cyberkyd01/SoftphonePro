@@ -73,6 +73,7 @@ class CallInfo {
     this.connectMs = 0,
     this.totalMs = 0,
     this.headers = const <String, String>{},
+    this.transferFrom,
   });
 
   final int cid;
@@ -106,6 +107,7 @@ class CallInfo {
   final int connectMs;
   final int totalMs;
   final Map<String, String> headers;
+  final int? transferFrom;
 
   factory CallInfo.fromJson(Map<String, dynamic> j) => CallInfo(
     cid: asInt(j['cid'], 0),
@@ -139,6 +141,7 @@ class CallInfo {
     connectMs: asInt(j['connectMs'], 0),
     totalMs: asInt(j['totalMs'], 0),
     headers: asStringMap(j['headers']),
+    transferFrom: asIntN(j['transferFrom']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -173,6 +176,7 @@ class CallInfo {
     'connectMs': connectMs,
     'totalMs': totalMs,
     'headers': headers,
+    'transferFrom': transferFrom,
   };
 
   CallInfo copyWith({
@@ -207,6 +211,7 @@ class CallInfo {
     int? connectMs,
     int? totalMs,
     Map<String, String>? headers,
+    int? transferFrom,
   }) => CallInfo(
     cid: cid ?? this.cid,
     call: call ?? this.call,
@@ -239,6 +244,7 @@ class CallInfo {
     connectMs: connectMs ?? this.connectMs,
     totalMs: totalMs ?? this.totalMs,
     headers: headers ?? this.headers,
+    transferFrom: transferFrom ?? this.transferFrom,
   );
 
   @override

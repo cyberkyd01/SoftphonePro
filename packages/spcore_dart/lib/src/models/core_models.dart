@@ -374,6 +374,7 @@ class CoreConfig {
     this.logForward = false,
     this.sipTrace = false,
     this.logFile,
+    this.publicAddr,
     this.nameservers,
     this.stunServers = const ['stun.l.google.com:19302'],
     this.stunIgnoreFailure = true,
@@ -391,6 +392,7 @@ class CoreConfig {
   final bool logForward;
   final bool sipTrace;
   final String? logFile;
+  final String? publicAddr;
 
   /// null = "auto" (native detection); empty = OS resolver only.
   final List<String>? nameservers;
@@ -410,6 +412,7 @@ class CoreConfig {
     logForward: asBool(j['logForward'], false),
     sipTrace: asBool(j['sipTrace'], false),
     logFile: asStringN(j['logFile']),
+    publicAddr: asStringN(j['publicAddr']),
     nameservers: j['nameservers'] is List
         ? asStringList(j['nameservers'])
         : null,
@@ -438,6 +441,7 @@ class CoreConfig {
     'logForward': logForward,
     'sipTrace': sipTrace,
     'logFile': logFile,
+    'publicAddr': publicAddr,
     'nameservers': nameservers ?? 'auto',
     'stunServers': stunServers,
     'stunIgnoreFailure': stunIgnoreFailure,
@@ -456,6 +460,7 @@ class CoreConfig {
     bool? logForward,
     bool? sipTrace,
     String? logFile,
+    String? publicAddr,
     List<String>? nameservers,
     List<String>? stunServers,
     bool? stunIgnoreFailure,
@@ -472,6 +477,7 @@ class CoreConfig {
     logForward: logForward ?? this.logForward,
     sipTrace: sipTrace ?? this.sipTrace,
     logFile: logFile ?? this.logFile,
+    publicAddr: publicAddr ?? this.publicAddr,
     nameservers: nameservers ?? this.nameservers,
     stunServers: stunServers ?? this.stunServers,
     stunIgnoreFailure: stunIgnoreFailure ?? this.stunIgnoreFailure,
