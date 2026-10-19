@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +45,10 @@ class _InCallPageState extends ConsumerState<InCallPage> {
     if (c == null) {
       return Scaffold(
         body: Center(
-          child: TextButton(onPressed: () => context.go('/keypad'), child: Text(context.l10n.actionBack)),
+          child: TextButton(
+            onPressed: () => context.go('/keypad'),
+            child: Text(context.l10n.actionBack),
+          ),
         ),
       );
     }
@@ -62,6 +66,206 @@ class _InCallPageState extends ConsumerState<InCallPage> {
         child: LayoutBuilder(
           builder: (context, box) {
             final small = box.maxHeight < 640;
+            final landscape =
+                box.maxWidth > box.maxHeight && box.maxHeight < 560;
+            Widget endButton(double bottom) => Padding(
+              padding: EdgeInsetsDirectional.only(bottom: bottom, top: 4),
+              child: RoundCallButton(
+                key: const Key('end-call'),
+                icon: Icons.call_end_rounded,
+                color: colors.endRed,
+                label: l.callEndCall,
+                size: landscape ? 56 : 72,
+                onPressed: () => calls.hangup(c.cid),
+              ),
+            );
+            List<Widget> infoWidgets() => [
+              SizedBox(height: small ? 0 : 8),
+              Text(
+                bidiSafe(title == c.number ? formatPhone(title) : title),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                textDirection: title == c.number ? TextDirection.ltr : null,
+                overflow: TextOverflow.ellipsis,
+                style: t.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              CallerIdentityBlock(call: c, title: title),
+              const SizedBox(height: 6),
+              if (c.isConfirmed && !c.isHeld)
+                CallTimer(
+                  call: c,
+                  style: t.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              else
+                Text(
+                  callStateText(c, l),
+                  style: t.textTheme.titleMedium?.copyWith(
+                    color: c.isHeld
+                        ? colors.holdAmber
+                        : t.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              if (c.isConfirmed && c.isHeld)
+                CallTimer(call: c, style: t.textTheme.bodyMedium),
+              const SizedBox(height: 6),
+              if (c.isConfirmed)
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    QualityIndicator(
+                      mos: c.stats?.mos ?? 0,
+                      onTap: () => showStatsSheet(context, c.cid),
+                    ),
+                    SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
+                    const NoiseCancellationChip(),
+                    if (c.recording)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record_rounded,
+                            size: 14,
+                            color: colors.endRed,
+                          ),
+                          Text(
+                            ' ${l.callRecBadge}',
+                            style: t.textTheme.labelSmall?.copyWith(
+                              color: colors.endRed,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              LanCallLabel(call: c),
+              RelayedBanner(call: c),
+              AnnouncementChip(cid: c.cid, center: true),
+              if (consult) _ConsultBanner(call: c),
+              TransferStalledBanner(call: c),
+              if (others.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                for (final o in others)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(bottom: 8),
+                    child: _StackedCall(
+                      call: o,
+                      title: callTitle(o, contacts, context.l10n),
+                    ),
+                  ),
+              ],
+            ];
+            List<Widget> controlWidgets({required bool landscape}) => [
+              if (_keypad && c.isConfirmed) ...[
+                const SizedBox(height: 8),
+                InCallKeypad(cid: c.cid, compact: true),
+              ] else if (others.isEmpty && !landscape) ...[
+                SizedBox(height: small ? 12 : 24),
+                Avatar(name: title, size: small ? 84 : 120),
+              ],
+              const SizedBox(height: 16),
+              if (_keypad && c.isConfirmed)
+                // The keypad takes the place of the action grid so its
+                // bottom row is never pushed behind the End button.
+                TextButton.icon(
+                  key: const Key('keypad-hide'),
+                  onPressed: () => setState(() => _keypad = false),
+                  icon: const Icon(Icons.keyboard_hide_rounded),
+                  label: Text(l.callHideKeypad),
+                )
+              else
+                _ActionGrid(
+                  children: [
+                    CallActionButton(
+                      icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                      label: l.callMute,
+                      active: c.muted,
+                      onPressed: c.isConfirmed
+                          ? () => calls.toggleMute(c.cid)
+                          : null,
+                    ),
+                    CallActionButton(
+                      icon: Icons.dialpad_rounded,
+                      label: l.callKeypad,
+                      active: _keypad,
+                      onPressed: c.isConfirmed
+                          ? () => setState(() => _keypad = !_keypad)
+                          : null,
+                    ),
+                    CallActionButton(
+                      icon: audioRouteIcon(
+                        speakerOn ? AudioRoute.speaker : route,
+                      ),
+                      label: speakerOn
+                          ? l.callSpeaker
+                          : (route == AudioRoute.earpiece
+                                ? l.callSpeaker
+                                : _routeName(l, route)),
+                      active:
+                          speakerOn ||
+                          route == AudioRoute.bluetooth ||
+                          route == AudioRoute.wired,
+                      onPressed: () => _onSpeaker(context, ref, route),
+                    ),
+                    CallActionButton(
+                      icon: Icons.pause_rounded,
+                      label: c.isHeld ? l.callResume : l.callHold,
+                      active: c.isHeld,
+                      activeColor: colors.holdAmber,
+                      onPressed: c.isConfirmed
+                          ? () => calls.toggleHold(c.cid)
+                          : null,
+                    ),
+                    CallActionButton(
+                      icon: Icons.person_add_alt_1_rounded,
+                      label: l.callAddCall,
+                      onPressed: () => context.canPop()
+                          ? context.pop()
+                          : context.go('/keypad'),
+                    ),
+                    CallActionButton(
+                      icon: Icons.phone_forwarded_rounded,
+                      label: l.callTransfer,
+                      onPressed: c.isConfirmed
+                          ? () => showTransferSheet(context, c.cid)
+                          : null,
+                    ),
+                    CallActionButton(
+                      icon: Icons.fiber_manual_record_rounded,
+                      label: c.recording ? l.callStop : l.callRecord,
+                      active: c.recording,
+                      activeColor: colors.endRed,
+                      onPressed: c.isConfirmed
+                          ? () => calls.toggleRecording(c.cid)
+                          : null,
+                    ),
+                    CallActionButton(
+                      icon: c.isConference
+                          ? Icons.call_split_rounded
+                          : Icons.call_merge_rounded,
+                      label: c.isConference ? l.callSplit : l.callMerge,
+                      active: c.isConference,
+                      onPressed: c.isConference
+                          ? () => calls.split()
+                          : (mergeable ? () => calls.merge() : null),
+                    ),
+                    CallActionButton(
+                      icon: Icons.more_horiz_rounded,
+                      label: l.actionMore,
+                      onPressed: () => showMoreSheet(context, c.cid),
+                    ),
+                  ],
+                ),
+              if (c.isConference) const ConferenceLevels(),
+              const SizedBox(height: 16),
+            ];
             return Column(
               children: [
                 Padding(
@@ -70,170 +274,82 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                     children: [
                       IconButton(
                         tooltip: l.callBackToApp,
-                        onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
+                        onPressed: () => context.canPop()
+                            ? context.pop()
+                            : context.go('/keypad'),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 30,
+                        ),
                       ),
                       const Spacer(),
                       if (profile != null)
                         Padding(
                           padding: const EdgeInsetsDirectional.only(end: 12),
-                          child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
+                          child: AccountChip(
+                            name: profile.name,
+                            status: acc.statusOf(profile.id),
+                          ),
                         ),
                     ],
                   ),
                 ),
-                for (final w in waiting) _WaitingBanner(call: w, title: callTitle(w, contacts, context.l10n)),
+                for (final w in waiting)
+                  _WaitingBanner(
+                    call: w,
+                    title: callTitle(w, contacts, context.l10n),
+                  ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Center(
-                      child: Column(
-                        children: [
-                          SizedBox(height: small ? 0 : 8),
-                          Text(
-                            title == c.number ? formatPhone(title) : title,
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            textDirection: title == c.number ? TextDirection.ltr : null,
-                            overflow: TextOverflow.ellipsis,
-                            style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          CallerIdentityBlock(call: c, title: title),
-                          const SizedBox(height: 6),
-                          if (c.isConfirmed && !c.isHeld)
-                            CallTimer(call: c, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))
-                          else
-                            Text(
-                              callStateText(c, l),
-                              style: t.textTheme.titleMedium?.copyWith(
-                                color: c.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
+                  child: landscape
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: SingleChildScrollView(
+                                      key: const Key('call-info-scroll'),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: Center(
+                                        child: Column(children: infoWidgets()),
+                                      ),
+                                    ),
+                                  ),
+                                  endButton(4),
+                                ],
                               ),
                             ),
-                          if (c.isConfirmed && c.isHeld) CallTimer(call: c, style: t.textTheme.bodyMedium),
-                          const SizedBox(height: 6),
-                          if (c.isConfirmed)
-                            Wrap(
-                              alignment: WrapAlignment.center,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
+                            Expanded(
+                              child: SingleChildScrollView(
+                                key: const Key('call-controls-scroll'),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    children: controlWidgets(landscape: true),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Center(
+                            child: Column(
                               children: [
-                                QualityIndicator(mos: c.stats?.mos ?? 0, onTap: () => showStatsSheet(context, c.cid)),
-                                SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
-                                const NoiseCancellationChip(),
-                                if (c.recording)
-                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                    Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
-                                    Text(' ${l.callRecBadge}', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
-                                  ]),
+                                ...infoWidgets(),
+                                ...controlWidgets(landscape: false),
                               ],
                             ),
-                          LanCallLabel(call: c),
-                          RelayedBanner(call: c),
-                          AnnouncementChip(cid: c.cid, center: true),
-                          if (consult) _ConsultBanner(call: c),
-                          TransferStalledBanner(call: c),
-                          if (others.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            for (final o in others)
-                              Padding(
-                                padding: const EdgeInsetsDirectional.only(bottom: 8),
-                                child: _StackedCall(call: o, title: callTitle(o, contacts, context.l10n)),
-                              ),
-                          ],
-                          if (_keypad && c.isConfirmed) ...[
-                            const SizedBox(height: 8),
-                            InCallKeypad(cid: c.cid, compact: true),
-                          ] else if (others.isEmpty) ...[
-                            SizedBox(height: small ? 12 : 24),
-                            Avatar(name: title, size: small ? 84 : 120),
-                          ],
-                          const SizedBox(height: 16),
-                          if (_keypad && c.isConfirmed)
-                            // The keypad takes the place of the action grid so its
-                            // bottom row is never pushed behind the End button.
-                            TextButton.icon(
-                              key: const Key('keypad-hide'),
-                              onPressed: () => setState(() => _keypad = false),
-                              icon: const Icon(Icons.keyboard_hide_rounded),
-                              label: Text(l.callHideKeypad),
-                            )
-                          else
-                          _ActionGrid(
-                            children: [
-                              CallActionButton(
-                                icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                                label: l.callMute,
-                                active: c.muted,
-                                onPressed: c.isConfirmed ? () => calls.toggleMute(c.cid) : null,
-                              ),
-                              CallActionButton(
-                                icon: Icons.dialpad_rounded,
-                                label: l.callKeypad,
-                                active: _keypad,
-                                onPressed: c.isConfirmed ? () => setState(() => _keypad = !_keypad) : null,
-                              ),
-                              CallActionButton(
-                                icon: audioRouteIcon(speakerOn ? AudioRoute.speaker : route),
-                                label: speakerOn ? l.callSpeaker : (route == AudioRoute.earpiece ? l.callSpeaker : _routeName(l, route)),
-                                active: speakerOn || route == AudioRoute.bluetooth || route == AudioRoute.wired,
-                                onPressed: () => _onSpeaker(context, ref, route),
-                              ),
-                              CallActionButton(
-                                icon: Icons.pause_rounded,
-                                label: c.isHeld ? l.callResume : l.callHold,
-                                active: c.isHeld,
-                                activeColor: colors.holdAmber,
-                                onPressed: c.isConfirmed ? () => calls.toggleHold(c.cid) : null,
-                              ),
-                              CallActionButton(
-                                icon: Icons.person_add_alt_1_rounded,
-                                label: l.callAddCall,
-                                onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
-                              ),
-                              CallActionButton(
-                                icon: Icons.phone_forwarded_rounded,
-                                label: l.callTransfer,
-                                onPressed: c.isConfirmed ? () => showTransferSheet(context, c.cid) : null,
-                              ),
-                              CallActionButton(
-                                icon: Icons.fiber_manual_record_rounded,
-                                label: c.recording ? l.callStop : l.callRecord,
-                                active: c.recording,
-                                activeColor: colors.endRed,
-                                onPressed: c.isConfirmed ? () => calls.toggleRecording(c.cid) : null,
-                              ),
-                              CallActionButton(
-                                icon: c.isConference ? Icons.call_split_rounded : Icons.call_merge_rounded,
-                                label: c.isConference ? l.callSplit : l.callMerge,
-                                active: c.isConference,
-                                onPressed: c.isConference ? () => calls.split() : (mergeable ? () => calls.merge() : null),
-                              ),
-                              CallActionButton(
-                                icon: Icons.more_horiz_rounded,
-                                label: l.actionMore,
-                                onPressed: () => showMoreSheet(context, c.cid),
-                              ),
-                            ],
                           ),
-                          if (c.isConference) const ConferenceLevels(),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  ),
+                        ),
                 ),
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(bottom: 20, top: 4),
-                  child: RoundCallButton(
-                    key: const Key('end-call'),
-                    icon: Icons.call_end_rounded,
-                    color: colors.endRed,
-                    label: l.callEndCall,
-                    size: 72,
-                    onPressed: () => calls.hangup(c.cid),
-                  ),
-                ),
+                if (!landscape) endButton(20),
               ],
             );
           },
@@ -248,14 +364,22 @@ class _InCallPageState extends ConsumerState<InCallPage> {
     _ => l.callSpeaker,
   };
 
-  Future<void> _onSpeaker(BuildContext context, WidgetRef ref, AudioRoute cur) async {
+  Future<void> _onSpeaker(
+    BuildContext context,
+    WidgetRef ref,
+    AudioRoute cur,
+  ) async {
     final p = ref.read(platformServicesProvider);
     final routes = await p.availableAudioRoutes();
     if (!context.mounted) return;
-    if (routes.length > 2 || cur == AudioRoute.bluetooth || cur == AudioRoute.wired) {
+    if (routes.length > 2 ||
+        cur == AudioRoute.bluetooth ||
+        cur == AudioRoute.wired) {
       await showAudioSheet(context);
     } else {
-      await p.setAudioRoute(cur == AudioRoute.speaker ? AudioRoute.earpiece : AudioRoute.speaker);
+      await p.setAudioRoute(
+        cur == AudioRoute.speaker ? AudioRoute.earpiece : AudioRoute.speaker,
+      );
     }
   }
 }
@@ -305,14 +429,31 @@ class _StackedCall extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                Text(callStateText(call, l), style: t.textTheme.bodySmall?.copyWith(color: call.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant)),
+                Text(
+                  bidiSafe(title),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  callStateText(call, l),
+                  style: t.textTheme.bodySmall?.copyWith(
+                    color: call.isHeld
+                        ? colors.holdAmber
+                        : t.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
           if (call.isConfirmed) ...[
             TextButton(onPressed: () => calls.swap(), child: Text(l.callSwap)),
-            TextButton(onPressed: () => calls.merge(), child: Text(l.callMerge)),
+            TextButton(
+              onPressed: () => calls.merge(),
+              child: Text(l.callMerge),
+            ),
           ],
           IconButton(
             tooltip: l.callEndCallWith(title),
@@ -342,19 +483,29 @@ class _ConsultBanner extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          Text(l.callAttendedTransferHint, style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+          Text(
+            l.callAttendedTransferHint,
+            style: t.textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: FilledButton(
                   key: const Key('complete-transfer'),
-                  onPressed: call.isConfirmed ? () => calls.completeAttended(call.cid) : null,
+                  onPressed: call.isConfirmed
+                      ? () => calls.completeAttended(call.cid)
+                      : null,
                   child: Text(l.callCompleteTransfer),
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton(key: const Key('cancel-transfer'), onPressed: () => calls.cancelConsult(call.cid), child: Text(l.actionCancel)),
+              OutlinedButton(
+                key: const Key('cancel-transfer'),
+                onPressed: () => calls.cancelConsult(call.cid),
+                child: Text(l.actionCancel),
+              ),
             ],
           ),
         ],
@@ -378,7 +529,9 @@ class _WaitingBanner extends ConsumerWidget {
       decoration: BoxDecoration(
         color: colors.raised,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+        ),
       ),
       child: Row(
         children: [
@@ -386,8 +539,21 @@ class _WaitingBanner extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l.callWaiting, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  l.callWaiting,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  bidiSafe(title),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
@@ -429,7 +595,14 @@ class IncomingCallPage extends ConsumerWidget {
     final colors = context.colors;
     final l = context.l10n;
     if (c == null) {
-      return Scaffold(body: Center(child: TextButton(onPressed: () => context.go('/keypad'), child: Text(l.actionBack))));
+      return Scaffold(
+        body: Center(
+          child: TextButton(
+            onPressed: () => context.go('/keypad'),
+            child: Text(l.actionBack),
+          ),
+        ),
+      );
     }
     final title = callTitle(c, contacts, context.l10n);
     final profile = acc.byId(c.accountId);
@@ -445,12 +618,18 @@ class IncomingCallPage extends ConsumerWidget {
                 const SizedBox(height: 24),
                 Text(
                   l.callIncomingCall,
-                  style: t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                  style: t.textTheme.titleMedium?.copyWith(
+                    color: t.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 if (profile != null)
                   Padding(
                     padding: const EdgeInsetsDirectional.only(top: 8),
-                    child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
+                    child: AccountChip(
+                      name: profile.name,
+                      status: acc.statusOf(profile.id),
+                    ),
                   ),
                 const Spacer(),
                 PulseRing(size: 120, child: Avatar(name: title, size: 120)),
@@ -458,27 +637,55 @@ class IncomingCallPage extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
-                    title == c.number ? formatPhone(title) : title,
+                    bidiSafe(title == c.number ? formatPhone(title) : title),
                     textAlign: TextAlign.center,
                     textDirection: title == c.number ? TextDirection.ltr : null,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: t.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                CallerIdentityBlock(call: c, title: title, numberStyle: tabular(t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: LanCallLabel(call: c)),
+                CallerIdentityBlock(
+                  call: c,
+                  title: title,
+                  numberStyle: tabular(
+                    t.textTheme.titleMedium?.copyWith(
+                      color: t.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: LanCallLabel(call: c),
+                ),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    CallActionButton(icon: Icons.message_rounded, label: l.callReply, size: 54, onPressed: () => _reply(context, ref, c)),
-                    CallActionButton(icon: Icons.voicemail_rounded, label: l.callVoicemail, size: 54, onPressed: hasVoicemail ? () => calls.redirectToVoicemail(c.cid) : null),
+                    CallActionButton(
+                      icon: Icons.message_rounded,
+                      label: l.callReply,
+                      size: 54,
+                      onPressed: () => _reply(context, ref, c),
+                    ),
+                    CallActionButton(
+                      icon: Icons.voicemail_rounded,
+                      label: l.callVoicemail,
+                      size: 54,
+                      onPressed: hasVoicemail
+                          ? () => calls.redirectToVoicemail(c.cid)
+                          : null,
+                    ),
                     CallActionButton(
                       icon: Icons.devices_rounded,
                       label: l.callToDevice,
                       size: 54,
-                      onPressed: lan.available && lan.devices.any((d) => d.online) ? () => forwardRingingToLan(context, ref, c.cid) : null,
+                      onPressed:
+                          lan.available && lan.devices.any((d) => d.online)
+                          ? () => forwardRingingToLan(context, ref, c.cid)
+                          : null,
                     ),
                   ],
                 ),
@@ -519,13 +726,20 @@ class IncomingCallPage extends ConsumerWidget {
     final calls = ref.read(callsProvider.notifier);
     final msgs = ref.read(messagesProvider.notifier);
     final l = ref.read(l10nProvider);
-    final quick = [l.callQuickReplyBusy, l.callQuickReplyMeeting, l.callQuickReplyOnMyWay];
+    final quick = [
+      l.callQuickReplyBusy,
+      l.callQuickReplyMeeting,
+      l.callQuickReplyOnMyWay,
+    ];
     final text = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [for (final q in quick) ListTile(title: Text(q), onTap: () => Navigator.pop(ctx, q))],
+          children: [
+            for (final q in quick)
+              ListTile(title: Text(q), onTap: () => Navigator.pop(ctx, q)),
+          ],
         ),
       ),
     );
@@ -565,13 +779,25 @@ class CallBar extends ConsumerWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    c == null ? context.l10n.callBarIncoming(title) : context.l10n.callBarInCallWith(title),
+                    c == null
+                        ? context.l10n.callBarIncoming(title)
+                        : context.l10n.callBarInCallWith(title),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                if (c != null && c.isConfirmed) CallTimer(call: c, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                if (c != null && c.isConfirmed)
+                  CallTimer(
+                    call: c,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 const SizedBox(width: 6),
                 const Icon(Icons.chevron_right_rounded, color: Colors.white),
               ],

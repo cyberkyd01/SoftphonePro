@@ -68,6 +68,11 @@ Found by the independent reviews and the device runs before release:
 * Registration retried endlessly after a wrong password; an engine restart could race with account synchronisation.
 * Per-contact and per-account ringtones, the recording beep, the blocklist (it matched number fragments) and emergency dialling without accounts.
 * TLS verification was on by default but no CA list shipped, so the engine could not start on Windows and iOS; the app now ships the Mozilla CA bundle and no longer falls back silently to the simulator when the engine fails to start.
+* Re-provisioning no longer adds duplicate accounts: an imported account that matches an existing one (same protocol, username, domain and registrar, host compared case-insensitively) updates it in place and keeps its id, call history links and, unless the import carries one, its password. The import confirmation says "Update N existing, add M new". Applies to `--provision` and to web link, QR, file and URL imports.
+* In-call page in landscape with a large font scale (for example 1.6) showed only the name, timer and End button: it now uses two columns that scroll, so Mute, Hold, Keypad and the other actions stay reachable. The navigation rail, dial pad and call panel of the wide layout no longer overflow at large font scales.
+* Right-to-left languages (Arabic) showed SIP addresses and numbers reordered ("127.0.0.1@1016" instead of "1016@127.0.0.1"). Technical strings (SIP URIs, numbers, IP addresses, host:port, codec names) are now isolated left-to-right in account chips and selectors, call screens, recents, contacts, speed dial, diagnostics and the LAN page.
+* Recording format setting accepts the aliases `stereo` / `wav-stereo` (WAV stereo) and `ogg` (Opus).
+* LAN: the first file offer right after pairing could stay on "Waiting for you" with no accept dialog, and a second offer was then declined as a duplicate. The pairing dialog's automatic close removed the offer dialog instead of itself. Offers now queue until the UI is ready, show one dialog at a time, and a repeated offer of a still-pending transfer re-shows its dialog instead of being declined.
 
 ### Changed
 * The recording-notice setting points to Settings > Calls > Announcements, with a button to open it.

@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "Cabeceras SIP personalizadas: {headers}",
   "importAccountCallerId": "ID de llamada: {callerId}",
   "importAccountSrtpOff": "Sin cifrado de medios (SRTP desactivado)",
-  "linkLanConnectAddress": "Dirección: {host}:{port}"
+  "linkLanConnectAddress": "Dirección: {host}:{port}",
+  "provisioningUpdateSummary": "Actualizar {updated} existentes, añadir {added} nuevas"
 }

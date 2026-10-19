@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -129,8 +130,8 @@ class CallStatsPanel extends StatelessWidget {
               cell(
                 l.callStatsCodec,
                 s?.codec.isNotEmpty == true
-                    ? s!.codec
-                    : (call.info.codec.isEmpty ? '--' : call.info.codec),
+                    ? ltr(s!.codec)
+                    : (call.info.codec.isEmpty ? '--' : ltr(call.info.codec)),
               ),
               cell(
                 'MOS',
@@ -589,15 +590,15 @@ void showCallInfo(BuildContext context, UiCall c) {
   final i = c.info;
   final l = context.l10n;
   final rows = <(String, String)>[
-    (l.callInfoRemote, i.remoteUri),
-    (l.callInfoAccount, i.localUri),
+    (l.callInfoRemote, ltr(i.remoteUri)),
+    (l.callInfoAccount, ltr(i.localUri)),
     (l.callInfoState, '${i.state.wire} (${i.stateCode} ${i.stateReason})'),
-    (l.callStatsCodec, i.codec.isEmpty ? '--' : i.codec),
+    (l.callStatsCodec, i.codec.isEmpty ? '--' : ltr(i.codec)),
     (
       l.callInfoSecure,
       '${i.srtp ? 'SRTP' : 'RTP'} / ${i.secureSignaling ? 'TLS' : l.callInfoPlainSignalling}',
     ),
-    ('Call-ID', i.callId),
+    ('Call-ID', ltr(i.callId)),
   ];
   showDialog<void>(
     context: context,
@@ -914,10 +915,10 @@ class _CallCardState extends ConsumerState<CallCard> {
                           showNumber: false,
                         ),
                         const SizedBox(height: 2),
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Flexible(
-                              child: Text(
+                            Text(
                                 callStateText(c, l),
                                 style: t.textTheme.bodySmall?.copyWith(
                                   color: c.isHeld
@@ -928,7 +929,6 @@ class _CallCardState extends ConsumerState<CallCard> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
                             if (c.isConfirmed) ...[
                               const Text('  ·  '),
                               CallTimer(

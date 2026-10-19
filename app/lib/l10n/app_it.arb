@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "Intestazioni SIP personalizzate: {headers}",
   "importAccountCallerId": "ID chiamante: {callerId}",
   "importAccountSrtpOff": "Nessuna cifratura dei media (SRTP disattivato)",
-  "linkLanConnectAddress": "Indirizzo: {host}:{port}"
+  "linkLanConnectAddress": "Indirizzo: {host}:{port}",
+  "provisioningUpdateSummary": "Aggiorna {updated} esistenti, aggiungi {added} nuovi"
 }

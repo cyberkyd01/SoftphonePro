@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "ترويسات SIP مخصصة: {headers}",
   "importAccountCallerId": "معرّف المتصل: {callerId}",
   "importAccountSrtpOff": "بدون تشفير الوسائط (SRTP متوقف)",
-  "linkLanConnectAddress": "العنوان: {host}:{port}"
+  "linkLanConnectAddress": "العنوان: {host}:{port}",
+  "provisioningUpdateSummary": "تحديث {updated} موجودة، وإضافة {added} جديدة"
 }

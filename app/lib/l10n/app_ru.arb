@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "Пользовательские заголовки SIP: {headers}",
   "importAccountCallerId": "Идентификатор вызывающего: {callerId}",
   "importAccountSrtpOff": "Без шифрования медиа (SRTP выключен)",
-  "linkLanConnectAddress": "Адрес: {host}:{port}"
+  "linkLanConnectAddress": "Адрес: {host}:{port}",
+  "provisioningUpdateSummary": "Обновить существующие: {updated}, добавить новые: {added}"
 }

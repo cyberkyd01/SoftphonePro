@@ -11399,6 +11399,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Address: {host}:{port}'**
   String linkLanConnectAddress(String host, String port);
+
+  /// Import confirmation: how many imported accounts update existing ones and how many are new.
+  ///
+  /// In en, this message translates to:
+  /// **'Update {updated} existing, add {added} new'**
+  String provisioningUpdateSummary(int updated, int added);
 }
 
 class _AppLocalizationsDelegate

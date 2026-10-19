@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "カスタム SIP ヘッダー：{headers}",
   "importAccountCallerId": "発信者番号：{callerId}",
   "importAccountSrtpOff": "メディア暗号化なし（SRTP オフ）",
-  "linkLanConnectAddress": "アドレス：{host}:{port}"
+  "linkLanConnectAddress": "アドレス：{host}:{port}",
+  "provisioningUpdateSummary": "既存の {updated} 件を更新し、新しい {added} 件を追加"
 }

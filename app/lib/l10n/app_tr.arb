@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "Özel SIP başlıkları: {headers}",
   "importAccountCallerId": "Arayan kimliği: {callerId}",
   "importAccountSrtpOff": "Medya şifrelemesi yok (SRTP kapalı)",
-  "linkLanConnectAddress": "Adres: {host}:{port}"
+  "linkLanConnectAddress": "Adres: {host}:{port}",
+  "provisioningUpdateSummary": "{updated} mevcut hesabı güncelle, {added} yeni hesap ekle"
 }

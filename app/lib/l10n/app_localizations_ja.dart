@@ -6585,4 +6585,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'アドレス：$host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return '既存の $updated 件を更新し、新しい $added 件を追加';
+  }
 }

@@ -6791,4 +6791,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'Adres: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return '$updated mevcut hesabı güncelle, $added yeni hesap ekle';
+  }
 }

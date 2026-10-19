@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "Eigene SIP-Header: {headers}",
   "importAccountCallerId": "Anruferkennung: {callerId}",
   "importAccountSrtpOff": "Keine Medienverschlüsselung (SRTP aus)",
-  "linkLanConnectAddress": "Adresse: {host}:{port}"
+  "linkLanConnectAddress": "Adresse: {host}:{port}",
+  "provisioningUpdateSummary": "{updated} vorhandene aktualisieren, {added} neue hinzufügen"
 }

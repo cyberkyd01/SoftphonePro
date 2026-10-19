@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -226,7 +227,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                               for (final s in suggestions.take(3))
                                 ActionChip(
                                   avatar: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 22),
-                                  label: Text(s.name.isEmpty ? s.number : s.name),
+                                  label: Text(bidiSafe(s.name.isEmpty ? s.number : s.name)),
                                   onPressed: () => pick(s),
                                 ),
                             ],
@@ -306,7 +307,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                               padding: const EdgeInsetsDirectional.only(end: 8),
                               child: ActionChip(
                                 avatar: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 24),
-                                label: Text(s.name.isEmpty ? s.number : '${s.name}  ${s.number}'),
+                                label: Text(s.name.isEmpty ? bidiSafe(s.number) : '${bidiSafe(s.name)}  ${bidiSafe(s.number)}'),
                                 onPressed: () => pick(s),
                               ),
                             ),
@@ -364,8 +365,8 @@ class _QuickList extends StatelessWidget {
               dense: true,
               visualDensity: VisualDensity.compact,
               leading: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 32),
-              title: Text(s.name.isEmpty ? s.number : s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), maxLines: 1, textDirection: TextDirection.ltr),
+              title: Text(bidiSafe(s.name.isEmpty ? s.number : s.name), maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: s.name.isEmpty ? null : Text(ltr(s.number), style: tabular(null), maxLines: 1),
               onTap: () => onPick(s),
             ),
         ],
@@ -493,8 +494,8 @@ class _SuggestionsPanel extends StatelessWidget {
                 final s = suggestions[i];
                 return ListTile(
                   leading: Avatar(name: s.name.isEmpty ? s.number : s.name),
-                  title: Text(s.name.isEmpty ? s.number : s.name),
-                  subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), textDirection: TextDirection.ltr),
+                  title: Text(bidiSafe(s.name.isEmpty ? s.number : s.name)),
+                  subtitle: s.name.isEmpty ? null : Text(ltr(s.number), style: tabular(null)),
                   trailing: IconButton(
                     tooltip: context.l10n.keypadCallPerson(s.name.isEmpty ? s.number : s.name),
                     icon: Icon(Icons.call_rounded, color: context.colors.callGreen),

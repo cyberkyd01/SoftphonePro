@@ -224,7 +224,9 @@ def main():
             os.kill(p, 9)
 
     def launch(*extra):
-        r = sh("open", "-n", app, "--args", *extra)
+        # `open` forwards our environment to the app: SPCORE_LIB (used for the far-end CLI) would make the app
+        # load the host's libspcore instead of the engine bundled in the DMG, so strip it.
+        r = sh("env", "-u", "SPCORE_LIB", "-u", "SPCORE_CLI", "open", "-n", app, "--args", *extra)
         if r.returncode != 0 or r.stderr.strip():
             print("open:", r.returncode, r.stderr.strip(), flush=True)
 

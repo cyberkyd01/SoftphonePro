@@ -1,3 +1,4 @@
+import '../../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,7 @@ class OverviewView extends ConsumerWidget {
                       title: Text(r.$1),
                       trailing: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 240),
-                        child: Text(r.$2, textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(bidiSafe(r.$2), textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                     ),
                 ],
@@ -47,7 +48,7 @@ class OverviewView extends ConsumerWidget {
                 title: l.diagSysTransports,
                 children: [
                   if (i.transports.isEmpty) ListTile(dense: true, title: Text(l.diagSysNoneReported)),
-                  for (final tr in i.transports) ListTile(dense: true, leading: const Icon(Icons.settings_ethernet_rounded), title: Text(tr)),
+                  for (final tr in i.transports) ListTile(dense: true, leading: const Icon(Icons.settings_ethernet_rounded), title: Text(bidiSafe(tr))),
                 ],
               ),
               SettingsGroup(
@@ -59,7 +60,7 @@ class OverviewView extends ConsumerWidget {
                     ListTile(
                       dense: true,
                       leading: Icon(c.enabled ? Icons.check_circle_outline_rounded : Icons.block_rounded, size: 20),
-                      title: Text(c.id),
+                      title: Text(bidiSafe(c.id)),
                       trailing: Text(c.enabled ? l.diagSysCodecPriority(c.priority) : l.diagSysCodecDisabled, style: t.textTheme.bodySmall),
                     ),
                 ],

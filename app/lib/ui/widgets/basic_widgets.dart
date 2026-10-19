@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -141,7 +142,7 @@ class AccountChip extends StatelessWidget {
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 150),
                       child: Text(
-                        name,
+                        bidiSafe(name),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelLarge,

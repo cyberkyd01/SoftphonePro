@@ -27,7 +27,7 @@ Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningR
     ref.read(noticeProvider.notifier).error(l.linkImportRefused(plan.refusedKey!));
     return 0;
   }
-  final decision = await showImportConfirmDialog(context, plan);
+  final decision = await showImportConfirmDialog(context, plan, existing: ref.read(accountsProvider).profiles);
   if (decision == null) return 0;
   return applyImportPlan(ref.read, plan, decision);
 }

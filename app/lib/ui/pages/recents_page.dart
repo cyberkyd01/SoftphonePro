@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'diagnostics/quality_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -126,7 +127,7 @@ class _RecentsPageState extends ConsumerState<RecentsPage> {
                   onSelected: (id) => ref.read(historyFilterProvider.notifier).set(filter.copyWith(accountId: id == '' ? null : id)),
                   itemBuilder: (_) => [
                     PopupMenuItem(value: '', child: Text(context.l10n.recentsAllAccounts)),
-                    for (final p in acc.profiles) PopupMenuItem(value: p.id, child: Text(p.name)),
+                    for (final p in acc.profiles) PopupMenuItem(value: p.id, child: Text(bidiSafe(p.name))),
                   ],
                   child: Chip(
                     avatar: const Icon(Icons.dns_rounded, size: 16),
@@ -218,7 +219,7 @@ class _HistoryList extends ConsumerWidget {
             minVerticalPadding: 8,
             leading: Avatar(name: name),
             title: Text(
-              name,
+              bidiSafe(name),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: missed ? colors.endRed : null, fontWeight: FontWeight.w600),
@@ -229,7 +230,7 @@ class _HistoryList extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
-                    [if (name != r.remoteNumber) r.remoteNumber, durationLabel(r, context.l10n)].where((e) => e.isNotEmpty).join('  ·  '),
+                    [if (name != r.remoteNumber) bidiSafe(r.remoteNumber), durationLabel(r, context.l10n)].where((e) => e.isNotEmpty).join('  ·  '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: tabular(t.textTheme.bodySmall),
@@ -291,8 +292,8 @@ class RecentDetailView extends ConsumerWidget {
           children: [
             Avatar(name: name, size: 84),
             const SizedBox(height: 12),
-            Text(name, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
-            if (name != number) Text(number, style: tabular(t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+            Text(bidiSafe(name), style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+            if (name != number) Text(bidiSafe(number), style: tabular(t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant))),
             const SizedBox(height: 16),
             Wrap(
               spacing: 16,
@@ -416,7 +417,7 @@ class RecentDetailView extends ConsumerWidget {
                     children: [
                       Text(
                         '${dayLabel(all[i].start, context.l10n)}, ${timeLabel(all[i].start, context.l10n)}'
-                        '${acc.byId(all[i].accountId) != null ? '  ·  ${acc.byId(all[i].accountId)!.name}' : ''}'
+                        '${acc.byId(all[i].accountId) != null ? '  ·  ${bidiSafe(acc.byId(all[i].accountId)!.name)}' : ''}'
                         '${all[i].sipCode >= 300 ? '  ·  SIP ${all[i].sipCode}' : ''}',
                       ),
                       RecordIdentityLines(record: all[i]),

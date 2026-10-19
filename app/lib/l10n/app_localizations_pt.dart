@@ -6845,6 +6845,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'Endereço: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return 'Atualizar $updated existentes, adicionar $added novas';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13686,5 +13691,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String linkLanConnectAddress(String host, String port) {
     return 'Endereço: $host:$port';
+  }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return 'Atualizar $updated existentes, adicionar $added novas';
   }
 }

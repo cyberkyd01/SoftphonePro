@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -150,8 +151,8 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
               for (final s in sugg)
                 ListTile(
                   leading: Avatar(name: s.name.isEmpty ? s.number : s.name),
-                  title: Text(s.name.isEmpty ? s.number : s.name),
-                  subtitle: s.name.isEmpty ? null : Text(s.number),
+                  title: Text(bidiSafe(s.name.isEmpty ? s.number : s.name)),
+                  subtitle: s.name.isEmpty ? null : Text(ltr(s.number)),
                   trailing: s.contact == null ? const Icon(Icons.history_rounded, size: 18) : const Icon(Icons.person_rounded, size: 18),
                   onTap: () {
                     Navigator.pop(context);

@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -105,8 +106,8 @@ class SpeedDialPage extends ConsumerWidget {
             ListTile(
               key: Key('speed-dial-slot-$i'),
               leading: CircleAvatar(child: Text('$i')),
-              title: Text(dial[i] == null ? l.speedDialNotAssigned : (dial[i]!.label.isEmpty ? dial[i]!.number : dial[i]!.label)),
-              subtitle: dial[i] == null || dial[i]!.label.isEmpty ? null : Text(dial[i]!.number),
+              title: Text(dial[i] == null ? l.speedDialNotAssigned : (dial[i]!.label.isEmpty ? bidiSafe(dial[i]!.number) : dial[i]!.label)),
+              subtitle: dial[i] == null || dial[i]!.label.isEmpty ? null : Text(ltr(dial[i]!.number)),
               trailing: const Icon(Icons.edit_rounded),
               onTap: () => showSpeedDialEditor(context, ref, i),
             ),

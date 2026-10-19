@@ -6817,4 +6817,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'العنوان: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return 'تحديث $updated موجودة، وإضافة $added جديدة';
+  }
 }

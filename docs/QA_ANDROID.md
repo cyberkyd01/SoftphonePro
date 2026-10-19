@@ -88,3 +88,36 @@ Fixed in the app, with tests in `app/test/recordings/qa_leftovers_test.dart`. No
 * Dial rules page: same large header (with back and add) as the other settings pages.
 * Incoming call in the foreground (Android, app resumed): only the in-app page is shown; the heads-up notification is posted only when the app is in the background or locked.
 * A call interrupted by force-stop: an "active calls journal" is written when a call starts and answers (with a heartbeat), and leftovers of an earlier run become "Interrupted" history entries at the next start.
+
+## v1.0.0 final
+
+Date: 2026-10-19. Build: `flutter build apk --release --target-platform android-arm64` of main `9eb7cb7` (activity-recreation fix included); cases K and L ran on a rebuild of the same commit plus the working-tree Back-button fix below (uncommitted). Emulator-5554 (arm64, Android 15), real `libspcore`. PBX in emulator mode (`up.sh --emulator`, advertises 10.0.2.2), account 1020. Provisioning was by deep link `softphonepro://provision?url=http://127.0.0.1:18765/cfg.json` (http is only accepted for localhost, so `adb reverse tcp:18765`). Screenshots: `docs/qa-screenshots/v100final_android_*.png`.
+
+| Case | Result | Evidence |
+|---|---|---|
+| A. Provisioning via deep link, 1020 registers | PASS | Confirm dialog (1 account, "Dials custom PBX feature codes" warning), Import; keypad shows "Calling from 1020", PBX `pjsip show contacts` lists `1020`. |
+| B. Outgoing call to 600, real audio path | PASS | PBX `Echo()` channel up. PBX `pjsip show channelstats` after 32 s: receive 1608, transmit 1606, lost 0 (RTP flows both ways). App quality sheet: PCMU, MOS 4.33, jitter 2.1 ms, loss 0 %, RTT 158 ms (`b2`). The in-call panel has no rx packet counter (only history `Rx/Tx pkts` widget exists in code), so packet evidence is the PBX side plus jitter/RTT/MOS measured by the app. |
+| C. DTMF 1234 to 602 | PASS | In-call keypad; `docker exec softphonepro-pbx cat /var/log/asterisk/dtmf_1020.txt` = `1234`. (Digits must be sent within 15 s, the dialplan `Read` timeout. A first slow attempt logged an empty string.) |
+| D. Blind transfer of incoming 1019 call to 600 | PASS | Host CLI 1019 called 1020, answered, Transfer > Blind > 600. PBX `core show channels`: `PJSIP/1019-... 600@default Echo() Up`, still up 14 s later; app returned to Recents. The host CLI's own leg was ended by the PBX about 19 s later (host has no media path to 10.0.2.2, so no RTP; not an app issue). |
+| E. Recording Stereo then Opus; Recordings list, play, export | PASS | Stereo: `WAV stereo`, 00:19, 1.2 MB (= 64 KB/s, 16 kHz x 2 ch x 16 bit). Opus: 00:11, 17 KB. Playback reached 00:18/00:19 (`e8`); Share sheet offers `rec_20261019_224245_600.wav` (`e7`). |
+| F. Noise cancellation (voice isolation) on/off during a call | PASS | In-call More > Noise cancellation on ("High (70%)") then off. PBX counters kept rising in both directions: 3283/3281, 3517/3515, 3778/3776 (on); 4259/4257, 4535/4533 (off). |
+| G. Hold with built-in music (Calm) | PASS | "On hold" label, Resume button; PBX counters kept increasing while held (861 > 1179, music is sent), Resume gives 1460/1562 and the call continued (`g1`, `g2`). |
+| H. Opening announcement (Notice chime) on outgoing call | PASS | Call connected, 137 PBX rx packets after 3 s, continued past 30 s. Audibility cannot be checked on the emulator. |
+| I. Arabic RTL | PASS | Settings > Appearance, keypad, in-call, More, Settings list all mirrored (`i1_settings_appearance`, `i2_keypad`, `i3_incall`, `i4_more`, `i5_settings`); digits keep LTR order. Switched back to English. |
+| J. Dark mode + rotation + font scale 1.6 during an active call | PASS | `cmd uimode night yes`, user_rotation 1, font_scale 1.6: no crash (`pidof` unchanged, empty crash buffer), PBX stats still rising, call continued. In landscape the action grid is below the fold (scroll reveals it; `j2`, `j3`, `j4`). |
+| K. App lock, incoming call while locked | PASS | PIN 4321 set, app relaunched locked (`k4`); call from 1019 showed the Incoming screen over the lock and was answered (PBX Up); after hangup the lock screen returned, PIN unlocked, lock turned off. |
+| L. LAN with `tool/lan_peer.dart` over adb reverse/forward | PASS (with note) | Link port 47800, peer on 47900. Peer-initiated pairing: code 290469 matched on both sides, "Paired with Host peer". Chat both ways (`hello_from_android` echoed). File app > host: `fromand.txt` (24 B) arrived with identical content. File host > app: accept dialog, completed, 21 B. Note: the host tool's two duplicate sends at pairing time left one offer stuck on "Waiting for you" with no dialog and the second declined as `duplicate`; cancelling it and asking again worked (`l14`, `l15`). |
+| M. Security regression | PASS | `am start ... -d "softphonepro-cli://dial?v=600"`: no call (PBX 0 channels), log "ignored link with scheme softphonepro-cli". `ACTION_ANSWER` without nonce while 1019 was ringing: "ignored ACTION_ANSWER without nonce", call kept ringing (`m2`). |
+
+### Bug found and fixed (Android and iOS)
+
+System Back from any Settings sub page, Recordings, LAN, Presence, More, Recents, Contacts or Messages left the app (the shell navigates with `go`, so there is no stack to pop). Now `AppShell` has a `PopScope`: Settings sub page > Settings > More > Keypad, Recordings/LAN/Presence > More, other tabs > Keypad (phones only). Verified on the emulator (Privacy > Settings > More > Keypad > exit). Test: `app/test/system_back_test.dart` (2 tests; full suite 523 passed). Files: `app/lib/ui/shell/app_shell.dart`.
+
+### Remaining observations
+
+* In-call quality sheet has no rx/tx packet counts (only the Diagnostics > Quality history sheet in code does).
+* Landscape plus font scale 1.6: the call page shows only name, timer and End; actions need scrolling.
+* In Arabic the account chip prints `127.0.0.1@1016` (bidi reorders `1016@127.0.0.1`); cosmetic.
+* Re-provisioning (a second import of the same account) adds a duplicate account each time (`1016@127.0.0.1` x4 seen on macOS).
+* Initial LAN file offer can be left "Waiting for you" without a dialog if it arrives while the pairing dialogs are closing (see L); could not reproduce on a later offer.
+* `lan_peer.dart` sends the greeting and the file twice at pairing (two code paths); harmless but noisy.

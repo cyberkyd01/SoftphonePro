@@ -1,3 +1,4 @@
+import 'package:softphonepro/core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,7 +74,7 @@ void main() {
     containerOf(tester).read(routerProvider).go('/keypad');
     await tester.pumpAndSettle();
     await settle(tester, env.engine);
-    await tester.tap(find.text('1001@pbx.test').first);
+    await tester.tap(find.text(bidiSafe('1001@pbx.test')).first);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('acc-resolved-server')), findsOneWidget);
     expect(find.text('pbx.test:5061'), findsOneWidget);

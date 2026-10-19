@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "自定义 SIP 头：{headers}",
   "importAccountCallerId": "主叫号码：{callerId}",
   "importAccountSrtpOff": "无媒体加密（SRTP 关闭）",
-  "linkLanConnectAddress": "地址：{host}:{port}"
+  "linkLanConnectAddress": "地址：{host}:{port}",
+  "provisioningUpdateSummary": "更新 {updated} 个现有账户，添加 {added} 个新账户"
 }

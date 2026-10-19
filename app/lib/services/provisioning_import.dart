@@ -81,13 +81,87 @@ Future<int> importProvisioningResult(
     ? applyTrustedImport(ref.read, r)
     : applyImportPlan(ref.read, prepareUntrustedImport(r));
 
+/// True when [a] and [b] are the same account: same protocol, username,
+/// domain and registrar (hosts compared case-insensitively).
+bool sameAccountIdentity(AccountProfile a, AccountProfile b) {
+  String host(String? v) => (v ?? '').trim().toLowerCase();
+  final x = a.config, y = b.config;
+  return x.proto == y.proto &&
+      x.username == y.username &&
+      host(x.domain) == host(y.domain) &&
+      host(x.registrar) == host(y.registrar);
+}
+
+/// The existing account that [incoming] would update, or null when it is new.
+AccountProfile? matchingAccount(
+  Iterable<AccountProfile> existing,
+  AccountProfile incoming,
+) {
+  for (final e in existing) {
+    if (sameAccountIdentity(e, incoming)) return e;
+  }
+  return null;
+}
+
+/// How many of [incoming] update an existing account and how many are added.
+({int updated, int added}) countImportMatches(
+  Iterable<AccountProfile> existing,
+  Iterable<AccountProfile> incoming,
+) {
+  final pool = [...existing];
+  var updated = 0, added = 0;
+  for (final a in incoming) {
+    if (matchingAccount(pool, a) != null) {
+      updated++;
+    } else {
+      added++;
+      pool.add(a);
+    }
+  }
+  return (updated: updated, added: added);
+}
+
+/// [incoming] merged onto [existing]: keeps its id (history links), default
+/// flag and, unless the import carries one, its password.
+AccountProfile mergeIntoExisting(AccountProfile existing, AccountProfile incoming) {
+  final pw = incoming.config.password.isEmpty
+      ? existing.config.password
+      : incoming.config.password;
+  return AccountProfile(
+    id: existing.id,
+    config: incoming.config.copyWith(uid: existing.id, password: pw),
+    enabled: incoming.enabled,
+    isDefault: existing.isDefault,
+    label: incoming.label,
+    color: incoming.color,
+    voicemailNumber: incoming.voicemailNumber,
+    featureCodes: incoming.featureCodes,
+    dnd: incoming.dnd,
+    autoAnswer: incoming.autoAnswer,
+    forwarding: incoming.forwarding,
+    ringtone: incoming.ringtone,
+    dialRuleSetId: incoming.dialRuleSetId,
+    providerTemplateId: incoming.providerTemplateId,
+    backupRegistrar: incoming.backupRegistrar,
+    autoRecord: incoming.autoRecord,
+    holdMusic: incoming.holdMusic,
+    openingAnnouncement: incoming.openingAnnouncement,
+  );
+}
+
 Future<int> _applyImport(
   Reader read, {
   required List<AccountProfile> accounts,
   required Map<String, dynamic> settings,
 }) async {
+  final notifier = read(accountsProvider.notifier);
   for (final a in accounts) {
-    await read(accountsProvider.notifier).add(a);
+    final existing = matchingAccount(read(accountsProvider).profiles, a);
+    if (existing != null) {
+      await notifier.update(mergeIntoExisting(existing, a));
+    } else {
+      await notifier.add(a);
+    }
   }
   final changes = {...settings};
   if (accounts.isNotEmpty) changes['onboardingDone'] = true;

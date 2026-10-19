@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -95,8 +96,8 @@ class AccountSheet extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                      Text(p.address, textDirection: TextDirection.ltr, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                      Text(bidiSafe(p.name), style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(ltr(p.address), style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -275,7 +276,7 @@ class AccountSelector extends ConsumerWidget {
               children: [
                 StatusDot(color: statusColor(context, acc.statusOf(p.id))),
                 const SizedBox(width: 10),
-                Flexible(child: Text(p.name, overflow: TextOverflow.ellipsis)),
+                Flexible(child: Text(bidiSafe(p.name), overflow: TextOverflow.ellipsis)),
                 if (p.id == selected?.id) ...[const SizedBox(width: 8), const Icon(Icons.check_rounded, size: 18)],
               ],
             ),

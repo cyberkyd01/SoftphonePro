@@ -6873,4 +6873,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'Адрес: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return 'Обновить существующие: $updated, добавить новые: $added';
+  }
 }

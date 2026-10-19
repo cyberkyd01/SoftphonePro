@@ -8,6 +8,7 @@ import '../l10n/l10n.dart';
 import '../lan/lan_controller.dart';
 import '../ui/router.dart';
 import '../ui/widgets/import_confirm_dialog.dart';
+import 'accounts_controller.dart';
 import 'app_services.dart';
 import 'calls_controller.dart';
 import 'dial_ready.dart';
@@ -161,7 +162,7 @@ Future<void> _provisionFromLink(Ref ref, Uri url) async {
     }
     final ctx = await _rootContext();
     if (ctx == null || !ctx.mounted) return;
-    final decision = await showImportConfirmDialog(ctx, plan, host: url.host);
+    final decision = await showImportConfirmDialog(ctx, plan, host: url.host, existing: ref.read(accountsProvider).profiles);
     if (decision == null) return;
     await applyImportPlan(ref.read, plan, decision);
     _leaveOnboarding(ref, plan.resolve(decision));

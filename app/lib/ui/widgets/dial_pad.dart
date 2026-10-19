@@ -52,36 +52,43 @@ class DialPad extends StatelessWidget {
       textDirection: TextDirection.ltr,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final r in rows)
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    for (final d in r)
-                      DialKey(
-                        digit: d,
-                        compact: compact,
-                        onTap: () => onDigit(d),
-                        speedDial:
-                            onLongPressDigit != null &&
-                            RegExp(r'[1-9]').hasMatch(d),
-                        onLongPress: d == '0'
-                            ? () => onDigit('+')
-                            : (onLongPressDigit != null &&
-                                      RegExp(r'[1-9]').hasMatch(d)
-                                  ? () => onLongPressDigit!(d)
-                                  : (d == '1' && onVoicemail != null
-                                        ? onVoicemail
-                                        : null)),
-                      ),
-                  ],
-                ),
-              ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // Keys shrink in a narrow column instead of overflowing.
+            final maxKey = box.maxWidth.isFinite ? box.maxWidth / 3 - 4 : null;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final r in rows)
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        for (final d in r)
+                          DialKey(
+                            digit: d,
+                            compact: compact,
+                            maxSize: maxKey,
+                            onTap: () => onDigit(d),
+                            speedDial:
+                                onLongPressDigit != null &&
+                                RegExp(r'[1-9]').hasMatch(d),
+                            onLongPress: d == '0'
+                                ? () => onDigit('+')
+                                : (onLongPressDigit != null &&
+                                          RegExp(r'[1-9]').hasMatch(d)
+                                      ? () => onLongPressDigit!(d)
+                                      : (d == '1' && onVoicemail != null
+                                            ? onVoicemail
+                                            : null)),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -96,8 +103,10 @@ class DialKey extends StatelessWidget {
     this.onLongPress,
     this.compact = false,
     this.speedDial = false,
+    this.maxSize,
   });
   final String digit;
+  final double? maxSize;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool compact;
@@ -106,7 +115,10 @@ class DialKey extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final size = compact ? 64.0 : 76.0;
+    final base = compact ? 64.0 : 76.0;
+    final size = maxSize == null || maxSize! >= base
+        ? base
+        : maxSize!.clamp(40.0, base);
     final letters = _letters[digit] ?? '';
     final l = context.l10n;
     return Semantics(

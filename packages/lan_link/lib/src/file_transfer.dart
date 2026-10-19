@@ -342,7 +342,14 @@ class FileEngine {
 
   Future<void> _onOffer(String peerId, FileOffer m) async {
     void decl(String r) => _safeSend(peerId, FileDecline(m.transferId, r));
-    if (_in.containsKey(m.transferId) || _out.containsKey(m.transferId)) {
+    final known = _in[m.transferId];
+    if (known != null && known.t.peerId == peerId && known.t.state == TransferState.offered) {
+      // The sender repeated an offer we still wait on: surface the pending
+      // transfer again (the UI re-shows its dialog) instead of declining it.
+      _newTransfers.add(known.t);
+      return;
+    }
+    if (known != null || _out.containsKey(m.transferId)) {
       return decl('duplicate');
     }
     final name = sanitizeFileName(m.name);
@@ -355,7 +362,11 @@ class FileEngine {
         this, m.transferId, peerId, true, name, m.size, m.sha256, m.mime);
     final partial = p.join(
         _partialDir, '${peerId}_${m.sha256.substring(0, 32)}_${m.size}.part');
-    if (_in.values.any((e) => e.partialPath == partial && !e.t.isFinished)) {
+    final same = _in.values
+        .where((e) => e.partialPath == partial && !e.t.isFinished)
+        .firstOrNull;
+    if (same != null) {
+      if (same.t.state == TransferState.offered) _newTransfers.add(same.t);
       return decl('duplicate');
     }
     final i = _in[m.transferId] = _In(t, partial);

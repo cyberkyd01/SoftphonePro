@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -122,7 +123,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
                       leading: Avatar(name: c.displayName, color: Color(c.avatarColor), lamp: c.blf ? presence.lampOf(c.id) : LampState.unknown),
                       title: Text(c.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: Text(
-                        [if (c.company.isNotEmpty) c.company, c.primary].where((e) => e.isNotEmpty).join('  ·  '),
+                        [if (c.company.isNotEmpty) c.company, bidiSafe(c.primary)].where((e) => e.isNotEmpty).join('  ·  '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -306,14 +307,14 @@ class ContactDetailView extends ConsumerWidget {
               for (final n in c.numbers)
                 ListTile(
                   leading: const Icon(Icons.phone_rounded),
-                  title: Text(n.value, style: tabular(null), textDirection: TextDirection.ltr),
+                  title: Text(ltr(n.value), style: tabular(null)),
                   subtitle: Text(contactLabelText(context.l10n, n.label)),
                   trailing: IconButton(tooltip: context.l10n.contactsCallName(n.value), icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(n.value)),
                 ),
               for (final u in c.sipUris)
                 ListTile(
                   leading: const Icon(Icons.alternate_email_rounded),
-                  title: Text(u, textDirection: TextDirection.ltr),
+                  title: Text(ltr(u)),
                   subtitle: Text(context.l10n.contactsSipAddress),
                   trailing: IconButton(tooltip: context.l10n.contactsCallName(u), icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(u)),
                 ),

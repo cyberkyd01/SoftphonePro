@@ -6848,4 +6848,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'Adresse: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return '$updated vorhandene aktualisieren, $added neue hinzufügen';
+  }
 }

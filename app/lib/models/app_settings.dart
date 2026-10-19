@@ -166,7 +166,19 @@ class AppSettings {
 
   // ---- recording (UX2)
   /// `wav` | `wavStereo` | `opus` (engine RecordFormat wire names).
-  String get recordFormat => _s('recordFormat', 'wav');
+  /// Tolerant: `stereo` / `wav-stereo` / `wav_stereo` mean `wavStereo`,
+  /// `ogg` / `opus` mean `opus`; anything unknown is `wav`.
+  String get recordFormat =>
+      normalizeRecordFormat(_s('recordFormat', 'wav'));
+
+  static String normalizeRecordFormat(String raw) {
+    final k = raw.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]'), '');
+    return switch (k) {
+      'stereo' || 'wavstereo' => 'wavStereo',
+      'ogg' || 'opus' || 'oggopus' => 'opus',
+      _ => 'wav',
+    };
+  }
 
   /// Auto-record rule: `off` | `all` | `incoming` | `outgoing`. Falls back
   /// to the legacy [autoRecord] switch when unset.

@@ -1,3 +1,4 @@
+import '../../../core/bidi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -93,7 +94,7 @@ class QualityView extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(live.info.remoteUri, style: t.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(ltr(live.info.remoteUri), style: t.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 8),
                         QualityPanel(samples: live.samples, stats: live.stats),
                       ],
@@ -119,7 +120,7 @@ class QualityView extends ConsumerWidget {
                   for (var i = 0; i < history.length; i++) ...[
                     ListTile(
                       key: Key('quality-hist-$i'),
-                      title: Text(history[i].remoteDisplay.isNotEmpty ? history[i].remoteDisplay : history[i].remoteNumber),
+                      title: Text(bidiSafe(history[i].remoteDisplay.isNotEmpty ? history[i].remoteDisplay : history[i].remoteNumber)),
                       subtitle: Text('${dayLabel(history[i].start, context.l10n)}, ${timeLabel(history[i].start, context.l10n)}  ·  ${formatMs(history[i].durationMs)}'),
                       trailing: QualityIndicator(mos: history[i].quality.mosAvg),
                       onTap: () => showCallQualitySheet(context, history[i]),

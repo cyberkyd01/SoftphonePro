@@ -1,3 +1,4 @@
+import '../../core/bidi.dart';
 import '../pages/diagnostics/diagnostics_page.dart';
 import 'encryption_settings.dart';
 import 'update_settings.dart';
@@ -123,7 +124,7 @@ class _AccountTile extends ConsumerWidget {
       ),
       title: Row(
         children: [
-          Flexible(child: Text(p.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Flexible(child: Text(bidiSafe(p.name), overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
           if (p.isDefault) ...[
             const SizedBox(width: 8),
             Container(
@@ -134,7 +135,7 @@ class _AccountTile extends ConsumerWidget {
           ],
         ],
       ),
-      subtitle: Text(acc.errorOf(id) ?? (acc.usingBackup.contains(id) ? context.l10n.settingsAccountSubtitleBackup(p.address, statusLabel(st, context.l10n)) : context.l10n.settingsAccountSubtitle(p.address, statusLabel(st, context.l10n))), maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(acc.errorOf(id) ?? (acc.usingBackup.contains(id) ? context.l10n.settingsAccountSubtitleBackup(ltr(p.address), statusLabel(st, context.l10n)) : context.l10n.settingsAccountSubtitle(ltr(p.address), statusLabel(st, context.l10n))), maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: Switch(value: p.enabled, onChanged: (v) => ref.read(accountsProvider.notifier).setEnabled(id, v)),
       onTap: () => context.push('/settings/accounts/$id'),
     );
@@ -947,7 +948,7 @@ class LanSection extends ConsumerWidget {
               for (final p in acc.profiles)
                 CheckboxListTile(
                   title: Text(p.name),
-                  subtitle: Text(p.address),
+                  subtitle: Text(ltr(p.address)),
                   value: s.lanShareAors.contains(p.id),
                   onChanged: (v) {
                     final l = [...s.lanShareAors]..remove(p.id);

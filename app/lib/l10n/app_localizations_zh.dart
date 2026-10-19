@@ -6531,4 +6531,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return '地址：$host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return '更新 $updated 个现有账户，添加 $added 个新账户';
+  }
 }

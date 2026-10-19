@@ -1874,5 +1874,6 @@
   "importAccountHeaders": "कस्टम SIP हेडर: {headers}",
   "importAccountCallerId": "कॉलर आईडी: {callerId}",
   "importAccountSrtpOff": "मीडिया एन्क्रिप्शन नहीं (SRTP बंद)",
-  "linkLanConnectAddress": "पता: {host}:{port}"
+  "linkLanConnectAddress": "पता: {host}:{port}",
+  "provisioningUpdateSummary": "{updated} मौजूदा अपडेट करें, {added} नए जोड़ें"
 }

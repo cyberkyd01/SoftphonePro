@@ -1,3 +1,4 @@
+import '../../../core/bidi.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -294,7 +295,7 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
                         child: QrImageView(data: payload, size: 180, backgroundColor: Colors.white),
                       ),
                       const SizedBox(height: 8),
-                      SelectableText('$host:${self!.linkPort}', key: const Key('lan-address'), textDirection: TextDirection.ltr, style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      SelectableText(ltr('$host:${self!.linkPort}'), key: const Key('lan-address'), style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                       TextButton(
                         onPressed: () async {
                           await Clipboard.setData(ClipboardData(text: payload));
@@ -458,7 +459,7 @@ class _DeviceTile extends ConsumerWidget {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            [typing ? l.lanTyping : statusLabelOf(l, peer), if (peer.address != null && online) peer.address!.address].join('  ·  '),
+                            [typing ? l.lanTyping : statusLabelOf(l, peer), if (peer.address != null && online) ltr(peer.address!.address)].join('  ·  '),
                             style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -524,7 +525,7 @@ class _RemoteCallTile extends ConsumerWidget {
       color: t.colorScheme.primaryContainer.withValues(alpha: 0.5),
       child: ListTile(
         leading: Icon(Icons.phone_in_talk_rounded, color: context.colors.callGreen),
-        title: Text('$who  ·  ${call.remoteNumber}'.replaceAll(RegExp(r'\s+·\s+$'), ''), maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text('${bidiSafe(who)}  ·  ${bidiSafe(call.remoteNumber)}'.replaceAll(RegExp(r'\s+·\s+$'), ''), maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(call.accountName.isEmpty ? l.lanRemoteActiveOn(peer.name) : l.lanRemoteActiveOnAccount(peer.name, call.accountName)),
         trailing: FilledButton(
           key: Key('lan-pull-${peer.deviceId}-${call.callId}'),

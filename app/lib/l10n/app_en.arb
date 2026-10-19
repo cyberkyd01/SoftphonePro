@@ -9248,5 +9248,13 @@
         "type": "String"
       }
     }
+  },
+  "provisioningUpdateSummary": "Update {updated} existing, add {added} new",
+  "@provisioningUpdateSummary": {
+    "description": "Import confirmation: how many imported accounts update existing ones and how many are new.",
+    "placeholders": {
+      "updated": {"type": "int"},
+      "added": {"type": "int"}
+    }
   }
 }

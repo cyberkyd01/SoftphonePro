@@ -41,7 +41,11 @@ const _compact = [
   _Dest('/keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
   _Dest('/recents', Icons.history_rounded, Icons.history_rounded),
   _Dest('/contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
-  _Dest('/messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
+  _Dest(
+    '/messages',
+    Icons.chat_bubble_outline_rounded,
+    Icons.chat_bubble_rounded,
+  ),
   _Dest('/more', Icons.more_horiz_rounded, Icons.more_horiz_rounded),
 ];
 
@@ -49,7 +53,11 @@ const _wide = [
   _Dest('/keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
   _Dest('/recents', Icons.history_rounded, Icons.history_rounded),
   _Dest('/contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
-  _Dest('/messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
+  _Dest(
+    '/messages',
+    Icons.chat_bubble_outline_rounded,
+    Icons.chat_bubble_rounded,
+  ),
   _Dest('/presence', Icons.grid_view_rounded, Icons.grid_view_rounded),
   _Dest('/lan', Icons.lan_outlined, Icons.lan_rounded),
   _Dest('/recordings', Icons.graphic_eq_rounded, Icons.graphic_eq_rounded),
@@ -62,6 +70,18 @@ int _indexFor(String loc, List<_Dest> dests, {required bool compact}) {
   }
   if (compact) return dests.length - 1; // presence/lan/settings live under More
   return 0;
+}
+
+/// Where the system Back button goes from a shell page on phones. The shell
+/// uses `go`, so there is no stack to pop; without this Back left the app from
+/// every page that is not the keypad.
+String? shellBackTarget(String loc) {
+  if (loc.startsWith('/settings/')) return '/settings';
+  if (loc == '/keypad' || loc.isEmpty) return null;
+  for (final p in const ['/settings', '/recordings', '/lan', '/presence']) {
+    if (loc.startsWith(p)) return '/more';
+  }
+  return '/keypad';
 }
 
 class AppShell extends ConsumerWidget {
@@ -83,21 +103,32 @@ class AppShell extends ConsumerWidget {
         engine.demo ? _DemoBanner(note: engine.note) : const SizedBox.shrink(),
       ],
     );
-    final body = expanded ? _wideLayout(context, ref, demo) : _compactLayout(context, ref, demo);
-    return AppShortcuts(child: body);
+    final body = expanded
+        ? _wideLayout(context, ref, demo)
+        : _compactLayout(context, ref, demo);
+    final target = expanded ? null : shellBackTarget(location);
+    return PopScope(
+      canPop: target == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && target != null) context.go(target);
+      },
+      child: AppShortcuts(child: body),
+    );
   }
 
   Widget _compactLayout(BuildContext context, WidgetRef ref, Widget demo) {
     final missed = ref.watch(missedCountProvider);
     final unread = ref.watch(unreadMessagesProvider);
     final idx = _indexFor(location, _compact, compact: true);
-    final isTab = _compact.any((d) => location.startsWith(d.path)) ||
+    final isTab =
+        _compact.any((d) => location.startsWith(d.path)) ||
         location.startsWith('/presence') ||
         location.startsWith('/lan') ||
         location.startsWith('/recordings') ||
         location.startsWith('/settings');
     // The keypad has its own account selector; no duplicate chip strip.
-    final showStrip = location.startsWith('/recents') || location.startsWith('/contacts');
+    final showStrip =
+        location.startsWith('/recents') || location.startsWith('/contacts');
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -118,8 +149,14 @@ class AppShell extends ConsumerWidget {
               destinations: [
                 for (var i = 0; i < _compact.length; i++)
                   NavigationDestination(
-                    icon: _badge(_compact[i].icon, i == 1 ? missed : (i == 3 ? unread : 0)),
-                    selectedIcon: _badge(_compact[i].selectedIcon, i == 1 ? missed : (i == 3 ? unread : 0)),
+                    icon: _badge(
+                      _compact[i].icon,
+                      i == 1 ? missed : (i == 3 ? unread : 0),
+                    ),
+                    selectedIcon: _badge(
+                      _compact[i].selectedIcon,
+                      i == 1 ? missed : (i == 3 ? unread : 0),
+                    ),
                     label: _compact[i].label(context.l10n),
                     tooltip: _compact[i].label(context.l10n),
                   ),
@@ -128,7 +165,8 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  Widget _badge(IconData icon, int n) => n > 0 ? Badge.count(count: n, child: Icon(icon)) : Icon(icon);
+  Widget _badge(IconData icon, int n) =>
+      n > 0 ? Badge.count(count: n, child: Icon(icon)) : Icon(icon);
 
   Widget _wideLayout(BuildContext context, WidgetRef ref, Widget demo) {
     final width = MediaQuery.sizeOf(context).width;
@@ -136,46 +174,86 @@ class AppShell extends ConsumerWidget {
     final idx = _indexFor(location, _wide, compact: false);
     final missed = ref.watch(missedCountProvider);
     final unread = ref.watch(unreadMessagesProvider);
-    final hasCalls = ref.watch(callsProvider.select((s) => s.live.any((c) => !c.isRingingIn || c.waiting)));
+    final hasCalls = ref.watch(
+      callsProvider.select(
+        (s) => s.live.any((c) => !c.isRingingIn || c.waiting),
+      ),
+    );
     final t = Theme.of(context);
     return Scaffold(
       body: Stack(
         children: [
           Row(
             children: [
-              NavigationRail(
-                extended: extended,
-                selectedIndex: idx,
-                labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-                minExtendedWidth: 200,
-                onDestinationSelected: (i) => context.go(_wide[i].path),
-                leading: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset('assets/branding/icon_1024.png', width: 36, height: 36, errorBuilder: (_, __, ___) => const Icon(Icons.phone_rounded))),
-                      if (extended) ...[
-                        const SizedBox(width: 10),
-                        Text(context.l10n.appName, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      ],
-                    ],
-                  ),
-                ),
-                trailing: Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(padding: const EdgeInsets.only(bottom: 16), child: _StatusSelector(extended: extended)),
-                  ),
-                ),
-                destinations: [
-                  for (var i = 0; i < _wide.length; i++)
-                    NavigationRailDestination(
-                      icon: _badge(_wide[i].icon, i == 1 ? missed : (i == 3 ? unread : 0)),
-                      selectedIcon: _badge(_wide[i].selectedIcon, i == 1 ? missed : (i == 3 ? unread : 0)),
-                      label: Text(_wide[i].label(context.l10n)),
+              // Scrolls when a short landscape screen or a large font scale
+              // leaves the rail less room than its destinations need.
+              LayoutBuilder(
+                builder: (context, box) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: box.maxHeight),
+                    child: IntrinsicHeight(
+                      child: NavigationRail(
+                        extended: extended,
+                        selectedIndex: idx,
+                        labelType: extended
+                            ? NavigationRailLabelType.none
+                            : NavigationRailLabelType.all,
+                        minExtendedWidth: 200,
+                        onDestinationSelected: (i) => context.go(_wide[i].path),
+                        leading: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.asset(
+                                  'assets/branding/icon_1024.png',
+                                  width: 36,
+                                  height: 36,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.phone_rounded),
+                                ),
+                              ),
+                              if (extended) ...[
+                                const SizedBox(width: 10),
+                                Text(
+                                  context.l10n.appName,
+                                  style: t.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        trailing: Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _StatusSelector(extended: extended),
+                            ),
+                          ),
+                        ),
+                        destinations: [
+                          for (var i = 0; i < _wide.length; i++)
+                            NavigationRailDestination(
+                              icon: _badge(
+                                _wide[i].icon,
+                                i == 1 ? missed : (i == 3 ? unread : 0),
+                              ),
+                              selectedIcon: _badge(
+                                _wide[i].selectedIcon,
+                                i == 1 ? missed : (i == 3 ? unread : 0),
+                              ),
+                              label: Text(_wide[i].label(context.l10n)),
+                            ),
+                        ],
+                      ),
                     ),
-                ],
+                  ),
+                ),
               ),
               VerticalDivider(width: 1, color: t.colorScheme.outlineVariant),
               Expanded(
@@ -231,13 +309,32 @@ class _TopBar extends ConsumerWidget {
                   child: Container(
                     height: 40,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(color: t.colorScheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(kRadius)),
+                    decoration: BoxDecoration(
+                      color: t.colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(kRadius),
+                    ),
                     child: Row(
                       children: [
-                        Icon(Icons.search_rounded, size: 20, color: t.colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.search_rounded,
+                          size: 20,
+                          color: t.colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(context.l10n.shellSearchHint, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
-                        Text(mac ? '⌘K' : 'Ctrl+K', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                        Expanded(
+                          child: Text(
+                            context.l10n.shellSearchHint,
+                            style: t.textTheme.bodyMedium?.copyWith(
+                              color: t.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          mac ? '⌘K' : 'Ctrl+K',
+                          style: t.textTheme.labelSmall?.copyWith(
+                            color: t.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -251,7 +348,10 @@ class _TopBar extends ConsumerWidget {
             child: SizedBox(
               height: 52,
               child: acc.profiles.isEmpty
-                  ? const Align(alignment: AlignmentDirectional.centerEnd, child: AccountStrip(padding: EdgeInsets.zero))
+                  ? const Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: AccountStrip(padding: EdgeInsets.zero),
+                    )
                   : ListView.separated(
                       scrollDirection: Axis.horizontal,
                       reverse: true,
@@ -260,17 +360,29 @@ class _TopBar extends ConsumerWidget {
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (context, i) {
                         final p = acc.profiles[acc.profiles.length - 1 - i];
-                        return AccountChip(name: p.name, status: acc.statusOf(p.id), reason: acc.errorOf(p.id), onTap: () => showAccountSheet(context, p.id));
+                        return AccountChip(
+                          name: p.name,
+                          status: acc.statusOf(p.id),
+                          reason: acc.errorOf(p.id),
+                          onTap: () => showAccountSheet(context, p.id),
+                        );
                       },
                     ),
             ),
           ),
           const SizedBox(width: 8),
           Tooltip(
-            message: vm > 0 ? context.l10n.shellVoicemailNewTooltip(vm) : context.l10n.shellVoicemailTooltip,
+            message: vm > 0
+                ? context.l10n.shellVoicemailNewTooltip(vm)
+                : context.l10n.shellVoicemailTooltip,
             child: IconButton(
               onPressed: () => dialVoicemail(context, ref),
-              icon: vm > 0 ? Badge.count(count: vm, child: const Icon(Icons.voicemail_rounded)) : const Icon(Icons.voicemail_rounded),
+              icon: vm > 0
+                  ? Badge.count(
+                      count: vm,
+                      child: const Icon(Icons.voicemail_rounded),
+                    )
+                  : const Icon(Icons.voicemail_rounded),
             ),
           ),
         ],
@@ -295,20 +407,56 @@ class _StatusSelector extends ConsumerWidget {
     return PopupMenuButton<String>(
       tooltip: l.shellStatusTooltip,
       position: PopupMenuPosition.over,
-      onSelected: (v) => ref.read(settingsProvider.notifier).update({'globalStatus': v}),
+      onSelected: (v) =>
+          ref.read(settingsProvider.notifier).update({'globalStatus': v}),
       itemBuilder: (_) => [
-        PopupMenuItem(value: 'available', child: Row(children: [StatusDot(color: c.regOk), const SizedBox(width: 10), Text(l.statusAvailable)])),
-        PopupMenuItem(value: 'away', child: Row(children: [StatusDot(color: c.holdAmber), const SizedBox(width: 10), Text(l.shellStatusAway)])),
-        PopupMenuItem(value: 'dnd', child: Row(children: [StatusDot(color: c.regFail), const SizedBox(width: 10), Text(l.statusDoNotDisturb)])),
+        PopupMenuItem(
+          value: 'available',
+          child: Row(
+            children: [
+              StatusDot(color: c.regOk),
+              const SizedBox(width: 10),
+              Text(l.statusAvailable),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'away',
+          child: Row(
+            children: [
+              StatusDot(color: c.holdAmber),
+              const SizedBox(width: 10),
+              Text(l.shellStatusAway),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'dnd',
+          child: Row(
+            children: [
+              StatusDot(color: c.regFail),
+              const SizedBox(width: 10),
+              Text(l.statusDoNotDisturb),
+            ],
+          ),
+        ),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             StatusDot(color: color),
-            if (extended) ...[const SizedBox(width: 8), Text(label, style: Theme.of(context).textTheme.labelLarge)],
+            if (extended) ...[
+              const SizedBox(width: 8),
+              Text(label, style: Theme.of(context).textTheme.labelLarge),
+            ],
             const Icon(Icons.arrow_drop_down_rounded, size: 18),
           ],
         ),
@@ -329,7 +477,11 @@ class _DemoBanner extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Row(
           children: [
-            Icon(Icons.science_rounded, size: 16, color: context.colors.holdAmber),
+            Icon(
+              Icons.science_rounded,
+              size: 16,
+              color: context.colors.holdAmber,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -339,9 +491,16 @@ class _DemoBanner extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (note != null) Tooltip(message: note!, child: const Icon(Icons.info_outline_rounded, size: 16)),
+            if (note != null)
+              Tooltip(
+                message: note!,
+                child: const Icon(Icons.info_outline_rounded, size: 16),
+              ),
             TextButton(
-              style: TextButton.styleFrom(minimumSize: const Size(0, 28), padding: const EdgeInsets.symmetric(horizontal: 8)),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 28),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
               onPressed: () => context.go('/settings/advanced'),
               child: Text(context.l10n.actionSettings),
             ),

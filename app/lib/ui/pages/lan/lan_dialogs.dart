@@ -39,8 +39,11 @@ class _PairingDialogState extends State<PairingDialog> {
       if (!mounted) return;
       setState(() {});
       if (s.state == ll.PairingState.paired || (widget.isTrusted?.call(s.peerId) ?? false)) {
+        // Close only this dialog's own route: a file offer that arrives right
+        // after pairing may already sit on top of it.
+        final route = ModalRoute.of(context);
         Future.delayed(const Duration(milliseconds: 900), () {
-          if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+          if (mounted && route != null && route.isActive) Navigator.of(context).removeRoute(route);
         });
       }
     });
@@ -315,12 +318,11 @@ final lanUiCoordinatorProvider = Provider<void>((ref) {
 
   final lan = ref.read(lanControllerProvider.notifier);
   final impl = ref.read(lanHandoffImplProvider);
+  final fileOffers = FileOfferQueue(withContext: withContext);
+  ref.onDispose(fileOffers.dispose);
   final subs = <StreamSubscription<dynamic>>[
     lan.pairingRequests.listen((s) => withContext((c) => showPairingDialog(c, s, isTrusted: (id) => lan.link?.peerById(id)?.trusted ?? false))),
-    lan.incomingFileOffers.listen((t) {
-      if (t.state != ll.TransferState.offered) return;
-      withContext((c) => showDialog<void>(context: c, barrierDismissible: false, builder: (_) => FileOfferDialog(transfer: t)));
-    }),
+    lan.incomingFileOffers.listen(fileOffers.add),
     impl.pendingOffers.listen((h) {
       final shown = withContext((c) => showDialog<void>(context: c, barrierDismissible: false, builder: (_) => HandoffOfferDialog(offer: h)));
       if (!shown) unawaited(impl.respond(h, false));
@@ -337,3 +339,77 @@ final lanUiCoordinatorProvider = Provider<void>((ref) {
     }
   });
 });
+
+/// Shows incoming file offers one dialog at a time. An offer that arrives
+/// before the navigator is ready (or while another offer's dialog is open)
+/// waits in the queue; a repeated offer of a transfer that is still pending
+/// re-shows its dialog unless that dialog is already on screen.
+class FileOfferQueue {
+  FileOfferQueue({
+    required this.withContext,
+    this.retry = const Duration(milliseconds: 300),
+    this.maxWait = const Duration(seconds: 30),
+  });
+
+  final bool Function(void Function(BuildContext)) withContext;
+  final Duration retry;
+  final Duration maxWait;
+  final List<ll.FileTransfer> _queue = [];
+  String? _showing;
+  Timer? _timer;
+  DateTime? _since;
+  bool _disposed = false;
+
+  /// Transfer ids waiting for a dialog (not the one on screen).
+  List<String> get queuedIds => [for (final t in _queue) t.id];
+  String? get showingId => _showing;
+
+  void add(ll.FileTransfer t) {
+    if (_disposed || t.state != ll.TransferState.offered) return;
+    if (_showing == t.id || _queue.any((e) => e.id == t.id)) return;
+    _queue.add(t);
+    _pump();
+  }
+
+  void _pump() {
+    if (_disposed || _showing != null) return;
+    while (_queue.isNotEmpty && _queue.first.state != ll.TransferState.offered) {
+      _queue.removeAt(0);
+    }
+    if (_queue.isEmpty) {
+      _since = null;
+      return;
+    }
+    final t = _queue.first;
+    Future<void>? shown;
+    final ok = withContext((c) {
+      shown = showDialog<void>(context: c, barrierDismissible: false, builder: (_) => FileOfferDialog(transfer: t));
+    });
+    if (!ok || shown == null) {
+      // Navigator not ready yet: try again shortly, give up after maxWait.
+      _since ??= DateTime.now();
+      if (DateTime.now().difference(_since!) > maxWait) {
+        _queue.removeAt(0);
+        _since = null;
+        _pump();
+        return;
+      }
+      _timer?.cancel();
+      _timer = Timer(retry, _pump);
+      return;
+    }
+    _since = null;
+    _queue.removeAt(0);
+    _showing = t.id;
+    unawaited(shown!.whenComplete(() {
+      _showing = null;
+      _pump();
+    }));
+  }
+
+  void dispose() {
+    _disposed = true;
+    _timer?.cancel();
+    _queue.clear();
+  }
+}

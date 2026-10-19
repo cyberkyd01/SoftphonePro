@@ -6763,4 +6763,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String linkLanConnectAddress(String host, String port) {
     return 'पता: $host:$port';
   }
+
+  @override
+  String provisioningUpdateSummary(int updated, int added) {
+    return '$updated मौजूदा अपडेट करें, $added नए जोड़ें';
+  }
 }

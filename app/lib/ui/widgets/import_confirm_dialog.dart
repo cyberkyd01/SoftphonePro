@@ -39,7 +39,7 @@ List<String> importAccountLines(AppLocalizations l, AccountProfile a) {
 /// every flagged item, the keys that are ignored, and the checkboxes that
 /// switch on auto-answer / automatic recording (both off by default).
 /// Returns what the user accepted, or null when cancelled.
-Future<ImportDecision?> showImportConfirmDialog(BuildContext context, ImportPlan plan, {String? host}) {
+Future<ImportDecision?> showImportConfirmDialog(BuildContext context, ImportPlan plan, {String? host, List<AccountProfile> existing = const []}) {
   final l = context.l10n;
   var allowAutoAnswer = false;
   var allowAutoRecord = false;
@@ -61,6 +61,17 @@ Future<ImportDecision?> showImportConfirmDialog(BuildContext context, ImportPlan
                     ? l.callLinkImportBody(host, plan.accounts.length)
                     : l.callLinkImportBodyWithSettings(host, plan.accounts.length, plan.settingCount),
               ),
+              if (countImportMatches(existing, plan.accounts).updated > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    l.provisioningUpdateSummary(
+                      countImportMatches(existing, plan.accounts).updated,
+                      countImportMatches(existing, plan.accounts).added,
+                    ),
+                    key: const Key('link-import-update-summary'),
+                  ),
+                ),
               for (final a in plan.accounts)
                 for (final (i, line) in importAccountLines(l, a).indexed)
                   Padding(
