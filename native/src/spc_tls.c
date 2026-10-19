@@ -237,7 +237,12 @@ void spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* 
     st->verify_client = PJ_FALSE;
 }
 
-void spc_tls_cleanup(void) { memset(g_fail, 0, sizeof(g_fail)); }
+void spc_tls_cleanup(void)
+{
+    memset(g_fail, 0, sizeof(g_fail));
+    memset(g_pins, 0, sizeof(g_pins)); g_npins = 0;
+    s_ca[0] = s_cert[0] = s_key[0] = s_min[0] = 0; s_verify = 0;
+}
 
 static void verify_names(unsigned long vs, cJSON* arr)
 {

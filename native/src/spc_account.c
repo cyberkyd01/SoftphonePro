@@ -287,6 +287,27 @@ static void add_hdr(pj_pool_t* pool, pjsip_hdr* list, const char* name, const ch
     if (h) pj_list_push_back(list, (pjsip_hdr*)h);
 }
 
+/* dscp.sip of an account JSON (default 24), -1 if out of range */
+static int acc_sip_dscp(const cJSON* c)
+{
+    int v = 24;
+    cJSON* obj = spc_jobj(c, "dscp");
+    if (obj && !spc_jint_range(obj, "sip", 24, 0, 63, &v)) return -1;
+    return v;
+}
+
+/* Per-account SIP DSCP: an account with its own transport (localPort > 0) owns that socket outright. Accounts on
+ * the shared UDP transport re-mark it (last add/modify wins); shared TCP/TLS/WS use transports.dscpSip. */
+static void apply_sip_dscp(spc_acc* m, const cJSON* c, int tp_id)
+{
+    int d = acc_sip_dscp(c);
+    const char* tr = spc_jstr(c, "transport");
+    if (d < 0 || !G.qos) return;
+    if (tp_id >= 0) { spc_udp_set_dscp(tp_id, d); return; }
+    (void)m;
+    if (!tr || spc_strieq(tr, "udp")) spc_udp_set_dscp(G.udp_tp, d);
+}
+
 static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size_t errn)
 {
     int port = 0;
@@ -309,6 +330,12 @@ static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size
     if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
     pjsua_transport_config_default(&tc);
     tc.port = (unsigned)port;
+    if (G.qos) {
+        int d = acc_sip_dscp(c);
+        tc.qos_type = PJ_QOS_TYPE_CONTROL;
+        tc.qos_params.flags = PJ_QOS_PARAM_HAS_DSCP;
+        tc.qos_params.dscp_val = (pj_uint8_t)((d < 0 ? 24 : d) & 0x3f);
+    }
     if (tr && spc_strieq(tr, "tcp")) type = PJSIP_TRANSPORT_TCP;
     else if (tr && spc_strieq(tr, "tls")) {
         type = PJSIP_TRANSPORT_TLS;
@@ -319,6 +346,7 @@ static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size
         return -1;
     }
     m->own_tp = id;
+    spc_udp_set_dscp(id, acc_sip_dscp(c) < 0 ? 24 : acc_sip_dscp(c));
     *tp_id = id;
     return 0;
 }
@@ -574,6 +602,7 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
         cfg->ip_change_cfg.reinvite_flags = spc_jbool(obj, "reinvite", 1) ?
             (PJSUA_CALL_REINIT_MEDIA | PJSUA_CALL_UPDATE_CONTACT | PJSUA_CALL_UPDATE_VIA) : 0;
     }
+    if (acc_sip_dscp(c) < 0) { snprintf(err, errn, "dscp.sip must be 0..63"); return -1; }
     /* rtp transport */
     pjsua_transport_config_default(&cfg->rtp_cfg);
     cfg->rtp_cfg.port = (unsigned)G.rtp_port;
@@ -690,6 +719,7 @@ static int h_account_add(cJSON* p, cJSON** res)
         return spc_err(rc == -2 ? SPC_E_UNSUPPORTED : SPC_E_INVALID_PARAM, 0, "%s", err);
     }
     cfg.transport_id = tp;
+    apply_sip_dscp(m, p, tp);
     spc_registry_lock();
     m->used = 1;
     spc_strlcpy(m->reg_state, cfg.register_on_acc_add ? "registering" : "none", sizeof(m->reg_state));
@@ -751,6 +781,7 @@ static int h_account_modify(cJSON* p, cJSON** res)
         return spc_err(rc == -2 ? SPC_E_UNSUPPORTED : SPC_E_INVALID_PARAM, 0, "%s", err);
     }
     cfg.transport_id = tp;
+    apply_sip_dscp(m, merged, tp);
     st = pjsua_acc_modify(acc, &cfg);
     pj_pool_release(pool);
     if (st != PJ_SUCCESS) { cJSON_Delete(merged); return spc_pjerr(st, "pjsua_acc_modify"); }

@@ -37,6 +37,8 @@ const char* spc_err_name(int code);
 /* Records an error for the current request (worker thread) and returns code. */
 int spc_err(int code, pj_status_t status, const char* fmt, ...);
 int spc_pjerr(pj_status_t status, const char* what);
+pj_sock_t spc_udp_transport_socket(int id);
+void spc_udp_set_dscp(int id, int dscp);
 
 typedef int (*spc_handler)(cJSON* p, cJSON** res);
 /* Defer the current request's response (handler returns SPC_OK with no result); complete it later from any thread. */
@@ -117,6 +119,7 @@ typedef struct spc_global {
     int  sip_trace;
     int  tls_verify;
     int  qos;
+    int  sip_dscp;                 /* shared-transport SIP DSCP (transports.dscpSip) */
     int  rtp_port, rtp_port_range;
     int  ec_tail_ms;
     int  clock_rate;
@@ -209,6 +212,7 @@ typedef struct spc_call {
     char last_media[12];
     char last_codec[48];
     int last_srtp;
+    int last_secsig;               /* signalling over TLS/WSS/sips (sticky) */
     int muted, held, detached;
     int redirect_pending;
     int nconf; uint64_t conf[SPC_MAX_PEERS];

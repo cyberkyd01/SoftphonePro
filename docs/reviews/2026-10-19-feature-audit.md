@@ -92,7 +92,7 @@ below names its track. File references are relative to the repo root.
 * **[A1] On-disk engine log:** set `CoreConfig.logFile` to the support dir
   with rotation, and include it in the diagnostics export.
 * **Dead or misleading settings:**
-  * **[D]** apply per-account `dscp.sip` in the engine.
+  * **[D] DONE** apply per-account `dscp.sip` in the engine (own-transport + shared UDP; see ENGINE_API.md "SIP DSCP").
   * **[A1]** dial `FeatureCodes.dndOn/dndOff/forwardOn/forwardOff` when the
     per-account DND or forwarding toggles change (if the codes are set).
   * **[A2]** RedirectPolicy.ask: implement a prompt via `processRedirect`.
@@ -115,7 +115,7 @@ below names its track. File references are relative to the repo root.
    (lines 138-145): `_added` is cleared while a queued `_sync` is still
    iterating. Queue the clear or check the generation inside the loop.
 6. **[A2]** CallKit DTMF is dropped (P0 item 4).
-7. **[D]** Wrong security badge for TLS calls (`spc_call.c`):
+7. **[D] DONE** Wrong security badge for TLS calls (`spc_call.c`):
    `secureSignaling = srtp && dlg->secure`, but `dlg->secure` is only set for
    `sips:` targets. Derive it from the dialog's transport type (TLS/WSS) and
    don't AND it with srtp.
@@ -126,17 +126,17 @@ below names its track. File references are relative to the repo root.
    `lan_handoff_impl.dart` (lines 246-262) and `calls_controller.dart` (lines
    561-576) both react to the same `transferStatus`. Gate CallsController's
    handling when a LAN relay session owns the cid.
-10. **[D]** A TLS transport creation failure is swallowed in `spc_core.c`
+10. **[D] DONE** A TLS transport creation failure is swallowed in `spc_core.c`
     (around lines 1041-1055). Fail `core.start` with a clear message (for
     example a bad cert or key file), or report it in the result.
-11. **[D]** `dscp.sip` is not applied.
+11. **[D] DONE** `dscp.sip` is not applied.
 12. **[A2]** Per-contact and per-account ringtones are no-ops (see Real
     ringtones above).
 13. **[A1]** `softphonepro://lan` and `provision` links land in the dialer
     (P0 item 2).
 14. **[A2]** BLF works only via the default account.
 15. **Minor:**
-    * **[D]** `G.tls_verify` keeps its value when a later `core.start` has no
+    * **[D] DONE** `G.tls_verify` keeps its value when a later `core.start` has no
       `tls` object.
     * **[A2]** `_syncSideEffects` re-invokes the proximity, screen and tray
       platform calls at 1 Hz. Only invoke them when the value changes.

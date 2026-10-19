@@ -2,7 +2,12 @@
 #include "spc_internal.h"
 #include "dart_api_dl.h"
 #include "spc_ws_transport.h"
+#include <pjsua-lib/pjsua_internal.h>
 #include <errno.h>
+#if !defined(_WIN32)
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
 #include <time.h>
 
 #if defined(_MSC_VER)
@@ -670,15 +675,40 @@ static void pj_cb_ip_change(pjsua_ip_change_op op, pj_status_t status, const pjs
     spc_emit("core.ipChangeProgress", f);
 }
 
+static pj_status_t g_last_tp_st;
+
+/* Loads the explicit TLS certificate / key to prove they are usable (the listener otherwise only fails later,
+ * or silently, depending on the TLS backend). PJ_SUCCESS when none are configured. */
+static pj_status_t tls_creds_check(const char* cert, const char* key)
+{
+    pj_pool_t* pool;
+    pj_str_t c, k, n = { NULL, 0 };
+    pj_ssl_cert_t* out = NULL;
+    pj_status_t st;
+    if ((!cert || !cert[0]) && (!key || !key[0])) return PJ_SUCCESS;
+    {
+        FILE* f;
+        if (cert && cert[0]) { f = fopen(cert, "rb"); if (!f) return PJ_STATUS_FROM_OS(errno ? errno : ENOENT); fclose(f); }
+        if (key && key[0]) { f = fopen(key, "rb"); if (!f) return PJ_STATUS_FROM_OS(errno ? errno : ENOENT); fclose(f); }
+    }
+    pool = pjsua_pool_create("spctlschk", 1024, 1024);
+    if (!pool) return PJ_ENOMEM;
+    c = spc_pjs(cert ? cert : "");
+    k = spc_pjs(key ? key : "");
+    st = pj_ssl_cert_load_from_files2(pool, &n, &n, &c, &k, &n, &out);
+    pj_pool_release(pool);
+    return st;
+}
 static int create_tp(pjsip_transport_type_e type, const pjsua_transport_config* cfg, int ipv6, int* idout)
 {
     pjsua_transport_config c = *cfg;
     pjsua_transport_id id = -1;
     pj_status_t st = pjsua_transport_create(type, &c, &id);
     if (st != PJ_SUCCESS && c.port != 0) {
-        c.port = 0;
+        c.port = 0;     /* port busy: fall back to an ephemeral port (a bad certificate fails again below) */
         st = pjsua_transport_create(type, &c, &id);
     }
+    g_last_tp_st = st;
     if (st != PJ_SUCCESS) return -1;
     if (g_ntps < (int)(sizeof(g_tps) / sizeof(g_tps[0]))) {
         g_tps[g_ntps].id = id;
@@ -687,6 +717,7 @@ static int create_tp(pjsip_transport_type_e type, const pjsua_transport_config* 
         g_ntps++;
     }
     if (idout) *idout = id;
+    if (type == PJSIP_TRANSPORT_UDP || type == PJSIP_TRANSPORT_UDP6) spc_udp_set_dscp(id, G.sip_dscp);
     return 0;
 }
 
@@ -822,6 +853,8 @@ static int h_core_start(cJSON* p, cJSON** res)
     G.udp_tp = G.tcp_tp = G.tls_tp = G.udp6_tp = G.tcp6_tp = G.tls6_tp = G.lan_tp = -1;
     G.direct_acc = G.lan_acc = -1;
     G.nat_type[0] = 0; G.nat_type_desc[0] = 0;
+    G.tls_verify = 0;      /* TLS globals never leak from a previous session */
+    G.sip_dscp = 24;
 
     s = spc_jstr(p, "publicAddr");
     spc_strlcpy(G.public_addr, s ? s : "", sizeof(G.public_addr));
@@ -882,6 +915,11 @@ static int h_core_start(cJSON* p, cJSON** res)
         return spc_err(SPC_E_INVALID_PARAM, 0, "invalid transport port");
     G.ipv6 = spc_jbool(tr, "ipv6", 0);
     G.qos = spc_jbool(tr, "qos", 1);
+    {
+        int dv;
+        if (!spc_jint_range(tr, "dscpSip", 24, 0, 63, &dv)) return spc_err(SPC_E_INVALID_PARAM, 0, "transports.dscpSip must be 0..63");
+        G.sip_dscp = dv;
+    }
 
     /* numeric / string validation: everything is checked before any engine state is created */
     {
@@ -1024,6 +1062,8 @@ static int h_core_start(cJSON* p, cJSON** res)
     if (G.public_addr[0]) tcfg.public_addr = spc_pjs(G.public_addr);
     if (G.qos) {
         tcfg.qos_type = PJ_QOS_TYPE_CONTROL;
+        tcfg.qos_params.flags = PJ_QOS_PARAM_HAS_DSCP;
+        tcfg.qos_params.dscp_val = (pj_uint8_t)(G.sip_dscp & 0x3f);
     }
     if (udp_en) {
         tcfg.port = (unsigned)udp_port;
@@ -1051,8 +1091,15 @@ static int h_core_start(cJSON* p, cJSON** res)
         spc_strlcpy(s_key, key ? key : "", sizeof(s_key));
         spc_tls_cfg(&tl.tls_setting, G.tls_verify, s_ca, s_cert, s_key, mp);
         tl.port = (unsigned)tls_port;
-        create_tp(PJSIP_TRANSPORT_TLS, &tl, 0, &G.tls_tp);
-        if (G.ipv6) create_tp(PJSIP_TRANSPORT_TLS6, &tl, 1, &G.tls6_tp);
+        pj_status_t cst = tls_creds_check(s_cert, s_key);
+        if (cst != PJ_SUCCESS) g_last_tp_st = cst;
+        if ((cst != PJ_SUCCESS || create_tp(PJSIP_TRANSPORT_TLS, &tl, 0, &G.tls_tp) != 0) && !spc_jbool(tls, "optional", 0)) {
+            pj_status_t ts = g_last_tp_st;
+            cJSON_Delete(tparr); pjsua_destroy();
+            return spc_err(SPC_E_PJ_ERROR, ts, "cannot create TLS transport on port %d (certFile='%s', keyFile='%s'); pass tls.optional:true to continue without TLS",
+                           tls_port, s_cert, s_key);
+        }
+        if (G.ipv6 && G.tls_tp >= 0) create_tp(PJSIP_TRANSPORT_TLS6, &tl, 1, &G.tls6_tp);
     } else if (tls) {   /* TLS listener disabled: wss accounts still use these TLS settings */
         pjsip_tls_setting ts;
         static char w_ca[512], w_cert[512], w_key[512];
@@ -1062,7 +1109,10 @@ static int h_core_start(cJSON* p, cJSON** res)
         spc_strlcpy(w_key, spc_jstr(tls, "keyFile") ? spc_jstr(tls, "keyFile") : "", sizeof(w_key));
         spc_tls_cfg(&ts, G.tls_verify, w_ca, w_cert, w_key, spc_jstr(tls, "minProto"));
     }
-    spc_ws_start();     /* SIP over WebSocket transports (ws/wss) */
+    if (spc_ws_start() != 0 && !(tls && spc_jbool(tls, "optional", 0))) {   /* SIP over WebSocket transports (ws/wss) */
+        cJSON_Delete(tparr); pjsua_destroy();
+        return spc_err(SPC_E_PJ_ERROR, 0, "cannot start the ws/wss transports (check tls.certFile / tls.keyFile / tls.caFile); pass tls.optional:true to continue without them");
+    }
     if (G.udp_tp < 0 && G.tcp_tp < 0 && G.tls_tp < 0) {
         cJSON_Delete(tparr); pjsua_destroy();
         return spc_err(SPC_E_INVALID_PARAM, 0, "no transport enabled");
@@ -1315,7 +1365,82 @@ static int h_core_set_user_agent(cJSON* p, cJSON** res)
     return SPC_OK;
 }
 
+/* socket of a UDP pjsua transport, or PJ_INVALID_SOCKET */
+pj_sock_t spc_udp_transport_socket(int id)
+{
+    pjsua_transport_info ti;
+    if (id < 0 || id >= (int)(sizeof(pjsua_var.tpdata) / sizeof(pjsua_var.tpdata[0]))) return PJ_INVALID_SOCKET;
+    if (pjsua_transport_get_info(id, &ti) != PJ_SUCCESS) return PJ_INVALID_SOCKET;
+    if (ti.type != PJSIP_TRANSPORT_UDP && ti.type != PJSIP_TRANSPORT_UDP6) return PJ_INVALID_SOCKET;
+    if (!pjsua_var.tpdata[id].data.tp) return PJ_INVALID_SOCKET;
+    return pjsip_udp_transport_get_socket(pjsua_var.tpdata[id].data.tp);
+}
+
+/* Marks a UDP SIP socket with an exact DSCP. pj_sock_set_qos_params() is used first (WMM / platform hints; on
+ * Apple platforms it only maps the value to a coarse SO_NET_SERVICE_TYPE), then IP_TOS / IPV6_TCLASS is set
+ * directly so the wire value is exactly dscp << 2 wherever the OS allows it. */
+void spc_udp_set_dscp(int id, int dscp)
+{
+    pj_sock_t sk = spc_udp_transport_socket(id);
+    pj_qos_params q;
+    if (sk == PJ_INVALID_SOCKET || !G.qos) return;
+    memset(&q, 0, sizeof(q));
+    q.flags = PJ_QOS_PARAM_HAS_DSCP;
+    q.dscp_val = (pj_uint8_t)(dscp & 0x3f);
+    pj_sock_set_qos_params(sk, &q);
+#if !defined(_WIN32)
+    {
+        int v = (dscp & 0x3f) << 2;
+        pjsua_transport_info ti;
+        if (pjsua_transport_get_info(id, &ti) != PJ_SUCCESS) return;
+        if (ti.type == PJSIP_TRANSPORT_UDP6) setsockopt((int)sk, IPPROTO_IPV6, IPV6_TCLASS, &v, (socklen_t)sizeof(v));
+        else setsockopt((int)sk, IPPROTO_IP, IP_TOS, &v, (socklen_t)sizeof(v));
+    }
+#endif
+}
+
+/* core.getSipTos: IP_TOS / IPV6_TCLASS of the UDP SIP sockets (diagnostics / tests). TCP and TLS client sockets
+ * are created per connection by PJSIP and cannot be inspected here ("tos": -1). */
+static int h_core_get_sip_tos(cJSON* p, cJSON** res)
+{
+    pjsua_transport_id ids[16];
+    unsigned n = 16, i;
+    cJSON* arr = cJSON_CreateArray();
+    (void)p;
+    if (pjsua_enum_transports(ids, &n) != PJ_SUCCESS) n = 0;
+    for (i = 0; i < n; i++) {
+        pjsua_transport_info ti;
+        cJSON* t;
+        int tos = -1;
+        char tn[16];
+        if (pjsua_transport_get_info(ids[i], &ti) != PJ_SUCCESS) continue;
+        spc_pjcopy(tn, sizeof(tn), &ti.type_name);
+        if (ti.type == PJSIP_TRANSPORT_UDP || ti.type == PJSIP_TRANSPORT_UDP6) {
+#if !defined(_WIN32)
+            pj_sock_t sk = spc_udp_transport_socket(ids[i]);
+            if (sk != PJ_INVALID_SOCKET) {
+                int v = 0;
+                socklen_t len = (socklen_t)sizeof(v);
+                if (ti.type == PJSIP_TRANSPORT_UDP6) { if (getsockopt((int)sk, IPPROTO_IPV6, IPV6_TCLASS, &v, &len) == 0) tos = v; }
+                else if (getsockopt((int)sk, IPPROTO_IP, IP_TOS, &v, &len) == 0) tos = v;
+            }
+#endif
+        }
+        t = cJSON_CreateObject();
+        cJSON_AddNumberToObject(t, "id", ids[i]);
+        cJSON_AddStringToObject(t, "type", tn);
+        cJSON_AddNumberToObject(t, "port", (int)ti.local_name.port);
+        cJSON_AddNumberToObject(t, "tos", tos);
+        cJSON_AddNumberToObject(t, "dscp", tos >= 0 ? tos >> 2 : -1);
+        cJSON_AddItemToArray(arr, t);
+    }
+    *res = cJSON_CreateObject();
+    cJSON_AddItemToObject(*res, "transports", arr);
+    return SPC_OK;
+}
+
 const spc_method spc_methods_core[] = {
+    { "core.getSipTos", h_core_get_sip_tos, 0 },
     { "core.start", h_core_start, SPC_M_PRESTART },
     { "core.stop", h_core_stop, SPC_M_PRESTART },
     { "core.info", h_core_info, SPC_M_PRESTART },

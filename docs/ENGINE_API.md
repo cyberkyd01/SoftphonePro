@@ -115,6 +115,7 @@ after `=`.
 | `core.setSipTrace` | `{enabled:b}` | `{}` |
 | `core.handleIpChange` | `{}` | `{}`; re-detects (or re-applies) the nameservers, then `pjsua_handle_ip_change`; progress is reported through `core.ipChangeProgress` events |
 | `core.setNameservers` | `{servers:[s]}` | `{}`; empty = keep the current list. Uses `pj_dns_resolver_set_ns`, creating the resolver if needed. |
+| `core.getSipTos` | `{}` | `{transports:[{id, type, port, tos, dscp}]}`: diagnostic. IP_TOS / IPV6_TCLASS read back from each UDP SIP socket (`tos` = dscp<<2); `-1` for TCP/TLS (their sockets are per connection and cannot be inspected) and on Windows. |
 | `core.setTlsPins` | `{pins:[{host:s, sha256:s}]}` | `{}`; a certificate whose SHA-256 matches a pin is accepted even when verification fails (self-signed PBX). `sha256` must be exactly 64 hex digits and `host` non-empty, otherwise `INVALID_PARAM` (nothing is applied). |
 | `core.setUserAgent` | `{userAgent:s}` | `{}` |
 
@@ -137,15 +138,23 @@ after `=`.
     "udp": {"port": 5060, "enabled": true},     // port 0 = random; falls back to random if busy
     "tcp": {"port": 5060, "enabled": true},
     "tls": {"port": 5061, "enabled": true, "verifyServer": false, "caFile": null,
-            "certFile": null, "keyFile": null, "minProto": "tls1.2"},
+            "certFile": null, "keyFile": null, "minProto": "tls1.2", "optional": false},
           // verifyServer:true needs trusted CAs. macOS/Linux fall back to the system bundle (/etc/ssl/cert.pem,
           // /etc/ssl/certs/ca-certificates.crt, ...), Android to /system/etc/security/cacerts. iOS and Windows have
           // no CA path OpenSSL can use: core.start fails with INVALID_PARAM unless caFile points to a readable
           // PEM bundle (the app ships a Mozilla bundle). An unreadable caFile also fails the start. The verdict is
           // applied right after the handshake, before any SIP data is sent; a connection with no certificate, or
           // with a failed verification and no matching pin, is dropped (transport.tlsVerify event).
+          // TLS start failures: if the TLS listener cannot be created (unreadable/invalid certFile or keyFile, or
+          // other transport error) or the ws/wss transports cannot start, core.start fails with PJ_ERROR and a
+          // message naming the port / files, and the engine stays stopped (startable again). `optional:true`
+          // restores the lenient behaviour: continue without the failed TLS/WSS transports (check
+          // result.transports). A busy port is not an error: the engine falls back to a random port.
+          // All TLS settings (verifyServer, caFile, certFile, keyFile, minProto), the TLS pins and the verify
+          // flag are reset on every core.start/core.stop: a start without a `tls` object means verifyServer:false.
     "ipv6": false,                              // also create IPv6 UDP/TCP/TLS transports
-    "qos": true                                 // DSCP: SIP=signalling (CS3), RTP=voice (EF)
+    "qos": true,                                // DSCP marking: SIP signalling, RTP voice (EF)
+    "dscpSip": 24                               // 0..63, DSCP of the SHARED SIP transports (default CS3); see "SIP DSCP" below
   },
   "lan": {"enabled": false, "port": 0},         // UDP transport + local account (uid "__lan__") for LAN calls
   "media": {
@@ -229,12 +238,25 @@ AccountConfig:
   "iax": {"host": "", "port": 4569, "context": null}   // proto=iax2 only; uses username/password
 }
 ```
+**SIP DSCP (`dscp.sip`, `transports.dscpSip`, applies only when `transports.qos` is true).** PJSIP sockets are
+shared between accounts, so the precise behaviour is:
+
+* UDP, account with its own transport (`localPort` > 0): the account owns the socket; `dscp.sip` is applied exactly
+  (IP_TOS / IPV6_TCLASS = dscp<<2) on add and on `account.modify`.
+* UDP, shared transport (no `localPort`, `transport:"udp"`): the socket starts at `transports.dscpSip` (default
+  24); adding or modifying an account re-marks the shared socket with that account's `dscp.sip` (last add/modify
+  wins, applies to every account sharing the socket).
+* TCP / TLS / WS / WSS shared transports: marked at `core.start` with `transports.dscpSip`; per-account
+  `dscp.sip` cannot change a per-connection socket afterwards (own TCP/TLS transports get the account value at creation).
+* On Apple platforms the OS maps DSCP to a coarse service class for TCP; exact bits are guaranteed for UDP only.
+* `dscp.rtp` is per account and applies to that account's RTP sockets.
+
 Numeric AccountConfig fields are range-checked (`INVALID_PARAM` otherwise):
 `regExpires` 10..86400, `regRetrySec` / `regFirstRetrySec` 0..86400,
 `regRetryRandomSec` / `regDelayBeforeRefreshSec` / `keepAliveSec` 0..3600 (the
 last: 0 = off), `unregTimeoutMs` 0..60000, `mwiExpires` 0..86400,
 `srtpSecureSignaling` 0..2, `regUseProxy` 0..3, `timerSe` 90..86400,
-`localPort` 0..65535, `dscp.*` 0..63. The same ranges apply to IAX2 accounts
+`localPort` 0..65535, `dscp.*` 0..63 (`dscp.rtp` default 46, `dscp.sip` default 24). The same ranges apply to IAX2 accounts
 (`iax.port` 0..65535). `core.start` validates `media.rtpPort` +
 `media.rtpPortRange` <= 65535, `media.jb.*` >= -1, the timers
 (`incomingAutoRingMs`, `incomingUnattendedMs`, `statsIntervalMs`) and the
@@ -410,7 +432,7 @@ BuddyInfo:
 | `account.incomingSubscribe` | `{acc, uid, from, accepted:b}` |
 | `call.incoming` | CallInfo + `{headers:{Call-Info, Alert-Info, Answer-Mode, Referred-By, X-*, ...}, replacesCid?:u64, autoAnswerHint?:{afterSec:i, source:"callInfo\|alertInfo\|answerMode", require:b}}` |
 | `call.state` | `{cid, call, acc, uid, proto, role, state, stateCode, stateReason, lastCode, remoteUri, remoteDisplay, remoteUser, connectMs, totalMs}` |
-| `call.media` | `{cid, media, codec, srtp, crypto, secureSignaling, ice}` |
+| `call.media` | `{cid, media, codec, srtp, crypto, secureSignaling, ice}`; `srtp` = media is SRTP-protected, `secureSignaling` = the call's SIP signalling runs over TLS or WSS (or a `sips:` target). The two are independent (SRTP over UDP: `srtp:true, secureSignaling:false`; TLS without SRTP: the reverse). Same semantics in `call.state`/CallInfo. |
 | `call.dtmf` | `{cid, digit, method:"rfc2833\|info", durationMs}` (in-band receive is not supported in v1) |
 | `call.transferRequest` | `{cid, target, referredBy, accepted:b}`; incoming REFER. The call created by the REFER announces itself with its own events, and its `call.state` events carry `transferFrom:<cid>`. |
 | `call.transferStatus` | `{cid, code, reason, final:b}` |

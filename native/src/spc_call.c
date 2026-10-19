@@ -1,6 +1,7 @@
 /* spc_call.c: call registry (cid), pjsua call callbacks, topology, info/stats JSON. */
 #include "spc_internal.h"
 #include <pjsua-lib/pjsua_internal.h>
+#include "spc_ws_transport.h"
 #include <math.h>
 #include <ctype.h>
 
@@ -83,13 +84,28 @@ void spc_call_get_tags(int slot, char* l, size_t ln, char* r, size_t rn)
     }
 }
 
+static int tp_type_secure(pjsip_transport* tp)
+{
+    int t;
+    if (!tp) return 0;
+    t = (int)tp->key.type & ~PJSIP_TRANSPORT_IPV6;
+    return t == (int)PJSIP_TRANSPORT_TLS || spc_ws_type_is_wss((int)tp->key.type);
+}
+
+/* Signalling security of the call's dialog: TLS or WSS transport actually used by the INVITE (or pinned on
+ * the dialog), or a sips: target. Independent of SRTP. */
 static int dlg_secure(int slot)
 {
     pjsua_call* call = NULL;
     pjsip_dialog* dlg = NULL;
     int s = 0;
     if (acquire_call("spc_sec", slot, &call, &dlg) == PJ_SUCCESS) {
-        if (dlg) { s = dlg->secure ? 1 : 0; pjsip_dlg_dec_lock(dlg); }
+        if (dlg) {
+            if (dlg->secure) s = 1;
+            else if (call && call->inv && call->inv->invite_tsx && tp_type_secure(call->inv->invite_tsx->transport)) s = 1;
+            else if (dlg->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT && tp_type_secure(dlg->tp_sel.u.transport)) s = 1;
+            pjsip_dlg_dec_lock(dlg);
+        }
     }
     return s;
 }
@@ -268,7 +284,7 @@ static cJSON* info_locked(spc_call* c, const pjsua_call_info* ci)
     cJSON_AddStringToObject(o, "media", c->last_media);
     cJSON_AddStringToObject(o, "codec", c->last_codec);
     cJSON_AddBoolToObject(o, "srtp", c->last_srtp);
-    cJSON_AddBoolToObject(o, "secureSignaling", c->last_srtp >= 2);
+    cJSON_AddBoolToObject(o, "secureSignaling", c->last_secsig);
     cJSON_AddBoolToObject(o, "muted", c->muted);
     cJSON_AddBoolToObject(o, "recording", c->recording);
     cJSON_AddBoolToObject(o, "detached", c->detached);
@@ -606,6 +622,7 @@ static void cb_call_state(pjsua_call_id call_id, pjsip_event* e)
         }
     }
     if (terminal) spc_call_cleanup_media(c);
+    else if (dlg_secure(call_id)) { spc_registry_lock(); c->last_secsig = 1; spc_registry_unlock(); }
     spc_registry_lock();
     if (c->ended) { spc_registry_unlock(); return; }
     if (terminal) {
@@ -657,7 +674,9 @@ static void cb_call_media_state(pjsua_call_id call_id)
     c = spc_call_find_locked(cid);
     if (!c || c->ended) { spc_registry_unlock(); return; }
     {
-        int ns = srtp ? (secure ? 2 : 1) : 0;
+        int ns = srtp ? 1 : 0;
+        if (secure) c->last_secsig = 1;
+        secure = c->last_secsig;
         if (strcmp(c->last_media, mname) != 0 || strcmp(c->last_codec, codec) != 0 || c->last_srtp != ns) changed = 1;
         spc_strlcpy(c->last_media, mname, sizeof(c->last_media));
         spc_strlcpy(c->last_codec, codec, sizeof(c->last_codec));
@@ -671,7 +690,7 @@ static void cb_call_media_state(pjsua_call_id call_id)
         cJSON_AddStringToObject(f, "codec", codec);
         cJSON_AddBoolToObject(f, "srtp", srtp);
         spc_jadd_str(f, "crypto", crypto[0] ? crypto : NULL);
-        cJSON_AddBoolToObject(f, "secureSignaling", srtp && secure);
+        cJSON_AddBoolToObject(f, "secureSignaling", secure);
         icej = cJSON_AddObjectToObject(f, "ice");
         cJSON_AddStringToObject(icej, "state", ice);
         cJSON_AddStringToObject(icej, "localType", lt);

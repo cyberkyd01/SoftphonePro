@@ -1358,7 +1358,10 @@ static int start_factory(int wss, int v6, const char* invalid_host)
         if (lf->tls.cert_file.slen || lf->tls.ca_list_file.slen || lf->tls.ca_list_path.slen || lf->tls.privkey_file.slen) {
             st = pj_ssl_cert_load_from_files2(pool, &lf->tls.ca_list_file, &lf->tls.ca_list_path, &lf->tls.cert_file,
                                               &lf->tls.privkey_file, &lf->tls.password, &lf->cert);
-            if (st != PJ_SUCCESS) PJ_PERROR(2, (THIS_FILE, st, "WSS: cannot load TLS credentials (continuing without)"));
+            if (st != PJ_SUCCESS) {
+                PJ_PERROR(2, (THIS_FILE, st, "WSS: cannot load TLS credentials"));
+                if (lf->tls.cert_file.slen || lf->tls.privkey_file.slen) goto fail;   /* explicit client cert/key: hard error */
+            }
         }
     }
     lf->is_registered = PJ_TRUE;
