@@ -61,9 +61,6 @@ dependencies:
   hotkey_manager: ^0.2.3
   screen_retriever: ^0.2.2
 
-  spcore_flutter:
-    path: ../packages/spcore_flutter
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
