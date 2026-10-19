@@ -12,7 +12,8 @@ xcrun simctl list runtimes available
 ARCHS_APP="$(lipo -archs "$APP/Runner")"
 echo "app archs: $ARCHS_APP"
 # An x86_64-only app needs Rosetta, which only iOS <= 18 simulator runtimes provide on Apple silicon.
-UDID="$(ARCHS_APP="$ARCHS_APP" xcrun simctl list devices available -j | python3 -c '
+export ARCHS_APP
+UDID="$(xcrun simctl list devices available -j | python3 -c '
 import json,os,sys
 x86_only = "arm64" not in os.environ["ARCHS_APP"].split()
 d=json.load(sys.stdin)["devices"]
