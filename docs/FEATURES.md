@@ -6,9 +6,9 @@ Status as of v1.0.0 (2026-10-19). Every status below is backed by the evidence i
 
 | Status | Meaning | Rows |
 |---|---|---|
-| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **69** |
+| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **70** |
 | ◐ | Implemented, but only checked by hand or on a device, or only partly tested (the Evidence column says what is missing) | **34** |
-| ☐ | Not implemented, or deferred | **8** |
+| ☐ | Not implemented, or deferred | **7** |
 | | Total rows | **111** |
 
 Not implemented: video calls (M8) and ZRTP (S6), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat, a Linux desktop app).

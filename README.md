@@ -69,6 +69,7 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * **SRTP** (SDES, AES-CM/GCM) and **DTLS-SRTP**.
 * A padlock on every call shows whether the call is encrypted.
 * Passwords live in the OS keystore, with an encrypted-file fallback.
+* Optional **encryption of the local database** (call history, contacts, messages, settings) with AES-256-GCM. The key stays in the OS keystore.
 * App lock with a PIN or biometrics. Incoming calls still ring while the app is locked.
 * No analytics or telemetry.
 
@@ -102,7 +103,9 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
   * global hotkeys;
   * start at login;
   * one running instance;
-  * the option to make SoftphonePro your default app for `sip:`/`tel:` links.
+  * the option to make SoftphonePro your default app for `sip:`/`tel:` links;
+  * the headset or media play/pause key answers and hangs up calls;
+  * an update checker (opt-out) that tells you when a new release is on GitHub.
 * **Android:**
   * a foreground service keeps your accounts registered;
   * full-screen incoming calls;
@@ -113,6 +116,7 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * **Every platform:**
   * T9 search in the dialer;
   * light and dark themes with an adaptive layout for phones, tablets and desktops.
+* **13 languages:** English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية (right-to-left), 简体中文 and 日本語. The language follows the system by default and can be changed in Settings > Appearance > Language. Log and trace contents, SIP tokens and codec names stay in English.
 * **Phones and Mac:** import contacts from the device, and scan QR codes with the camera (other platforms can paste the code).
 
 The full list of about 110 features, each with its status and the test that backs it, is in [docs/FEATURES.md](docs/FEATURES.md). Some features are only partly tested (marked ◐ there); read [Known limitations](#known-limitations) before you rely on them.
@@ -172,8 +176,9 @@ Device testing is narrower than the automated tests: the macOS app was driven en
 
 * **iOS background calls:** iOS only gets incoming calls while the app is running. Background calls would need VoIP push notifications (PushKit) plus a push server, and the PBX has to support it. Android keeps accounts registered in the background with a foreground service instead.
 * **Not yet supported:** video calls and ZRTP. These are planned for a later version.
+* **Translations** are machine-assisted, so some wording may sound unnatural. Corrections are welcome in `app/lib/l10n/`.
+* **Recording files** are not encrypted, even when the database is.
 * **Unsigned builds:** builds aren't code-signed or notarised yet, so expect a one-time security prompt on Windows and macOS, and sideloading on iOS.
-* **Languages:** English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية (right-to-left), 简体中文 and 日本語. The language follows the system by default and can be changed in Settings > Appearance > Language. Log and trace contents, SIP tokens and codec names stay in English.
 * **Hold music through Asterisk:** when the PBX answers a hold request itself, the caller hears the PBX's own music, not yours. Your music plays on direct calls and on PBXs that relay the held party's audio.
 * **Ogg Opus recordings** play inside the app on Android and Linux only. On iPhone, Mac and Windows use *Open with…* or export the file.
 * **Partly tested areas:** see the ◐ rows in [docs/FEATURES.md](docs/FEATURES.md), for example STUN/TURN against real servers, IPv6, session timers, 100rel, SIP Outbound, camera QR scanning, device contacts, CallKit and the Android Telecom integration.

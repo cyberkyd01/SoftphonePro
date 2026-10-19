@@ -4,22 +4,17 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
-### Added
-* Localisation: the whole interface (screens, dialogs, notices, notifications, SIP error explanations) in 13 languages - English, Spanish, French, German, Brazilian Portuguese, Italian, Dutch, Russian, Turkish, Hindi, Arabic, Simplified Chinese and Japanese - with full right-to-left layout for Arabic. New Settings > Appearance > Language picker (default: follow the system). Android declares RTL support; iOS and macOS declare their languages and localise the permission prompts.
-* Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore. Safe migration both ways with a verified copy, a backup until the next start, and a recovery screen if the key is missing.
-* Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
-* Desktop headset / media play-pause button answers and hangs up (or mutes), claimed only while a call rings or is active (macOS and Windows).
-
-### Changed
-* The recording-notice setting points to Settings > Calls > Announcements, with a button to open it.
-* The welcome text no longer compares the app with premium apps.
-* Native licences are registered once at startup instead of when the About page is built.
-
 ## [1.0.0] - 2026-10-19
 
 First public release. Windows, macOS, Android and iOS builds, plus a browser extension. See [docs/RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md) for downloads, install notes and known limitations, and [docs/FEATURES.md](docs/FEATURES.md) for the status of every feature and the test behind it.
 
 ### Added
+
+**Languages, privacy and desktop**
+* Localisation: the whole interface (screens, dialogs, notices, notifications, SIP error explanations) in 13 languages - English, Spanish, French, German, Brazilian Portuguese, Italian, Dutch, Russian, Turkish, Hindi, Arabic, Simplified Chinese and Japanese - with full right-to-left layout for Arabic. New Settings > Appearance > Language picker (default: follow the system). Android declares RTL support; iOS and macOS declare their languages and localise the permission prompts.
+* Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore. Safe migration both ways with a verified copy, a backup until the next start, and a recovery screen if the key is missing.
+* Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
+* Desktop headset / media play-pause button answers and hangs up (or mutes), claimed only while a call rings or is active (macOS and Windows).
 
 **Call engine (`spcore`, built on PJSIP 2.17)**
 * SIP over UDP, TCP, TLS 1.2/1.3 and WebSocket (WS/WSS, RFC 7118), IAX2 (RFC 5456), IPv4 and IPv6 settings, SRTP (SDES) and DTLS-SRTP, ICE, STUN and TURN settings.
@@ -74,11 +69,27 @@ Found by the independent reviews and the device runs before release:
 * Per-contact and per-account ringtones, the recording beep, the blocklist (it matched number fragments) and emergency dialling without accounts.
 * TLS verification was on by default but no CA list shipped, so the engine could not start on Windows and iOS; the app now ships the Mozilla CA bundle and no longer falls back silently to the simulator when the engine fails to start.
 
+### Changed
+* The recording-notice setting points to Settings > Calls > Announcements, with a button to open it.
+* The welcome text no longer compares the app with premium apps.
+* Native licences are registered once at startup instead of when the About page is built.
+
+### Security
+* Fixed before release, after the final review:
+  * a remote engine hang on malformed `History-Info` indexes;
+  * Android intents that other installed apps could use to place, provision or answer calls;
+  * an engine hang on crafted WAV files on Windows;
+  * the automation token appearing in settings exports;
+  * dangerous settings in web-link provisioning not being shown to the user;
+  * secrets in the diagnostic bundle's engine log.
+
+  Each fix has a regression test. See [docs/reviews/2026-10-19-final-review.md](docs/reviews/2026-10-19-final-review.md).
+
 ### Known limitations
 
 * iOS cannot receive calls in the background (no PushKit/push server).
 * Video calls and ZRTP are not implemented.
-* The interface is English only.
+* Translations are machine-assisted. Recording audio files are not encrypted (the database can be).
 * Windows and iOS builds have not been run on a device or simulator. macOS and Android were tested as described in [docs/QA_MACOS.md](docs/QA_MACOS.md) and [docs/QA_ANDROID.md](docs/QA_ANDROID.md).
 * Builds are not code-signed or notarised.
 * Hold music through Asterisk is the PBX's own; Ogg Opus recordings play in the app on Android and Linux only.
