@@ -26,30 +26,31 @@ xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
 
-# stream the log of the app process while it runs
-xcrun simctl spawn "$UDID" log stream --style compact --level debug --predicate 'process == "Runner"' > "$OUT/device.log" 2>&1 &
-LOGPID=$!
-sleep 2
-xcrun simctl launch --console-pty "$UDID" "$BUNDLE_ID" > "$OUT/console.log" 2>&1 &
+START_TS="$(date '+%Y-%m-%d %H:%M:%S')"
+LAUNCH_OUT="$(xcrun simctl launch --stdout="$OUT/stdout.log" --stderr="$OUT/stderr.log" "$UDID" "$BUNDLE_ID")"
+echo "$LAUNCH_OUT"
+PID="${LAUNCH_OUT##*: }"
+alive() { kill -0 "$1" 2>/dev/null; }
 sleep 5
-PID="$(xcrun simctl spawn "$UDID" launchctl list | awk -v b="UIKitApplication:$BUNDLE_ID" 'index($0,b){print $1; exit}')"
-echo "app pid after 5 s: ${PID:-none}"
+if alive "$PID"; then A5=yes; else A5=no; fi
+echo "app pid $PID alive after 5 s: $A5"
 sleep 20
-PID2="$(xcrun simctl spawn "$UDID" launchctl list | awk -v b="UIKitApplication:$BUNDLE_ID" 'index($0,b){print $1; exit}')"
-echo "app pid after 25 s: ${PID2:-none}"
+if alive "$PID"; then A25=yes; else A25=no; fi
+echo "app pid $PID alive after 25 s: $A25"
 xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png"
-sleep 1
-kill "$LOGPID" 2>/dev/null || true
+xcrun simctl spawn "$UDID" log show --start "$START_TS" --style compact --info --debug --predicate 'process == "Runner"' > "$OUT/device.log" 2>&1 || true
+sleep 2
+ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | tail -5 || true
 
-echo "--- console tail"; tail -n 30 "$OUT/console.log" || true
-echo "--- engine-related log lines"; grep -i -E 'spcore|engine' "$OUT/device.log" "$OUT/console.log" | head -20 || true
+echo "--- stdout/stderr tail"; tail -n 30 "$OUT/stdout.log" "$OUT/stderr.log" || true
+echo "--- engine-related log lines"; grep -i -E 'spcore|engine|flutter' "$OUT/device.log" | head -20 || true
+echo "--- last device log lines"; tail -n 25 "$OUT/device.log" || true
 
 FAIL=0
-if [ -z "${PID2:-}" ] || [ "$PID2" = "-" ]; then echo "FAIL: app is not running after 25 s"; FAIL=1; fi
-if [ -n "${PID:-}" ] && [ -n "${PID2:-}" ] && [ "$PID" != "$PID2" ]; then echo "FAIL: app pid changed ($PID -> $PID2): it crashed/restarted"; FAIL=1; fi
-if ls ~/Library/Logs/DiagnosticReports/Runner* >/dev/null 2>&1; then echo "FAIL: crash report found"; cp ~/Library/Logs/DiagnosticReports/Runner* "$OUT/" ; FAIL=1; fi
+[ "$A25" = yes ] || { echo "FAIL: app is not running after 25 s"; FAIL=1; }
+if ls ~/Library/Logs/DiagnosticReports/Runner* >/dev/null 2>&1; then echo "FAIL: crash report found"; cp ~/Library/Logs/DiagnosticReports/Runner* "$OUT/"; FAIL=1; fi
 [ -s "$OUT/ios-simulator.png" ] || { echo "FAIL: no screenshot"; FAIL=1; }
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
-xcrun simctl shutdown "$UDID" || true
+timeout 60 xcrun simctl shutdown "$UDID" || true
 [ "$FAIL" = 0 ] && echo "IOS SMOKE OK"
 exit "$FAIL"

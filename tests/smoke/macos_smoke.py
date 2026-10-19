@@ -11,7 +11,10 @@ import socket
 import subprocess
 import sys
 import time
+import threading
 import urllib.request
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 
 def free_port():
@@ -58,8 +61,18 @@ def main():
         r = subprocess.run(["pgrep", "-x", "softphonepro"], capture_output=True, text=True)
         return [int(x) for x in r.stdout.split()]
 
+    # The app is sandboxed and cannot read arbitrary paths, so serve the JSON on loopback
+    # (http://127.0.0.1 is an allowed --provision source, same as tests/macos_e2e).
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=a.out))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    prov_url = "http://127.0.0.1:%d/provision.json" % httpd.server_address[1]
+
     start = time.time()
-    r = subprocess.run(["open", "-n", app, "--args", "--provision", cfg_path], capture_output=True, text=True)
+    r = subprocess.run(["open", "-n", app, "--args", "--provision", prov_url], capture_output=True, text=True)
     print("open rc=%d %s" % (r.returncode, r.stderr.strip()), flush=True)
     check(r.returncode == 0, "open launched the app")
     try:
@@ -71,6 +84,12 @@ def main():
                 break
             except Exception:
                 time.sleep(0.7)
+        if st is None:
+            print("pids:", pids(), flush=True)
+            subprocess.run("ls -la ~/Library/Logs/DiagnosticReports | tail; ps aux | grep -i softphone | head", shell=True)
+            with open(os.path.join(a.out, "unified.log"), "w") as f:
+                subprocess.run(["log", "show", "--last", "3m", "--style", "compact", "--predicate",
+                                'process == "softphonepro" OR eventMessage CONTAINS[c] "softphonepro"'], stdout=f)
         check(st is not None, "automation API answered /v1/status within 90 s")
         json.dump(st, open(os.path.join(a.out, "status.json"), "w"), indent=1)
         check(st["app"] == "SoftphonePro", "app name is SoftphonePro")
