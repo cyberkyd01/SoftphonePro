@@ -47,7 +47,7 @@ if ($dumpbin) {
   $exports = & $exe /nologo /exports $dll.FullName | Out-String
   foreach ($s in $required) { if ($exports -notmatch "\b$s\b") { throw "spcore.dll does not export $s" } }
   $deps = & $exe /nologo /dependents $dll.FullName | Out-String
-  if ($deps -match '(?i)vcruntime|msvcp|ucrtbased') { Write-Warning "spcore.dll depends on the dynamic CRT:`n$deps" }
+  if ($deps -match '(?i)vcruntime|msvcp|ucrtbased') { throw "spcore.dll depends on the dynamic CRT (all libs must be /MT):`n$deps" }
   Write-Host "Exports verified ($($required.Count) symbols)."
 } else { Write-Warning 'dumpbin not found: exports not verified' }
 
