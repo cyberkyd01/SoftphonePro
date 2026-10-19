@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../diagnostics/diagnostics_hub.dart';
+import '../diagnostics/sip_trace_controller.dart';
+import '../lan/lan_controller.dart';
+import '../lan/lan_handoff_impl.dart';
+import '../ui/pages/lan/lan_dialogs.dart';
 import 'accounts_controller.dart';
 import 'calls_controller.dart';
 import 'contacts_controller.dart';
@@ -49,6 +54,13 @@ final appServicesProvider = Provider<void>((ref) {
   ref.read(presenceProvider);
   ref.read(historyProvider);
   ref.read(contactsProvider);
+  // Diagnostics collectors listen from the first frame (trace, logs, TLS).
+  ref.read(sipTraceProvider);
+  ref.read(logsProvider);
+  ref.read(diagnosticsHubProvider);
+  ref.read(lanControllerProvider);
+  ref.read(lanHandoffImplProvider);
+  ref.read(lanUiCoordinatorProvider);
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
 

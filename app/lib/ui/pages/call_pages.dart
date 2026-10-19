@@ -10,6 +10,7 @@ import '../../services/contacts_controller.dart';
 import '../../services/messages_controller.dart';
 import '../../services/providers.dart';
 import '../helpers.dart';
+import 'lan/lan_call_widgets.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
 import '../widgets/dial_pad.dart';
@@ -120,6 +121,8 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                                   ]),
                               ],
                             ),
+                          LanCallLabel(call: c),
+                          RelayedBanner(call: c),
                           if (consult) _ConsultBanner(call: c),
                           if (others.isNotEmpty) ...[
                             const SizedBox(height: 12),
@@ -440,6 +443,7 @@ class IncomingCallPage extends ConsumerWidget {
                 ),
                 if (title != c.number && c.number.isNotEmpty)
                   Text(c.number, style: tabular(t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: LanCallLabel(call: c)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -450,7 +454,7 @@ class IncomingCallPage extends ConsumerWidget {
                       icon: Icons.devices_rounded,
                       label: 'To device',
                       size: 54,
-                      onPressed: lan.available && lan.devices.isNotEmpty ? () => calls.forwardIncomingToLan(c.cid, lan.devices.first) : null,
+                      onPressed: lan.available && lan.devices.any((d) => d.online) ? () => forwardRingingToLan(context, ref, c.cid) : null,
                     ),
                   ],
                 ),

@@ -1,3 +1,4 @@
+import 'diagnostics/quality_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -374,6 +375,7 @@ class RecentDetailView extends ConsumerWidget {
                     '${all[i].sipCode >= 300 ? '  ·  SIP ${all[i].sipCode}' : ''}',
                   ),
                   trailing: Text(formatMs(all[i].durationMs), style: tabular(t.textTheme.bodyMedium)),
+                  onTap: all[i].quality.isEmpty && all[i].callId.isEmpty ? null : () => showCallQualitySheet(context, all[i]),
                 ),
                 if (i != all.length - 1) const Divider(height: 1, indent: 16),
               ],

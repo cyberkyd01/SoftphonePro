@@ -55,6 +55,15 @@ dependencies:
   audioplayers: ^6.6.0
   spcore_flutter:
     path: ../packages/spcore_flutter
+  bonsoir: ^2.2.0+1
+  lan_link:
+    path: ../packages/lan_link
+
+dependency_overrides:
+  # bonsoir_android 2.2.0 still uses the removed v1 plugin Registrar API and
+  # does not compile on current Flutter; patched copy (MIT) in third_party/.
+  bonsoir_android:
+    path: ../third_party/bonsoir_android
 
 dev_dependencies:
   flutter_test:

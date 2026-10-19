@@ -142,6 +142,7 @@ class MessagesRepository {
   Future<void> put(ChatMessage m) => _store.put(m.id, m.toJson());
   Future<void> putAll(Iterable<ChatMessage> ms) =>
       _store.putAll({for (final m in ms) m.id: m.toJson()});
+  Future<void> delete(String id) => _store.delete(id);
   Future<void> deleteConversation(String key) => _store.deleteWhere(
     (j) => ChatMessage.fromJson(j).conversationKey == key,
   );

@@ -22,13 +22,49 @@ enum CallResult {
   };
 }
 
+/// One point of a call's quality time series.
+class QualitySample {
+  const QualitySample({
+    required this.t,
+    this.mos = 0,
+    this.jitter = 0,
+    this.loss = 0,
+    this.rtt = 0,
+  });
+
+  /// Seconds since the call connected.
+  final double t;
+  final double mos;
+  final double jitter;
+  final double loss;
+  final double rtt;
+
+  List<num> toJson() => [
+    double.parse(t.toStringAsFixed(1)),
+    double.parse(mos.toStringAsFixed(2)),
+    double.parse(jitter.toStringAsFixed(1)),
+    double.parse(loss.toStringAsFixed(2)),
+    double.parse(rtt.toStringAsFixed(0)),
+  ];
+
+  static QualitySample? fromJson(Object? j) {
+    if (j is! List || j.length < 5) return null;
+    double d(int i) => j[i] is num ? (j[i] as num).toDouble() : 0;
+    return QualitySample(t: d(0), mos: d(1), jitter: d(2), loss: d(3), rtt: d(4));
+  }
+}
+
 class QualitySummary {
   const QualitySummary({
     this.mosAvg = 0,
     this.mosMin = 0,
     this.jitterMax = 0,
     this.lossPct = 0,
+    this.samples = const [],
   });
+
+  /// Down-sampled series (at most ~120 points), empty for old records.
+  final List<QualitySample> samples;
 
   final double mosAvg;
   final double mosMin;
@@ -42,6 +78,12 @@ class QualitySummary {
     mosMin: (j['mosMin'] as num?)?.toDouble() ?? 0,
     jitterMax: (j['jitterMax'] as num?)?.toDouble() ?? 0,
     lossPct: (j['lossPct'] as num?)?.toDouble() ?? 0,
+    samples: j['samples'] is List
+        ? [
+            for (final e in j['samples'] as List)
+              if (QualitySample.fromJson(e) case final q?) q,
+          ]
+        : const [],
   );
 
   Map<String, dynamic> toJson() => {
@@ -49,6 +91,7 @@ class QualitySummary {
     'mosMin': mosMin,
     'jitterMax': jitterMax,
     'lossPct': lossPct,
+    if (samples.isNotEmpty) 'samples': [for (final q in samples) q.toJson()],
   };
 }
 
@@ -68,8 +111,11 @@ class CallRecord {
     this.reason = '',
     this.recordingPath,
     this.quality = const QualitySummary(),
+    this.callId = '',
   });
 
+  /// SIP Call-ID (to find the call in the SIP trace); empty for old records.
+  final String callId;
   final String id;
   final String accountId;
   final CallDirection direction;
@@ -104,6 +150,7 @@ class CallRecord {
         reason: reason,
         recordingPath: recordingPath ?? this.recordingPath,
         quality: quality ?? this.quality,
+        callId: callId,
       );
 
   factory CallRecord.fromJson(Map<String, dynamic> j) => CallRecord(
@@ -131,6 +178,7 @@ class CallRecord {
     quality: QualitySummary.fromJson(
       Map<String, dynamic>.from((j['quality'] as Map?) ?? const {}),
     ),
+    callId: j['callId'] as String? ?? '',
   );
 
   Map<String, dynamic> toJson() => {
@@ -148,5 +196,6 @@ class CallRecord {
     'reason': reason,
     'recordingPath': recordingPath,
     'quality': quality.toJson(),
+    if (callId.isNotEmpty) 'callId': callId,
   };
 }

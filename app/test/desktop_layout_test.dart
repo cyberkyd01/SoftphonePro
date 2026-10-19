@@ -89,11 +89,11 @@ void main() {
     final c = containerOf(tester);
     await tester.runAsync(() => c.read(historyProvider.notifier).add(CallRecord(
       id: 'r1', accountId: 'acc1', direction: CallDirection.incoming, remoteUri: 'sip:2002@pbx.test', remoteNumber: '2002', remoteDisplay: '',
-      start: DateTime.now().subtract(const Duration(hours: 1)), durationMs: 83000, result: CallResult.answered,
+      start: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 10, 2), durationMs: 83000, result: CallResult.answered,
       quality: const QualitySummary(mosAvg: 4.3, mosMin: 4.1, jitterMax: 6, lossPct: 0.2))));
     await tester.runAsync(() => c.read(historyProvider.notifier).add(CallRecord(
       id: 'r2', accountId: 'acc1', direction: CallDirection.incoming, remoteUri: 'sip:9000@pbx.test', remoteNumber: '9000', remoteDisplay: 'Support',
-      start: DateTime.now().subtract(const Duration(minutes: 5)), result: CallResult.missed)));
+      start: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 10, 57), result: CallResult.missed)));
     await tester.tap(find.text('Recents').last);
     await tester.pumpAndSettle();
     expect(find.text('Alice Johnson'), findsOneWidget);
@@ -112,6 +112,6 @@ void main() {
     expect(find.text('Bob Marley'), findsOneWidget);
     await tester.tap(find.text('LAN').last);
     await tester.pumpAndSettle();
-    expect(find.text('Coming soon'), findsOneWidget);
+    expect(find.text('LAN Link is off'), findsOneWidget);
   });
 }

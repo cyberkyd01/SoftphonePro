@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../models/app_settings.dart';
+import '../platform/android/android_platform_services.dart';
 import 'providers.dart';
 import 'settings_controller.dart';
 
@@ -40,6 +41,7 @@ class EngineState {
     this.version = '',
     this.note,
     this.error,
+    this.startResult,
   });
   final EnginePhase phase;
   final bool demo;
@@ -50,6 +52,9 @@ class EngineState {
   final String? note;
   final String? error;
 
+  /// Result of the last successful `core.start` (transports, pjsip, LAN).
+  final CoreStartResult? startResult;
+
   bool get running => phase == EnginePhase.running;
 
   EngineState copyWith({
@@ -59,6 +64,7 @@ class EngineState {
     String? version,
     String? note,
     String? error,
+    CoreStartResult? startResult,
   }) => EngineState(
     phase: phase ?? this.phase,
     demo: demo ?? this.demo,
@@ -66,6 +72,7 @@ class EngineState {
     version: version ?? this.version,
     note: note ?? this.note,
     error: error,
+    startResult: startResult ?? this.startResult,
   );
 }
 
@@ -206,6 +213,7 @@ class EngineController extends Notifier<EngineState> {
     _sub?.cancel();
     _sub = engine.events.listen(_onEvent);
     final res = await engine.start(buildCoreConfig(settings));
+    await _applyAndroidDns(engine, settings);
     _engine = engine;
     _startedAt = DateTime.now();
     if (_disposed) return;
@@ -215,8 +223,22 @@ class EngineController extends Notifier<EngineState> {
       generation: state.generation + 1,
       version: res.version,
       note: handle.note,
+      startResult: res,
     );
     await _applyLive(settings, initial: true);
+  }
+
+  /// Android has no res_ninit: hand the engine the active network's DNS servers.
+  Future<void> _applyAndroidDns(SipEngine engine, AppSettings settings) async {
+    if (kIsWeb || !Platform.isAndroid || settings.dnsServers.isNotEmpty) return;
+    final p = ref.read(platformServicesProvider);
+    if (p is! AndroidPlatformServices) return;
+    try {
+      final dns = await p.getDnsServers();
+      if (dns.isNotEmpty) await engine.setNameservers(dns);
+    } catch (e) {
+      debugPrint('android dns failed: $e');
+    }
   }
 
   Future<void> restart() async {
@@ -393,6 +415,8 @@ class EngineController extends Notifier<EngineState> {
 
   /// App going away: stop sending events to a dead isolate.
   void onAppDetached() {
+    // On Android the engine outlives the activity (foreground service).
+    if (!kIsWeb && Platform.isAndroid) return;
     final e = _engine;
     if (e is FfiSipEngine) e.detach();
   }
