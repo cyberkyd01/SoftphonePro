@@ -1,5 +1,6 @@
 /* spc_core.c: public C ABI, worker thread, event delivery, core.* requests. */
 #include "spc_internal.h"
+#include "spc_denoise.h"
 #include "dart_api_dl.h"
 #include "spc_ws_transport.h"
 #include <pjsua-lib/pjsua_internal.h>
@@ -274,7 +275,7 @@ typedef struct spc_req {
     int deferred;
 } spc_req;
 
-static const spc_method* g_tables[8];
+static const spc_method* g_tables[12];
 
 static const spc_method* find_method(const char* name)
 {
@@ -547,7 +548,8 @@ SPC_API int32_t spc_init(int64_t port)
     g_tables[3] = spc_methods_media;
     g_tables[4] = spc_methods_presence;
     g_tables[5] = spc_methods_diag;
-    g_tables[6] = NULL;
+    g_tables[6] = spc_methods_denoise;
+    g_tables[7] = NULL;
     G.worker_quit = 0;
     G.q_head = G.q_tail = NULL;
     if (spc_thread_create(&G.worker, worker_main, NULL) != 0) {
@@ -766,13 +768,48 @@ static int g_ns_mode;                              /* 0 auto, 1 none (OS resolve
 static char g_ns_explicit[PJ_DNS_RESOLVER_MAX_NS][64];
 static int g_ns_explicit_n;
 
+/* "ip", "ip:port" (IPv4) or "[ip6]:port" / "ip6" -> bare address + port (53 default). 0 on a syntax error. */
+static int split_ns(const char* s, char* ip, size_t ipn, pj_uint16_t* port)
+{
+    const char* c;
+    *port = 53;
+    if (!s || !s[0] || strlen(s) > 60) return 0;
+    if (s[0] == '[') {
+        const char* rb = strchr(s, ']');
+        size_t n;
+        if (!rb) return 0;
+        n = (size_t)(rb - s - 1);
+        if (n == 0 || n >= ipn) return 0;
+        memcpy(ip, s + 1, n); ip[n] = 0;
+        if (rb[1] == ':') {
+            int pv = atoi(rb + 2);
+            if (pv <= 0 || pv > 65535) return 0;
+            *port = (pj_uint16_t)pv;
+        } else if (rb[1]) return 0;
+        return 1;
+    }
+    c = strchr(s, ':');
+    if (c && strchr(c + 1, ':') == NULL) {          /* exactly one colon: ipv4:port */
+        size_t n = (size_t)(c - s);
+        int pv = atoi(c + 1);
+        if (n == 0 || n >= ipn || pv <= 0 || pv > 65535) return 0;
+        memcpy(ip, s, n); ip[n] = 0;
+        *port = (pj_uint16_t)pv;
+        return 1;
+    }
+    spc_strlcpy(ip, s, ipn);
+    return 1;
+}
+
 static int valid_ns_addr(const char* s)
 {
     pj_in_addr a4;
     pj_in6_addr a6;
     pj_str_t str;
-    if (!s || !s[0] || strlen(s) > 60) return 0;
-    str = spc_pjs(s);
+    char ip[64];
+    pj_uint16_t port;
+    if (!split_ns(s, ip, sizeof(ip), &port)) return 0;
+    str = spc_pjs(ip);
     return pj_inet_pton(pj_AF_INET(), &str, &a4) == PJ_SUCCESS || pj_inet_pton(pj_AF_INET6(), &str, &a6) == PJ_SUCCESS;
 }
 
@@ -781,11 +818,15 @@ static int apply_nameservers(char servers[][64], int n)
     pjsip_endpoint* ep = pjsua_get_pjsip_endpt();
     pj_dns_resolver* res = pjsip_endpt_get_resolver(ep);
     pj_str_t ns[PJ_DNS_RESOLVER_MAX_NS];
+    pj_uint16_t ports[PJ_DNS_RESOLVER_MAX_NS];
+    char ips[PJ_DNS_RESOLVER_MAX_NS][64];
     int i, cnt = 0;
     pj_status_t st;
     for (i = 0; i < n && cnt < PJ_DNS_RESOLVER_MAX_NS; i++) {
         if (!servers[i][0]) continue;
-        ns[cnt++] = spc_pjs(servers[i]);
+        if (!split_ns(servers[i], ips[cnt], sizeof(ips[cnt]), &ports[cnt])) continue;
+        ns[cnt] = spc_pjs(ips[cnt]);
+        cnt++;
     }
     if (!cnt) return 0;
     if (!res) {
@@ -794,7 +835,7 @@ static int apply_nameservers(char servers[][64], int n)
         st = pjsip_endpt_set_resolver(ep, res);
         if (st != PJ_SUCCESS) return st;
     }
-    st = pj_dns_resolver_set_ns(res, (unsigned)cnt, ns, NULL);
+    st = pj_dns_resolver_set_ns(res, (unsigned)cnt, ns, ports);
     return st;
 }
 
@@ -902,7 +943,13 @@ static int h_core_start(cJSON* p, cJSON** res)
             else if (!spc_strieq(s, "auto")) return spc_err(SPC_E_INVALID_PARAM, 0, "media.sndMode must be auto|manual");
         }
         G.no_audio_device = spc_jbool(media, "noAudioDevice", 0);
+        {
+            char vie[128];
+            if (spc_denoise_validate(cJSON_GetObjectItemCaseSensitive(media, "voiceIsolation"), vie, sizeof(vie)) != 0)
+                return spc_err(SPC_E_INVALID_PARAM, 0, "%s", vie);
+        }
     }
+    spc_denoise_configure(media ? cJSON_GetObjectItemCaseSensitive(media, "voiceIsolation") : NULL);
 
     tr = spc_jobj(p, "transports");
     udp = spc_jobj(tr, "udp");
@@ -1133,6 +1180,7 @@ static int h_core_start(cJSON* p, cJSON** res)
         return spc_err(SPC_E_PJ_ERROR, 0, "cannot create direct account");
     }
     spc_media_started();
+    spc_denoise_start();
 
     r = cJSON_CreateObject();
     cJSON_AddStringToObject(r, "version", SPC_VERSION);
@@ -1192,6 +1240,7 @@ static void do_stop(int graceful)
     if (graceful) { spc_iax2_unregister_all(4000); spc_account_graceful_unregister(4000); }
     spc_call_hangup_all_and_wait(graceful ? 1500 : 500);
     spc_iax2_shutdown();
+    spc_denoise_shutdown();
     spc_media_shutdown();
     spc_trace_set(0);
     spc_lan_stop();
@@ -1316,6 +1365,7 @@ static int h_core_handle_ip_change(cJSON* p, cJSON** res)
     pjsua_ip_change_param_default(&prm);
     st = pjsua_handle_ip_change(&prm);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_handle_ip_change");
+    spc_account_on_ip_change();       /* accounts with transport:"auto" re-resolve their SRV records */
     return SPC_OK;
 }
 

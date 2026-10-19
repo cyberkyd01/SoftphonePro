@@ -244,6 +244,83 @@ void spc_tls_cleanup(void)
     s_ca[0] = s_cert[0] = s_key[0] = s_min[0] = 0; s_verify = 0;
 }
 
+#if defined(__has_include)
+#  if __has_include(<openssl/ssl.h>)
+#    include <openssl/ssl.h>
+#    include <openssl/err.h>
+#    include <openssl/pem.h>
+#    include <openssl/x509.h>
+#    define SPC_HAVE_OSSL 1
+#  endif
+#endif
+
+#ifdef SPC_HAVE_OSSL
+static int pw_cb(char* buf, int size, int rw, void* u)
+{
+    const char* p = (const char*)u;
+    size_t n;
+    (void)rw;
+    if (!p || !p[0]) return 0;          /* never prompt on a terminal */
+    n = strlen(p);
+    if (n > (size_t)size) n = (size_t)size;
+    memcpy(buf, p, n);
+    return (int)n;
+}
+#endif
+
+int spc_tls_validate_client_cert(const char* cert, const char* key, const char* password, char* err, size_t en)
+{
+    FILE* f;
+    if (!cert || !cert[0]) { snprintf(err, en, "tlsClientCert.certFile required"); return -1; }
+    if (!key || !key[0]) { snprintf(err, en, "tlsClientCert.keyFile required"); return -1; }
+    f = fopen(cert, "rb");
+    if (!f) { snprintf(err, en, "tlsClientCert.certFile '%s' is not readable", cert); return -1; }
+    fclose(f);
+    f = fopen(key, "rb");
+    if (!f) { snprintf(err, en, "tlsClientCert.keyFile '%s' is not readable", key); return -1; }
+    fclose(f);
+#ifdef SPC_HAVE_OSSL
+    {
+        SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
+        int rc = -1;
+        unsigned long e;
+        if (!ctx) { snprintf(err, en, "cannot create a TLS context"); return -1; }
+        SSL_CTX_set_default_passwd_cb(ctx, pw_cb);
+        SSL_CTX_set_default_passwd_cb_userdata(ctx, (void*)password);
+        ERR_clear_error();
+        if (SSL_CTX_use_certificate_chain_file(ctx, cert) != 1) {
+            snprintf(err, en, "tlsClientCert.certFile '%s' is not a valid PEM certificate", cert);
+        } else if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) != 1) {
+            int dec = 0, mism = 0;
+            while ((e = ERR_get_error()) != 0) {         /* OpenSSL 3 decoders queue several errors: look at all of them */
+                char es[160];
+                ERR_error_string_n(e, es, sizeof(es));
+                if (getenv("SPC_DEBUG_TLS")) fprintf(stderr, "tls key error: %s\n", es);
+                if (strstr(es, "ecrypt") || strstr(es, "assword") || strstr(es, "assphrase") ||
+                    ERR_GET_REASON(e) == PEM_R_BAD_PASSWORD_READ || ERR_GET_REASON(e) == PEM_R_PROBLEMS_GETTING_PASSWORD) dec = 1;
+                if (ERR_GET_REASON(e) == X509_R_KEY_VALUES_MISMATCH) mism = 1;
+            }
+            if (dec)
+                snprintf(err, en, "tlsClientCert.keyFile '%s' cannot be decrypted (missing or wrong password)", key);
+            else if (mism)
+                snprintf(err, en, "tlsClientCert.keyFile '%s' does not match certFile '%s'", key, cert);
+            else
+                snprintf(err, en, "tlsClientCert.keyFile '%s' is not a valid PEM private key (or the password is wrong)", key);
+        } else if (SSL_CTX_check_private_key(ctx) != 1) {
+            snprintf(err, en, "tlsClientCert.keyFile '%s' does not match certFile '%s'", key, cert);
+        } else {
+            rc = 0;
+        }
+        SSL_CTX_free(ctx);
+        ERR_clear_error();
+        return rc;
+    }
+#else
+    (void)password;
+    return 0;
+#endif
+}
+
 static void verify_names(unsigned long vs, cJSON* arr)
 {
     static const struct { unsigned long bit; const char* n; } t[] = {

@@ -1,0 +1,90 @@
+diff -ru /private/tmp/claude-501/x/rn/src/celt_lpc.c src/celt_lpc.c
+--- /private/tmp/claude-501/x/rn/src/celt_lpc.c	2026-10-19 15:40:40
++++ src/celt_lpc.c	2026-10-19 15:41:37
+@@ -101,7 +101,8 @@
+    int fastN=n-lag;
+    int shift;
+    const opus_val16 *xptr;
+-   opus_val16 xx[n];
++   opus_val16 xx[SPC_RNN_MAXN]; /* spcore: was a VLA (MSVC) */
++   if (n > SPC_RNN_MAXN) return 0;
+    celt_assert(n>0);
+    celt_assert(overlap>=0);
+    if (overlap == 0)
+diff -ru /private/tmp/claude-501/x/rn/src/common.h src/common.h
+--- /private/tmp/claude-501/x/rn/src/common.h	2026-10-19 15:40:18
++++ src/common.h	2026-10-19 15:41:31
+@@ -6,6 +6,8 @@
+ #include "stdlib.h"
+ #include "string.h"
+ 
++/* spcore: fixed upper bound replacing C99 VLAs (MSVC has none) */
++#define SPC_RNN_MAXN 2048
+ #define RNN_INLINE inline
+ #define OPUS_INLINE inline
+ 
+Only in /private/tmp/claude-501/x/rn/src: compile.sh
+Only in src: config.h
+diff -ru /private/tmp/claude-501/x/rn/src/denoise.c src/denoise.c
+--- /private/tmp/claude-501/x/rn/src/denoise.c	2026-10-19 15:40:40
++++ src/denoise.c	2026-10-19 15:41:24
+@@ -163,7 +163,7 @@
+ }
+ 
+ 
+-CommonState common;
++static CommonState common;
+ 
+ static void check_init() {
+   int i;
+diff -ru /private/tmp/claude-501/x/rn/src/pitch.c src/pitch.c
+--- /private/tmp/claude-501/x/rn/src/pitch.c	2026-10-19 15:40:40
++++ src/pitch.c	2026-10-19 15:41:24
+@@ -293,10 +293,12 @@
+    celt_assert(len>0);
+    celt_assert(max_pitch>0);
+    lag = len+max_pitch;
++   if (lag > SPC_RNN_MAXN) { *pitch = 0; return; }
+ 
+-   opus_val16 x_lp4[len>>2];
+-   opus_val16 y_lp4[lag>>2];
+-   opus_val32 xcorr[max_pitch>>1];
++   /* spcore: were VLAs (MSVC); sizes are bounded by the fixed RNNoise frame constants */
++   opus_val16 x_lp4[SPC_RNN_MAXN>>2];
++   opus_val16 y_lp4[SPC_RNN_MAXN>>2];
++   opus_val32 xcorr[SPC_RNN_MAXN>>1];
+ 
+    /* Downsample by 2 again */
+    for (j=0;j<len>>2;j++)
+@@ -440,7 +442,8 @@
+       *T0_=maxperiod-1;
+ 
+    T = T0 = *T0_;
+-   opus_val32 yy_lookup[maxperiod+1];
++   if (maxperiod > SPC_RNN_MAXN) return 0;
++   opus_val32 yy_lookup[SPC_RNN_MAXN+1];
+    dual_inner_prod(x, x, x-T0, N, &xx, &xy);
+    yy_lookup[0] = xx;
+    yy=xx;
+diff -ru /private/tmp/claude-501/x/rn/src/rnn.c src/rnn.c
+--- /private/tmp/claude-501/x/rn/src/rnn.c	2026-10-19 15:40:40
++++ src/rnn.c	2026-10-19 15:41:24
+@@ -102,7 +102,7 @@
+       for (i=0;i<N;i++)
+          output[i] = relu(output[i]);
+    } else {
+-     *(int*)0=0;
++     /* spcore: unreachable (was a deliberate null write) */
+    }
+ }
+ 
+@@ -148,7 +148,7 @@
+       if (gru->activation == ACTIVATION_SIGMOID) sum = sigmoid_approx(WEIGHTS_SCALE*sum);
+       else if (gru->activation == ACTIVATION_TANH) sum = tansig_approx(WEIGHTS_SCALE*sum);
+       else if (gru->activation == ACTIVATION_RELU) sum = relu(WEIGHTS_SCALE*sum);
+-      else *(int*)0=0;
++      else sum = 0;
+       h[i] = z[i]*state[i] + (1-z[i])*sum;
+    }
+    for (i=0;i<N;i++)
+Only in /private/tmp/claude-501/x/rn/src: rnn_train.py

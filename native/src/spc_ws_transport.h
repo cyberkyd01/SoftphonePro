@@ -16,6 +16,10 @@ int  spc_ws_type_is_wss(int tp_type);
  * Default path is "/ws". Thread safe. */
 void spc_ws_route_set(const char* host, int port, int wss, const char* path);
 
+/* Per-route TLS client certificate for wss connections to "host:port" (empty cert/key clears it). The route must
+ * exist (spc_ws_route_set first). Loaded per connection. */
+void spc_ws_route_set_cert(const char* host, int port, int wss, const char* cert, const char* key, const char* pass);
+
 /* out = hostport with the default port (80 ws / 443 wss) appended when it has none. */
 void spc_ws_ensure_port(const char* hostport, int wss, char* out, size_t outsz);
 

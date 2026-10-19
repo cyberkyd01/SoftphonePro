@@ -147,6 +147,7 @@ extern const spc_method spc_methods_call[];
 extern const spc_method spc_methods_media[];
 extern const spc_method spc_methods_presence[];
 extern const spc_method spc_methods_diag[];
+extern const spc_method spc_methods_denoise[];
 
 /* ---- accounts (spc_account.c) ---- */
 typedef struct spc_acc {
@@ -178,6 +179,12 @@ typedef struct spc_acc {
     int own_tp;
     int expires_cfg;
     int tls_verify_failed;         /* last registration failed due to TLS cert */
+    int auto_tr;                   /* configured transport is "auto" (SRV-selected) */
+    unsigned auto_gen;             /* bumped on modify/remove/new resolution: invalidates in-flight SRV lookups */
+    int auto_initial;              /* first resolution still pending: the resolver starts the registration */
+    int auto_reg;                  /* registration was requested at add time */
+    char resolved[160];            /* "host:port" of the chosen SRV target (auto transport), else "" */
+    unsigned long own_sig;         /* signature of the dedicated transport's configuration (port, type, client cert) */
     cJSON* cfg;
 } spc_acc;
 
@@ -193,6 +200,14 @@ int      spc_acc_list_json(cJSON* arr);
 void     spc_account_on_ip_change(void);
 
 /* ---- calls (spc_call.c) ---- */
+#define SPC_MAX_DIV 8
+typedef struct { char uri[200], user[96], reason[40]; int counter; } spc_div;
+typedef struct {                   /* caller identity from signalling headers (docs/ENGINE_API.md 9.5) */
+    int pai_set, withheld;         /* asserted identity present / withheld by Privacy (not exposed) */
+    char disp[96], user[96], uri[200];
+    int ndiv; spc_div div[SPC_MAX_DIV];
+    char ref_by[200];              /* Referred-By URI of the INVITE */
+} spc_ident;
 typedef struct spc_call {
     struct spc_call* next;
     uint64_t cid;
@@ -208,6 +223,7 @@ typedef struct spc_call {
     uint64_t parent_cid;           /* spawned by REFER */
     char call_id[128];
     char referred_by[256];
+    spc_ident ident;
     char local_tag[64], remote_tag[64];
     char last_media[12];
     char last_codec[48];
@@ -218,8 +234,11 @@ typedef struct spc_call {
     int nconf; uint64_t conf[SPC_MAX_PEERS];
     int nbr;   uint64_t bridged[SPC_MAX_PEERS];
     int recording; int rec_id; int rec_mix; char rec_file[600]; int64_t rec_start_ms;
-    int player_id;
+    int player_id;                 /* unused (players live in spc_player.c, keyed by cid) */
+    int rec2_id, rec_fmt;          /* spc_rec.c recorder (wavStereo/opus), 0 = none; rec_fmt: 0 wav, 1 wavStereo, 2 opus */
+    int ann_mute;                  /* announcement mute: a playing file asked to mute the mic towards this call (independent of `muted`) */
     int tg_slot; pjmedia_port* tg_port; pj_pool_t* tg_pool;
+    void* dn_in; int dn_in_slot; int dn_closed;   /* incoming voice-isolation processor (spc_denoise.c); dn_closed: media cleaned up */
     void* iax;                     /* proto==1: unused by the registry (state lives in spc_iax2.c, keyed by cid) */
     int rx_set; float rx_level, tx_level;
     int64_t created_ms;
@@ -246,6 +265,7 @@ int       spc_account_filter_codecs_for(int acc, pjmedia_sdp_session* sdp);
 /* call internals shared with spc_callreq.c */
 spc_call* spc_call_lock_find(uint64_t cid);      /* returns with registry lock held if found, else unlocked NULL */
 void      spc_call_apply_topology(void);
+int       spc_call_mic_source(void);             /* conf slot every "microphone -> X" connection must use: 0, or the voice-isolation processor */
 void      spc_call_cleanup_media(spc_call* c);   /* registry lock NOT held */
 int       spc_lan_register_account(int tp, int* acc);
 int       spc_call_media_audio_idx(const pjsua_call_info* ci);
@@ -292,6 +312,7 @@ int   spc_media_ensure_clock(void);
 pj_status_t spc_media_set_null_snd(void);
 extern pj_pool_t* spc_media_pool;
 int   spc_media_bridge_rate(void);
+void  spc_port_destroy_release(pjmedia_port* port, pj_pool_t* pool);   /* destroy a (already removed) bridge port; pool is freed on its last reference */
 const char* spc_media_snd_current(char* cap, size_t n, char* play, size_t m);
 int   spc_media_snd_open(void);
 int   spc_media_on_connect_error(pj_status_t st);
@@ -319,6 +340,9 @@ void  spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char*
 void  spc_tls_flag_failure(const char* host);
 int   spc_tls_recent_failure(const char* host);
 void  spc_tls_cleanup(void);
+/* Validates a client certificate: both files readable, key decrypts with `password`, cert and key match.
+ * 0 ok, -1 with a message in err. */
+int   spc_tls_validate_client_cert(const char* cert, const char* key, const char* password, char* err, size_t en);
 
 /* ---- dns (spc_dns.c) ---- */
 int   spc_dns_detect(char servers[][64], int max);

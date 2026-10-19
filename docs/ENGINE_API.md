@@ -126,7 +126,8 @@ after `=`.
   "logLevel": 3, "logForward": false, "sipTrace": false, "logFile": null,
   "nameservers": "auto",                 // "auto" = native detection (res_ninit on Apple/Linux, GetNetworkParams
                                          // on Windows; Android has none → Dart must call core.setNameservers);
-                                         // [] = OS resolver only (getaddrinfo, no SRV); ["8.8.8.8",…] = explicit
+                                         // [] = OS resolver only (getaddrinfo, no SRV); ["8.8.8.8",…] = explicit;
+                                         // entries are "ip", "ipv4:port" or "[ipv6]:port" (default port 53)
   "stunServers": ["stun.l.google.com:19302"], "stunIgnoreFailure": true,
   "maxCalls": 16,
   "incomingAutoRingMs": 1500,            // send 180 if Dart hasn't answered/rung/rejected in time; 0 = never
@@ -267,7 +268,7 @@ AccountInfo, which is also the payload of the `account.reg` event:
 {"acc":0,"uid":"…","proto":"sip","uri":"sip:1001@pbx","regState":"registered",
  "regCode":200,"regReason":"OK","status":0,"statusText":"Success","lastError":null,
  "expires":295,"online":true,"isUnreg":false,"contact":"<sip:1001@1.2.3.4:5060;ob>",
- "transport":"udp","presence":"online","isLan":false,"isDirect":false}
+ "transport":"udp","resolvedServer":null,"presence":"online","isLan":false,"isDirect":false}
 ```
 * `account.add` with `register:true` does not emit a separate `account.reg`.
   The first one is pjsua's own `registering` event.
@@ -275,7 +276,14 @@ AccountInfo, which is also the payload of the `account.reg` event:
   `unregistering` · `unregistered` · `failed`.
 * `lastError` is a human-readable reason, for example "Wrong
   username/password (403)", "Timeout (408)", "TLS certificate not
-  trusted", or "DNS lookup failed".
+  trusted", "TLS client certificate required by the server (set
+  tlsClientCert): …", "Server rejected the TLS client certificate: …", or
+  "DNS lookup failed".
+* `transport` is the transport in use. For `transport:"auto"` accounts it
+  is `"auto"` until the first SRV lookup completes, then `udp`, `tcp` or `tls`.
+  `resolvedServer` is `"host:port"` of the chosen SRV target for auto
+  accounts (or the registrar host and default port when no SRV lookup was
+  needed or possible), and `null` for every other account.
 
 ### call.*
 Every call request identifies the call by `cid` (u64).
@@ -290,7 +298,7 @@ Every call request identifies the call by `cid` (u64).
 | `call.processRedirect` | `{cid, action:"accept\|acceptReplace\|reject\|stop"}` | `{}` (answer to `call.redirected` when the account's redirect = ask) |
 | `call.hangup` | `{cid, code?:i}` | `{}` |
 | `call.hangupAll` | `{}` | `{}` |
-| `call.hold` | `{cid}` | `{}`; disconnects both bridge directions, then re-INVITEs using the account's holdType |
+| `call.hold` | `{cid, music?:{file:s, loop?:b=true, volume?:f=1.0}}` | `{}`; disconnects both bridge directions, then re-INVITEs using the account's holdType. With `music`, plays a file to the held party (section 9.3) |
 | `call.unhold` | `{cid}` | `{}` (re-INVITE sendrecv, then reconnects ports as before the hold) |
 | `call.mute` | `{cid, mute:b}` | `{}` (disconnects or reconnects mic → call) |
 | `call.setLevels` | `{cid, rx?:f=1.0, tx?:f=1.0}` | `{}` |
@@ -302,15 +310,15 @@ Every call request identifies the call by `cid` (u64).
 | `call.detachLocal` | `{cid, detached:b}` | `{}`; true disconnects the local mic/speaker from this call (relay handoff) |
 | `call.conference` | `{cids:[u64]}` | `{}`; full-mesh connect with the local mic/speaker; unholds held calls |
 | `call.unconference` | `{cids:[u64]}` | `{}` |
-| `call.recordStart` | `{cid, file:s, mix?:"both\|remote\|local"="both"}` | `{file}` WAV PCM16 at the bridge clock rate |
-| `call.recordStop` | `{cid}` | `{file, durationMs}`; returns only after the WAV file is finalised |
+| `call.recordStart` | `{cid, file:s, mix?:"both\|remote\|local"="both", format?:"wav\|wavStereo\|opus"="wav"}` | `{file}`; see section 9.4 |
+| `call.recordStop` | `{cid}` | `{file, durationMs, format, bytes}`; returns only after the file is finalised |
 | `call.update` | `{cid, useUpdate?:b=false}` | `{}` (re-INVITE/UPDATE: refreshes media/contact) |
 | `call.sendRequest` | `{cid, method:s, headers?:{}, body?:s, contentType?:s}` | `{}`; in-dialog request. Only `INFO`, `MESSAGE`, `NOTIFY` and `OPTIONS` are allowed; anything that changes the dialog or INVITE session (`BYE`, `INVITE`, `ACK`, `CANCEL`, `PRACK`, `UPDATE`, `REFER`, ...) is `INVALID_PARAM` - use the dedicated `call.*` methods. |
 | `call.info` | `{cid}` | `CallInfo` |
 | `call.stats` | `{cid}` | `CallStats` |
 | `call.list` | `{}` | `{calls:[CallInfo]}` |
-| `call.playFile` | `{cid, file:s, loop?:b}` | `{}`; plays a WAV into the call (the remote party hears it) |
-| `call.stopFile` | `{cid}` | `{}` |
+| `call.playFile` | `{cid, file:s, loop?:b=false, volume?:f=1.0, localMonitor?:b=false, muteMic?:b=false}` | `{playId}`; plays a WAV or MP3 into the call (section 9.2) |
+| `call.stopFile` | `{cid, playId?:i}` | `{stopped:i}` (section 9.2) |
 
 **Custom headers** (`headers` on `call.make`, `call.answer`, `call.reject`, `call.pickup`,
 `call.sendRequest` and the account-level `headers`): names must be SIP tokens
@@ -333,7 +341,7 @@ CallInfo:
  "remoteUri":"sip:1002@pbx","remoteContact":"<sip:…>","remoteDisplay":"Bob","remoteUser":"1002",
  "localUri":"sip:1001@pbx","callId":"SIP Call-ID","localTag":"…","remoteTag":"…",
  "media":"none|active|localHold|remoteHold|bothHold|error","codec":"opus/48000/2",   // bothHold reserved (not emitted yet)
- "srtp":false,"secureSignaling":false,"muted":false,"recording":false,"detached":false,
+ "srtp":false,"secureSignaling":false,"muted":false,"announcementMuted":false,"recording":false,"detached":false,
  "held":false,"conferenceWith":[43],"bridgedWith":[],
  "connectMs":0,"totalMs":0,"headers":{"Call-Info":"…"}}
 ```
@@ -379,6 +387,7 @@ Special ids:
 | `media.ringStart` | `{file?:s, devId?:s="default", loop?:b=true, volume?:f=1}` | `{}`; separate ringer sound port (desktop); with no file, a built-in synthesized ring |
 | `media.ringStop` | `{}` | `{}` |
 | `media.loopback` | `{enabled:b}` | `{}`; mic → speaker echo test |
+| `media.fileInfo`, `media.recordMicStart`, `media.recordMicStop` | | see section 9.2 |
 
 ### buddy.* (presence and BLF)
 | method | params | result |
@@ -438,7 +447,8 @@ BuddyInfo:
 | `call.transferStatus` | `{cid, code, reason, final:b}` |
 | `call.replaced` | `{oldCid, newCid}` |
 | `call.redirected` | `{cid, target, code}`; only when the account's redirect = ask |
-| `call.recording` | `{cid, recording:b, file}` |
+| `call.recording` | `{cid, recording:b, file, format?:s}` (`format` on start) |
+| `call.playDone` | `{cid, playId, file, reason:"eof\|stopped\|hangup\|error", moh?:true}`; section 9.2 |
 | `call.stats` | CallStats (periodic, when statsIntervalMs > 0) |
 | `buddy.state` | BuddyInfo |
 | `im.incoming` | `{acc, uid, from, fromDisplay, to, body, contentType, isLan:b}` |
@@ -475,6 +485,14 @@ The decision to auto-answer is made in Dart policy, not in native code.
 `;transport=` is appended to match the account transport when the target has
 no transport parameter and the account uses TCP, TLS, WS or WSS.
 Phone-number cleanup is done by Dart dial rules.
+
+`sips:` targets: they are accepted only on TLS accounts (`transport` `tls`,
+or an `auto` account), and on the direct account when the TLS listener is
+enabled. On any other account, `call.make` fails with `INVALID_PARAM` ("sips:
+URIs need a TLS account …"). No `;transport=` is appended to a `sips:` URI
+(sips implies TLS, default port 5061). For a `sips:` request the core also
+promotes the `Contact` to `sips:` (RFC 3261 26.2.2), as PBXs such as Asterisk
+answer `480 SIPS Required` otherwise. See §9.6.
 
 ## 5. Sound device modes
 * **auto** (desktop, Android): pjsua opens the sound device when a call's
@@ -580,73 +598,303 @@ Phone-number cleanup is done by Dart dial rules.
 ## 9. Voice isolation, media files, announcements, recording formats (contract v1.1)
 
 ### 9.1 Voice isolation (AI noise suppression)
-Noise suppression uses RNNoise (BSD-3), bundled in spcore.
-* **Microphone path:** a processing port is inserted between the sound-device
-  port (slot 0) and every call. The topology code uses a "mic source" slot
-  that is either slot 0 or the denoise port.
-* **Incoming path:** an optional processing port per call, placed between
-  the call's port and the speaker.
-* **Format:** RNNoise works on 48 kHz, 10 ms frames. Resampling to and from
-  the bridge rate is internal.
+Noise suppression uses RNNoise v0.1.1 (BSD-3, compiled-in model), bundled in spcore
+(`native/third_party/rnnoise`).
 
-`strength` (0.0–1.0) blends the original and denoised signal, and also
+Each processor is a port in the conference bridge. The bridge feeds it with `put_frame`
+and reads the result back on the next 20 ms clock tick, so a processor adds one
+bridge frame plus about 14 ms of RNNoise look-ahead and resampler delay (about 35 ms
+in total). The work runs on the conference clock thread; enable and strength changes
+are atomic and never take a lock that is held across a pjsua call.
+* **Microphone path:** one processor, fed from the sound-device port (slot 0). The
+  topology code uses a "mic source" slot that is either slot 0 or this processor,
+  for every mic-to-call and mic-to-recorder connection. Mute, hold, detach, conference,
+  bridge and recording semantics are unchanged. The processor is connected only while
+  isolation is enabled and at least one call exists. Anything that connects the mic
+  to something else must use `spc_call_mic_source()`.
+* **Incoming path:** one processor per call, between the call's port and the speaker
+  (slot 0). It is created on first use and destroyed with the call.
+* **Format:** RNNoise works on 48 kHz, 10 ms frames. The core resamples from the bridge
+  rate (any rate where 20 ms maps to a whole number of 48 kHz samples, which covers
+  8/16/24/32/44.1/48 kHz) and back, with libresample's large filter (unity gain).
+* **Cost:** about 160 us of CPU per 10 ms frame on Apple M2 (about 1.6% of one core)
+  per processor, with the mic and each call counted separately.
+
+`strength` (0.0–1.0, default 1.0) blends the original and denoised signal, and also
 attenuates non-speech frames by up to `30 dB × strength`, using RNNoise's
-voice-activity probability.
+voice-activity probability. The attenuation uses a 120 ms hangover so word endings are
+kept, a fast open and a slow close, and is applied as a per-sample ramp, so there are
+no clicks. At strength 0 the signal passes through the resamplers only, delayed.
 
 | method | params | result |
 |---|---|---|
-| `media.setVoiceIsolation` | `{mic?:{enabled:b, strength:f}, incoming?:{enabled:b, strength:f}}` | `{available:b, engine:"rnnoise"}`. Takes effect live, for current and future calls. Omitted parts are unchanged. |
-| `media.voiceIsolationStatus` | `{}` | `{mic:{enabled, strength, vad:f}, incoming:{enabled, strength}}`; `vad` is the latest speech probability (0–1), for UI meters |
+| `media.setVoiceIsolation` | `{mic?:{enabled?:b, strength?:f}, incoming?:{enabled?:b, strength?:f}}` | `{available:b, engine:"rnnoise"}`. Takes effect live, for current and future calls, without dropping audio (the new path is connected before the old one is removed). Omitted parts and omitted fields are unchanged. `INVALID_PARAM` for a non-boolean `enabled`, a `strength` outside 0..1 or non-object parts; nothing is changed in that case. |
+| `media.voiceIsolationStatus` | `{}` | `{available, engine, mic:{enabled, strength, vad:f}, incoming:{enabled, strength}}`; `vad` is the latest speech probability (0–1) of the microphone processor, 0 while it is off. For UI meters. |
 
-`core.start` media accepts `voiceIsolation` with the same shape. The default
-is off.
+`core.start` media accepts `voiceIsolation` with the same shape (`INVALID_PARAM` if
+malformed). The default is off, and the setting does not survive `core.stop`.
+
+**Limitations**
+* Incoming isolation shapes the local speaker path only. The recording, a conference or
+  bridge relay to other calls, and the call's own media statistics (`rxLevel`) see the
+  unprocessed audio. This is deliberate: recordings stay faithful, and the other party
+  of a bridged call is not affected by the local user's preference.
+* The mic processor is shared by all calls and recorders, so it is a mono, bridge-rate
+  signal; `wavStereo` recordings and other code that taps the mic must go through
+  `spc_call_mic_source()` to get the isolated mic.
+* RNNoise is trained on speech; music and tones are treated as noise and are
+  suppressed at high strength.
+* Warm-up: the first ~0.5 s after a processor starts reduces noise less (the model state
+  and gain smoothing converge).
+* Test builds (`-DSPC_TEST_HOOKS=ON`) add the hidden method
+  `__denoise.processFile {in, out, strength}` which runs a processor offline on a mono PCM16 WAV
+  (the output is delayed by the processor latency) and returns the CPU cost per 10 ms frame.
 
 ### 9.2 Media files and playback
-`call.playFile` and music on hold accept these formats:
-* WAV: PCM16, µ-law or A-law, mono or stereo, any rate;
-* MP3, decoded with minimp3 (CC0).
+`call.playFile`, music on hold and `media.fileInfo` accept:
+* **WAV** (RIFF/RF64 container): PCM 8/16/24/32 bit, IEEE float32, µ-law, A-law
+  (also `WAVE_FORMAT_EXTENSIBLE` with these sub-formats), 1 to 8 channels, any
+  sample rate from 1 kHz to 384 kHz. A `data` chunk with a wrong or zero size is
+  clamped to the file size.
+* **MP3** (MPEG-1/2/2.5 Layer III, mono or stereo, CBR or VBR, with or without
+  ID3 tags), decoded with minimp3 (CC0, vendored).
+
+Multi-channel audio is down-mixed to mono (average) and resampled to the
+conference-bridge rate with a windowed-sinc resampler (8 zero crossings, 
+anti-aliased when down-sampling). Decoding runs on a helper thread per play; the
+bridge's clock thread only copies decoded samples from memory, so it never
+waits for file I/O. If decoding is momentarily behind playback (huge file, slow
+disk), silence is played until samples are ready. **Limits:** 30 minutes of
+audio and 200 MB (the file for MP3, the decoded PCM16 at the bridge rate for all
+formats); longer files are rejected with `INVALID_PARAM`. At most 16 concurrent
+plays per call.
 
 | method | params | result |
 |---|---|---|
-| `call.playFile` | `{cid, file:s, loop?:b=false, volume?:f=1.0, localMonitor?:b=false, muteMic?:b=false}` | `{playId:i}`. `localMonitor` also plays the file to the local speaker. `muteMic` mutes the mic towards this call while the file plays and restores it afterwards. |
-| `call.stopFile` | `{cid, playId?:i}` | `{}`; with no playId, stops all playback on the call |
-| `media.fileInfo` | `{file:s}` | `{format:"wav\|mp3", durationMs, sampleRate, channels}`, or `INVALID_PARAM` if the file is unreadable or unsupported |
-| `media.recordMicStart` | `{file:s}` | `{file}`. Records only the microphone to WAV, for example a user-recorded announcement. Works with no call (opens the sound device). |
-| `media.recordMicStop` | `{}` | `{file, durationMs}` |
+| `call.playFile` | `{cid, file:s, loop?:b=false, volume?:f=1.0, localMonitor?:b=false, muteMic?:b=false}` | `{playId:i}` |
+| `call.stopFile` | `{cid, playId?:i}` | `{stopped:i}` |
+| `media.fileInfo` | `{file:s}` | `{format:"wav\|mp3", durationMs, sampleRate, channels}`; works before `core.start`; `INVALID_PARAM` if the file is unreadable, unsupported or too long |
+| `media.recordMicStart` | `{file:s}` | `{file}` |
+| `media.recordMicStop` | `{}` | `{file, durationMs, format:"wav", bytes}` |
 
-New event: `call.playDone {cid, playId, file, reason:"eof|stopped|hangup|error"}`.
+**`call.playFile`**
+* `playId` is unique per engine run (positive integer, never reused).
+  Several plays can run on one call at the same time; they are mixed by the
+  bridge. The file is validated when the request is made: an unreadable,
+  unsupported, empty or too long file, or a bad parameter, is `INVALID_PARAM`
+  (no play is created). `volume` is a linear gain, 0 to 4.
+* The audio goes to the call's transmit path (the remote party hears it). It
+  is connected while the call media is active and the call is not on hold;
+  while the call is on hold the play is silent (it keeps running). Files played
+  into a call are not part of `call.recordStart` recordings.
+* `localMonitor: true` also plays the file to the speaker (conference slot 0).
+* `muteMic: true` removes the microphone from the call while this file plays
+  and restores it afterwards. This is an **announcement mute**, separate from
+  the user's `call.mute`: the microphone reaches the call only if neither is
+  set. `CallInfo.announcementMuted` is true while at least one `muteMic` play is
+  running (overlapping plays keep it set until the last one ends). Ending an
+  announcement never unmutes a user who muted, and a user's `call.mute` during
+  the announcement does not end it.
+* When the play ends, the event `call.playDone {cid, playId, file, reason}` is
+  emitted exactly once per play:
+  `eof` (finished, not looping), `stopped` (`call.stopFile`, music stopped by
+  unhold or conference merge), `hangup` (the call ended; emitted before the
+  terminal `call.state`), `error` (the decoder failed mid-file). Music on hold
+  adds `moh: true`; a music file that cannot be started after the hold was
+  acknowledged emits `playDone` with `playId: 0` and `reason: "error"`.
+
+**`call.stopFile`** stops the play `playId`, or every non-music play on the call
+when `playId` is omitted. `stopped` is the number of plays stopped (0 is not an
+error: the play may have ended on its own). Music on hold is only stopped by
+`call.unhold`, hangup or a conference merge, or by `playId` of the music play.
+
+**`media.recordMicStart` / `media.recordMicStop`** record the microphone source
+(the raw microphone, or the voice-isolation output while isolation is active
+and a call exists) to a mono PCM16 WAV at the bridge rate, for example a user
+recorded announcement. They work without a call: the sound device (or the
+null device when `noAudioDevice` is set) is opened if needed. Only one
+microphone recording can run (`ALREADY`). Silence is inserted by wall clock if
+the device delivers no frames, so `durationMs` matches the elapsed time. The
+recording is finalised by `core.stop` too. **Limitation:** with no call in
+progress the raw microphone (slot 0) is recorded even if voice isolation is on.
 
 ### 9.3 Music on hold (client side)
 `call.hold {cid, music?:{file:s, loop?:b=true, volume?:f=1.0}}`.
-* The hold re-INVITE uses `sendonly`, so we still transmit. After the hold
-  is acknowledged, the core connects a looping player to the held call.
-* Music stops on unhold, hangup or conference merge.
-* With no `music`, the call holds normally, and the PBX can play its own
-  hold music.
+* `music` is validated first (`INVALID_PARAM` leaves the call unheld). The hold
+  re-INVITE then goes out as usual (sendonly, or the account's holdType); we
+  keep transmitting. When the re-INVITE has been acknowledged (media state
+  `localHold`, event `call.media`), the engine starts a player on that call; if
+  the hold fails, no music starts. Calling `call.hold` again on a held call
+  with `music` starts the music at once.
+* Music stops on `call.unhold`, hangup (`playDone` with `reason: "hangup"`) or
+  when the call is merged into a conference (`call.conference`). `playDone`
+  carries `moh: true`. A non-looping file ends with `reason: "eof"`; the call
+  stays on hold.
+* With no `music`, the call holds normally and the PBX can play its own
+  hold music. Through a PBX that answers a hold request itself (Asterisk), the
+  far end hears the PBX music, not ours; client-side music is for direct calls
+  and PBXs that relay the held party's audio.
+* A call that the remote party holds (media `remoteHold`) still delivers its
+  audio to the speaker and recorders, so a SoftphonePro peer hears the holder's
+  music. IAX2 calls have no media-state acknowledgement: the music starts as
+  soon as the hold request succeeded.
 
 ### 9.4 Recording formats
 `call.recordStart` adds a format: `{cid, file, mix?, format?:"wav"|"wavStereo"|"opus"}`.
+An unknown format is `INVALID_PARAM`; `opus` is `UNSUPPORTED` in a build without
+libopus. The file is created when the request is made (unwritable path:
+`INVALID_PARAM`). Start and stop emit `call.recording` (it carries `format` on
+start). Hangup and `core.stop` finalise the file.
 
 | format | content |
 |---|---|
-| `wav` (default) | Mono PCM16 at the bridge rate. `mix` applies. |
-| `wavStereo` | Left channel = local microphone, right channel = remote party. `mix` is ignored. |
-| `opus` | Ogg Opus, mono, about 24 kbps, 48 kHz granule, with `mix` semantics. The file extension should be `.ogg` or `.opus`. |
+| `wav` (default) | Mono PCM16 at the bridge rate. `mix` applies. Written by pjsua's WAV recorder. |
+| `wavStereo` | Stereo PCM16 at the bridge rate. Left = local microphone source (what is sent to the call; silent while `call.mute` is on), right = the remote party. `mix` is ignored. |
+| `opus` | Ogg Opus (RFC 7845 / RFC 6716): mono, Opus VOIP application, signal type voice, VBR about 24 kbps, 20 ms packets. Input is resampled to 48 kHz; granule positions are at 48 kHz, so players report the exact duration (the encoder lookahead is in `pre-skip`; the last packet is trimmed by the final granule position). `OpusHead` and `OpusTags` are on their own pages, pages are about 1 s long, the last page has EOS, and every page carries the Ogg CRC32. `mix` applies as for `wav`. The extension should be `.ogg` or `.opus`. |
 
-`call.recordStop` returns `{file, durationMs, format, bytes}`.
+`wavStereo` and `opus` use sink ports in the conference bridge that feed a
+writer thread (the bridge clock thread never touches the file). The writer pads
+a side that receives no frames with silence by wall clock (after 100 ms), so
+the two channels of a stereo file stay frame aligned and the file duration
+matches the recording time.
+
+`call.recordStop` returns `{file, durationMs, format:"wav|wavStereo|opus", bytes}` after the
+file is finalised: `durationMs` is the recorded audio length (from the written
+samples for `wavStereo`, `opus` and the microphone recorder; read from the WAV
+header for `wav`), `bytes` the file size. Playing a file into the call
+(`call.playFile`) is not part of any recording.
 
 ### 9.5 Caller identity (CallInfo additions)
-* **`assertedIdentity`:** `{display, user, uri}` or null. It comes from
-  `P-Asserted-Identity`, or from `Remote-Party-ID` (privacy honoured).
-* **`diversion`:** `[{uri, user, reason, counter}]`, taken from `Diversion`
-  or `History-Info`. Earliest diversion first.
-* **`referredBy`:** the `Referred-By` URI, for calls that result from a
-  transfer.
+Present in `call.incoming`, `call.state` and `call.info`:
+* **`assertedIdentity`:** `{display, user, uri}` or `null`.
+  * `P-Asserted-Identity` (RFC 3325). When there are several values (in one header or in
+    several), a `sip:`/`sips:` value is preferred over `tel:`; otherwise the first. For a
+    `tel:` URI, `user` is the number without parameters.
+  * With no PAI: `Remote-Party-ID` (first value). Its `privacy` parameter is honoured:
+    `full` hides the identity, `name` clears `display`, `uri` clears `uri` and `user`.
+  * `Privacy: id` (RFC 3325) hides a PAI.
+* **`identityWithheld`:** `true` if an identity was present but is hidden by one of the
+  privacy rules above (then `assertedIdentity` is `null`). UIs should show "Anonymous".
+* **`diversion`:** `[{uri, user, reason, counter}]`, earliest diversion first, at most 8.
+  * From `Diversion` headers (RFC 5806). The topmost value is the most recent diversion,
+    so the list is reversed. `reason` is the `reason` parameter (`user-busy`, `no-answer`,
+    `unconditional`, ...), `""` if absent; `counter` is the `counter` parameter (1..999,
+    default 1).
+  * With no `Diversion`: `History-Info` (RFC 7044), ordered by `index` (dotted numeric).
+    Entry *n* diverted to entry *n+1*, so the final entry (the current target) is not
+    listed; `reason` comes from the `cause` of the next entry's embedded `Reason`
+    (302 → `unconditional`, 486/600/603 → `user-busy`, 408/480 → `no-answer`,
+    404/410/503 → `unavailable`, 487 → `deflection`, otherwise the number); `counter`
+    counts earlier entries with the same URI.
+  * If both are present, `Diversion` wins.
+* **`referredBy`:** the URI of the `Referred-By` header of the incoming INVITE (calls that
+  result from a transfer), else `null`. It is separate from the `referredBy` field of the
+  `call.transferRequest` event, which comes from the REFER.
+
+Sources: for incoming calls the identity is parsed once from the INVITE. For outgoing
+calls, only `assertedIdentity` is taken, from 18x (180 and above) and 2xx responses; the
+latest response that carries one wins, and a later response without PAI keeps the value.
+Re-INVITE and UPDATE requests are not examined.
+
+Hostile-input handling: at most 64 headers are scanned, 1 KB of each header value and 24
+values per header kind are examined, fields are truncated (display 95, user 95, uri 199,
+reason 39 bytes) and control characters are stripped. Quoted strings and angle brackets
+are respected when splitting comma-separated values. Malformed values are skipped.
+The raw headers are also still in `headers` of `call.incoming`.
 
 ### 9.6 Accounts: TLS client certificates and automatic transport
 AccountConfig additions:
 
 | field | meaning |
 |---|---|
-| `tlsClientCert: {certFile:s, keyFile:s, password?:s}` | Mutual TLS. The account gets a dedicated TLS transport that presents this certificate. Also used for wss. |
-| `transport: "auto"` | The core picks the transport from DNS. It tries the SRV records `_sips._tcp` (tls), then `_sip._tcp` (tcp), then `_sip._udp` (udp), in order of preference, and falls back to udp/5060. The result appears in `AccountInfo.transport` and `AccountInfo.resolvedServer`. |
+| `tlsClientCert: {certFile:s, keyFile:s, password?:s}` | Mutual TLS: the account presents this PEM certificate (chain) and key. `password` decrypts an encrypted key. `null` removes it on `account.modify`. |
+| `transport: "auto"` | The core picks the transport from DNS SRV records (below). |
+
+#### tlsClientCert
+* **Where it applies:** accounts with `transport` `tls`, `wss` or `auto`
+  (for `auto` it is used when TLS is chosen). With `udp`, `tcp` or `ws` the
+  request fails (`INVALID_PARAM`: "tlsClientCert needs transport tls, wss or auto").
+* **tls:** the account gets a dedicated TLS transport. It binds to `localPort`
+  if set, else to a random port. It uses its own certificate, and the same
+  CA, protocol minimum, `verifyServer` and `core.setTlsPins` policy as the
+  global TLS transport. The account is bound to it, like the transport of an
+  account with `localPort`. The transport is closed when the account is
+  removed, or modified so that it no longer needs it. It is re-created when the
+  certificate files, their modification times, the password or `localPort` change.
+* **wss:** the certificate is presented on each WebSocket TLS connection to
+  the account's server (`host:port`). It is held per server route, not per account. If
+  two wss accounts use the same server `host:port` with different
+  certificates, the last one added or modified wins.
+* **Validation at `account.add` / `account.modify`:** both files must be
+  readable and be PEM. The key must decrypt with `password`; the engine never prompts on a terminal. The key must match
+  the certificate. Otherwise the request fails with `INVALID_PARAM` and a
+  specific message ("… is not readable", "… is not a valid PEM certificate",
+  "… cannot be decrypted (missing or wrong password)", "… does not match
+  certFile …"). A failed `account.modify` leaves the account unchanged.
+  Later file problems (for example an expired certificate) show up as a
+  registration failure.
+* **Server refuses the connection:** a server that requires a client
+  certificate and gets none (or a rejected one) ends the TLS handshake. The
+  account goes to `regState:"failed"` with `lastError` "TLS client
+  certificate required by the server (set tlsClientCert): …" or "Server
+  rejected the TLS client certificate: …".
+* The certificate is not read for the global `transports.tls.certFile`;
+  that one still serves the TLS listener and wss accounts without their own.
+
+#### transport: "auto"
+The core chooses `tls`, `tcp` or `udp` for the account, then configures it as if the
+app had set that transport. Registration starts after the choice.
+
+1. **Lookup name:** the `registrar` host if set, otherwise the `domain`.
+2. **No DNS lookup is done** (the choice is made at once, synchronously) when:
+   * the registrar has a `transport=` parameter (`udp|tcp|tls`) or a `sips:`
+     scheme (that transport / `tls` is used);
+   * the host is an IP literal or has an explicit port (RFC 3263 skips SRV);
+     transport is `udp`;
+   * no DNS resolver is configured (`nameservers: []`): `udp`, port 5060,
+     with a log note.
+3. **Otherwise** the core queries `_sips._tcp`, `_sip._tcp` and `_sip._udp`
+   under the name, in parallel, using the PJSIP resolver (`nameservers`).
+   * The most preferred transport that has at least one SRV record wins:
+     `tls`, then `tcp`, then `udp`.
+   * `resolvedServer` is the SRV record of the winning transport with
+     the lowest priority number (highest weight breaks ties) as
+     `target:port`.
+   * With no SRV record at all: `udp`, `<name>:5060`, with a log note.
+   * The lookup is bounded: a transport whose query has not answered after 4 s is
+     treated as having no records.
+4. **The actual connection** is made by PJSIP's own SRV handling once the transport
+   is fixed (`;transport=` on the registrar URI, and on outgoing calls): it follows SRV priority and weight
+   among all targets and falls back to the next target.
+   `resolvedServer` only reports the primary one.
+5. **Never blocks the worker.** `account.add` returns at once. The lookup runs on the
+   resolver; the result is applied on a timer thread through an internal
+   account modify. Until then `regState` is `registering` (or `none` with
+   `register:false`), `transport` is `"auto"`, `resolvedServer` is `null`, and no
+   REGISTER is sent. With `register:false` the account is configured but not
+   registered; `account.register` registers it later.
+6. **Events:** every change is reported as `account.reg` (`transport`,
+   `resolvedServer`). `transport.state` shows the real connection.
+7. **Re-resolution:** on `core.handleIpChange` (after the nameservers are
+   refreshed), and on `account.modify`. The previous result stays visible while
+   the new lookup runs. If the result is unchanged nothing else happens. If it
+   changed, the account is reconfigured and re-registers. `account.remove` cancels a pending lookup.
+8. **tlsClientCert** applies when `tls` is chosen.
+9. **Limitations:** the resolver caches answers for their TTL and
+   negative answers for 60 s (PJSIP default), so a changed DNS zone may
+   take that long to be seen by a re-resolution. `ws`/`wss` are never
+   chosen automatically. `account.modify` of any field re-runs the lookup.
+
+#### sips: targets
+See §4. `sips:` works for TLS accounts: the INVITE goes over TLS and
+`secureSignaling` is `true`. On other accounts it is rejected with a clear
+error. Tests: `native/tests/test_n3.py` (`TestSips`).
+
+#### Tests and test PBX
+* The Asterisk test PBX has a second TLS listener, port **5062**, that
+  requires a client certificate signed by the test CA
+  (`tests/sipserver/certs/client.crt`, `client.key`, and `client-enc.key`,
+  the same key encrypted with password `secret`). See `tests/sipserver/README.md`.
+* `native/tests/dns_stub.py` is a stdlib UDP DNS responder (A, SRV) used by the
+  `auto` tests. Start the core with `nameservers:["127.0.0.1:<port>"]`.
+

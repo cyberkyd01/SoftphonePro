@@ -65,7 +65,9 @@ jobs:
       - name: Build native dependencies
         if: steps.deps-cache.outputs.cache-hit != 'true'
         run: native/scripts/build_deps_linux.sh --no-docker
-      - name: Build spcore + spcore_cli
+      - name: Build spcore + spcore_cli (test build with test hooks)
+        env:
+          SPC_TEST_HOOKS: "ON"      # needed by native/tests/test_voice_isolation.py; shipped app builds keep it OFF
         run: native/scripts/build_spcore.sh linux
       - name: Start test PBX (Asterisk)
         run: tests/sipserver/scripts/up.sh

@@ -2,6 +2,9 @@
 #include "spc_internal.h"
 #include <pjsua-lib/pjsua_internal.h>
 #include "spc_ws_transport.h"
+#include "spc_denoise.h"
+#include "spc_player.h"
+#include "spc_rec.h"
 #include <math.h>
 #include <ctype.h>
 
@@ -138,7 +141,7 @@ static spc_call* call_create(int slot, const pjsua_call_info* ci, int* created, 
     else spc_strlcpy(c->dtmf_method, "rfc2833", sizeof(c->dtmf_method));
     c->role = ci->role == PJSIP_ROLE_UAC ? 0 : 1;
     spc_pjcopy(c->call_id, sizeof(c->call_id), &ci->call_id);
-    c->rec_id = -1; c->player_id = -1; c->tg_slot = -1;
+    c->rec_id = -1; c->player_id = -1; c->tg_slot = -1; c->dn_in_slot = -1;
     c->created_ms = spc_mono_ms();
     spc_strlcpy(c->last_media, "none", sizeof(c->last_media));
     if (parent && spc_call_find_locked(parent)) c->parent_cid = parent;
@@ -173,6 +176,301 @@ uint64_t spc_call_ensure_slot(int slot)
     c = call_create(slot, &ci, &created, 0);
     (void)c;
     return slot_snapshot(slot, NULL);
+}
+
+/* ------------------------------------------------------------------ */
+/* caller identity: P-Asserted-Identity, Remote-Party-ID, Diversion,   */
+/* History-Info, Referred-By (docs/ENGINE_API.md 9.5)                  */
+/* ------------------------------------------------------------------ */
+#define ID_MAX_HDRS 64          /* header scan bound */
+#define ID_MAX_VALUE 1024       /* bytes of one header value that are looked at */
+#define ID_MAX_ENTRIES 24       /* values examined per header kind */
+
+/* Next comma separated element of a header value, honouring "quotes" and <angle brackets>. 0 at the end. */
+static int id_next_value(const char** pp, char* out, size_t n)
+{
+    const char* p = *pp;
+    size_t l = 0;
+    int q = 0, ang = 0;
+    while (*p == ' ' || *p == ',' || *p == '\t') p++;
+    if (!*p) { *pp = p; return 0; }
+    while (*p) {
+        if (*p == '\\' && q && p[1]) { if (l + 2 < n) { out[l++] = p[0]; out[l++] = p[1]; } p += 2; continue; }
+        if (*p == '"') q = !q;
+        else if (!q && *p == '<') ang = 1;
+        else if (!q && *p == '>') ang = 0;
+        else if (!q && !ang && *p == ',') break;
+        if (l + 1 < n) out[l++] = *p;
+        p++;
+    }
+    out[l] = 0;
+    *pp = p;
+    return 1;
+}
+
+/* parameter after the address ("name=value" or bare flag); value copied without quotes. Returns 1 if present. */
+static int id_param(const char* v, const char* name, char* out, size_t n)
+{
+    const char* p = strchr(v, '>');
+    size_t nl = strlen(name);
+    int q = 0;
+    if (out && n) out[0] = 0;
+    if (!p) { p = strchr(v, ';'); if (!p) return 0; } else p++;
+    for (; *p; p++) {
+        if (*p == '"') { q = !q; continue; }
+        if (q || *p != ';') continue;
+        {
+            const char* s = p + 1;
+            while (*s == ' ') s++;
+            if (spc_strnieq(s, name, nl) && (s[nl] == '=' || s[nl] == ';' || s[nl] == ',' || s[nl] == ' ' || s[nl] == 0)) {
+                s += nl;
+                while (*s == ' ') s++;
+                if (*s == '=') {
+                    size_t l = 0;
+                    s++;
+                    while (*s == ' ') s++;
+                    if (*s == '"') s++;
+                    while (*s && *s != '"' && *s != ';' && *s != ',' && *s != ' ' && l + 1 < n) out[l++] = *s++;
+                    if (out && n) out[l] = 0;
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Collects the (truncated) values of all headers called `name` (or compact `alt`), in message order. Returns count. */
+static int id_headers(const pjsip_msg* msg, const char* name, const char* alt, char vals[][ID_MAX_VALUE], int maxv)
+{
+    const pjsip_hdr* h;
+    int n = 0, scanned = 0;
+    for (h = msg->hdr.next; h != &msg->hdr && n < maxv && scanned < ID_MAX_HDRS; h = h->next, scanned++) {
+        char hn[32];
+        if (h->type != PJSIP_H_OTHER) continue;
+        if (h->name.slen <= 0 || h->name.slen >= (pj_ssize_t)sizeof(hn)) continue;
+        spc_pjcopy(hn, sizeof(hn), &h->name);
+        if (!spc_strieq(hn, name) && !(alt && spc_strieq(hn, alt))) continue;
+        spc_pjcopy(vals[n++], ID_MAX_VALUE, &((const pjsip_generic_string_hdr*)h)->hvalue);
+    }
+    return n;
+}
+
+static int id_is_sip(const char* uri) { return spc_strnieq(uri, "sip:", 4) || spc_strnieq(uri, "sips:", 5); }
+
+static void id_clean(char* s)       /* strip control characters (values end up in JSON / UI) */
+{
+    char* d = s;
+    for (; *s; s++) if ((unsigned char)*s >= 0x20 && *s != 0x7f) *d++ = *s;
+    *d = 0;
+}
+
+static const char* id_reason_from_cause(int cause, char* buf, size_t n)
+{
+    switch (cause) {
+    case 301: case 302: return "unconditional";
+    case 486: case 600: case 603: return "user-busy";
+    case 408: case 480: return "no-answer";
+    case 404: case 410: case 503: return "unavailable";
+    case 487: return "deflection";
+    default: snprintf(buf, n, "%d", cause); return buf;
+    }
+}
+
+/* History-Info index "1.2.3" -> comparable key (dotted numeric compare) */
+static int id_index_cmp(const char* a, const char* b)
+{
+    while (*a || *b) {
+        long x = strtol(a, (char**)&a, 10), y = strtol(b, (char**)&b, 10);
+        if (x != y) return x < y ? -1 : 1;
+        if (*a == '.') a++;
+        if (*b == '.') b++;
+        if (!*a && !*b) break;
+        if (!*a) return -1;
+        if (!*b) return 1;
+    }
+    return 0;
+}
+
+typedef struct { char idx[32]; spc_div d; char cause[16]; } id_he;
+
+static void id_fill_div_uri(spc_div* d, const char* v)
+{
+    char disp[8], uri[200], user[96];
+    spc_parse_nameaddr(v, disp, sizeof(disp), uri, sizeof(uri), user, sizeof(user));
+    {   char* q = strchr(uri, '?'); if (q) *q = 0; }          /* History-Info URIs carry ?Reason=... headers */
+    spc_strlcpy(d->uri, uri, sizeof(d->uri));
+    spc_strlcpy(d->user, user, sizeof(d->user));
+    id_clean(d->uri); id_clean(d->user);
+}
+
+/* Parses the identity headers of a SIP message. Requests: everything. Responses (18x/2xx of an outgoing call):
+ * only the asserted identity. Never writes outside *out; bounded in headers, header length and entries. */
+static void id_parse(const pjsip_msg* msg, int is_request, spc_ident* out)
+{
+    static char vals[ID_MAX_ENTRIES][ID_MAX_VALUE];      /* guarded: only called with g_id_mtx held */
+    int n, i, k;
+    char tmp[ID_MAX_VALUE], disp[96], user[96], uri[200], privbuf[128];
+    memset(out, 0, sizeof(*out));
+    if (!msg) return;
+    /* --- asserted identity --- */
+    privbuf[0] = 0;
+    {
+        char pv[4][ID_MAX_VALUE];
+        int np = id_headers(msg, "Privacy", NULL, pv, 4), j;
+        for (j = 0; j < np; j++) { size_t l = strlen(privbuf); if (l + strlen(pv[j]) + 2 < sizeof(privbuf)) snprintf(privbuf + l, sizeof(privbuf) - l, "%s;", pv[j]); }
+    }
+    n = id_headers(msg, "P-Asserted-Identity", NULL, vals, 4);
+    {
+        int best = -1, bestk = -1;         /* prefer a sip(s): value, else the first tel: value */
+        const char* p;
+        char val[ID_MAX_VALUE];
+        for (i = 0; i < n; i++) {
+            p = vals[i];
+            for (k = 0; k < 4 && id_next_value(&p, val, sizeof(val)); k++) {
+                spc_parse_nameaddr(val, disp, sizeof(disp), uri, sizeof(uri), user, sizeof(user));
+                if (!uri[0]) continue;
+                if (id_is_sip(uri)) { best = i; bestk = k; goto found_pai; }
+                if (best < 0) { best = i; bestk = k; }
+            }
+        }
+found_pai:
+        if (best >= 0) {
+            p = vals[best];
+            for (k = 0; k <= bestk && id_next_value(&p, val, sizeof(val)); k++) {}
+            spc_parse_nameaddr(val, out->disp, sizeof(out->disp), out->uri, sizeof(out->uri), out->user, sizeof(out->user));
+            out->pai_set = 1;
+        }
+    }
+    if (!out->pai_set) {
+        n = id_headers(msg, "Remote-Party-ID", NULL, vals, 2);
+        if (n > 0) {
+            const char* p = vals[0];
+            if (id_next_value(&p, tmp, sizeof(tmp))) {
+                char pr[24];
+                spc_parse_nameaddr(tmp, out->disp, sizeof(out->disp), out->uri, sizeof(out->uri), out->user, sizeof(out->user));
+                if (out->uri[0]) out->pai_set = 1;
+                if (id_param(tmp, "privacy", pr, sizeof(pr))) {
+                    if (spc_strieq(pr, "full")) out->withheld = 1;
+                    else if (spc_strieq(pr, "name")) out->disp[0] = 0;
+                    else if (spc_strieq(pr, "uri")) { out->uri[0] = 0; out->user[0] = 0; }
+                }
+            }
+        }
+    } else {
+        /* RFC 3325: "Privacy: id" asks the UA not to reveal the asserted identity */
+        if (strstr(privbuf, "id") != NULL) {
+            const char* s = privbuf;
+            while ((s = strstr(s, "id")) != NULL) {
+                int pre_ok = (s == privbuf || s[-1] == ';' || s[-1] == ',' || s[-1] == ' ');
+                int post_ok = (s[2] == 0 || s[2] == ';' || s[2] == ',' || s[2] == ' ');
+                if (pre_ok && post_ok) { out->withheld = 1; break; }
+                s += 2;
+            }
+        }
+    }
+    if (out->withheld) { out->disp[0] = out->uri[0] = out->user[0] = 0; out->pai_set = 0; }
+    id_clean(out->disp); id_clean(out->uri); id_clean(out->user);
+    if (!is_request) return;
+    /* --- Referred-By --- */
+    n = id_headers(msg, "Referred-By", "b", vals, 1);
+    if (n > 0) {
+        const char* p = vals[0];
+        if (id_next_value(&p, tmp, sizeof(tmp))) {
+            spc_parse_nameaddr(tmp, disp, sizeof(disp), uri, sizeof(uri), user, sizeof(user));
+            spc_strlcpy(out->ref_by, uri, sizeof(out->ref_by));
+            id_clean(out->ref_by);
+        }
+    }
+    /* --- Diversion: the topmost header is the most recent diversion; reported earliest first --- */
+    n = id_headers(msg, "Diversion", NULL, vals, ID_MAX_ENTRIES);
+    if (n > 0) {
+        spc_div all[ID_MAX_ENTRIES];
+        int na = 0;
+        for (i = 0; i < n; i++) {
+            const char* p = vals[i];
+            char val[ID_MAX_VALUE];
+            for (k = 0; k < 8 && na < ID_MAX_ENTRIES && id_next_value(&p, val, sizeof(val)); k++) {
+                char c[16];
+                spc_div* d = &all[na];
+                memset(d, 0, sizeof(*d));
+                id_fill_div_uri(d, val);
+                if (!d->uri[0]) continue;
+                if (id_param(val, "reason", d->reason, sizeof(d->reason))) id_clean(d->reason);
+                d->counter = 1;
+                if (id_param(val, "counter", c, sizeof(c))) { int v = atoi(c); d->counter = v < 1 ? 1 : (v > 999 ? 999 : v); }
+                na++;
+            }
+        }
+        /* header order is most recent first (each diverting proxy adds its header on top): reverse */
+        for (i = na - 1; i >= 0 && out->ndiv < SPC_MAX_DIV; i--) out->div[out->ndiv++] = all[i];
+    } else {
+        /* History-Info (RFC 7044): entry i-1 diverted to entry i; the reason is the Reason of entry i */
+        id_he he[ID_MAX_ENTRIES];
+        int nh = 0;
+        n = id_headers(msg, "History-Info", NULL, vals, ID_MAX_ENTRIES);
+        for (i = 0; i < n; i++) {
+            const char* p = vals[i];
+            char val[ID_MAX_VALUE];
+            for (k = 0; k < 8 && nh < ID_MAX_ENTRIES && id_next_value(&p, val, sizeof(val)); k++) {
+                char* r;
+                memset(&he[nh], 0, sizeof(he[nh]));
+                id_fill_div_uri(&he[nh].d, val);
+                if (!he[nh].d.uri[0]) continue;
+                if (!id_param(val, "index", he[nh].idx, sizeof(he[nh].idx))) he[nh].idx[0] = 0;
+                /* embedded Reason: sip:u@h?Reason=SIP%3Bcause%3D486 */
+                r = strstr(val, "cause%3D");
+                if (!r) r = strstr(val, "cause%3d");
+                if (!r) r = strstr(val, "cause=");
+                if (r) { r += (r[5] == '=') ? 6 : 8; { int l = 0; while (isdigit((unsigned char)r[l]) && l < 4) { he[nh].cause[l] = r[l]; l++; } he[nh].cause[l] = 0; } }
+                nh++;
+            }
+        }
+        /* sort by index (insertion sort; entries without index keep arrival order after the indexed ones) */
+        for (i = 1; i < nh; i++) {
+            int j = i;
+            while (j > 0 && he[j - 1].idx[0] && he[j].idx[0] && id_index_cmp(he[j - 1].idx, he[j].idx) > 0) {
+                id_he t = he[j]; he[j] = he[j - 1]; he[j - 1] = t; j--;
+            }
+        }
+        for (i = 0; i + 1 < nh && out->ndiv < SPC_MAX_DIV; i++) {
+            spc_div* d = &out->div[out->ndiv];
+            int c = 1, j;
+            *d = he[i].d;
+            if (he[i + 1].cause[0]) { char rb[16]; spc_strlcpy(d->reason, id_reason_from_cause(atoi(he[i + 1].cause), rb, sizeof(rb)), sizeof(d->reason)); }
+            for (j = 0; j < i; j++) if (strcmp(he[j].d.uri, d->uri) == 0) c++;
+            d->counter = c;
+            out->ndiv++;
+        }
+    }
+}
+
+static spc_mutex_t g_id_mtx;
+static volatile long g_id_once;
+static void id_mtx_init(void) { spc_mutex_init(&g_id_mtx); }
+
+/* Parses and stores the identity of a message into the call. `is_request`: INVITE of an incoming call. */
+static void id_store(uint64_t cid, const pjsip_msg* msg, int is_request)
+{
+    spc_call* c;
+    spc_ident* id = (spc_ident*)malloc(sizeof(*id));
+    if (!id) return;
+    spc_once(&g_id_once, id_mtx_init);
+    spc_mutex_lock(&g_id_mtx);
+    id_parse(msg, is_request, id);
+    spc_mutex_unlock(&g_id_mtx);
+    spc_registry_lock();
+    c = spc_call_find_locked(cid);
+    if (!c) { /* call gone */ }
+    else if (is_request) c->ident = *id;
+    else if (id->pai_set || id->withheld) {
+        c->ident.pai_set = id->pai_set; c->ident.withheld = id->withheld;
+        memcpy(c->ident.disp, id->disp, sizeof(id->disp));
+        memcpy(c->ident.user, id->user, sizeof(id->user));
+        memcpy(c->ident.uri, id->uri, sizeof(id->uri));
+    }
+    spc_registry_unlock();
+    free(id);
 }
 
 /* ------------------------------------------------------------------ */
@@ -286,6 +584,7 @@ static cJSON* info_locked(spc_call* c, const pjsua_call_info* ci)
     cJSON_AddBoolToObject(o, "srtp", c->last_srtp);
     cJSON_AddBoolToObject(o, "secureSignaling", c->last_secsig);
     cJSON_AddBoolToObject(o, "muted", c->muted);
+    cJSON_AddBoolToObject(o, "announcementMuted", c->ann_mute);
     cJSON_AddBoolToObject(o, "recording", c->recording);
     cJSON_AddBoolToObject(o, "detached", c->detached);
     cJSON_AddBoolToObject(o, "held", c->held);
@@ -298,6 +597,26 @@ static cJSON* info_locked(spc_call* c, const pjsua_call_info* ci)
     cJSON_AddNumberToObject(o, "connectMs", (double)(ci->connect_duration.sec * 1000 + ci->connect_duration.msec));
     cJSON_AddNumberToObject(o, "totalMs", (double)(ci->total_duration.sec * 1000 + ci->total_duration.msec));
     if (c->parent_cid) cJSON_AddNumberToObject(o, "transferFrom", (double)c->parent_cid);
+    if (c->ident.pai_set) {
+        cJSON* ai = cJSON_AddObjectToObject(o, "assertedIdentity");
+        cJSON_AddStringToObject(ai, "display", c->ident.disp);
+        cJSON_AddStringToObject(ai, "user", c->ident.user);
+        cJSON_AddStringToObject(ai, "uri", c->ident.uri);
+    } else cJSON_AddNullToObject(o, "assertedIdentity");
+    cJSON_AddBoolToObject(o, "identityWithheld", c->ident.withheld);
+    {
+        cJSON* da = cJSON_AddArrayToObject(o, "diversion");
+        for (i = 0; i < c->ident.ndiv; i++) {
+            cJSON* d = cJSON_CreateObject();
+            cJSON_AddStringToObject(d, "uri", c->ident.div[i].uri);
+            cJSON_AddStringToObject(d, "user", c->ident.div[i].user);
+            cJSON_AddStringToObject(d, "reason", c->ident.div[i].reason);
+            cJSON_AddNumberToObject(d, "counter", c->ident.div[i].counter);
+            cJSON_AddItemToArray(da, d);
+        }
+    }
+    if (c->ident.ref_by[0]) cJSON_AddStringToObject(o, "referredBy", c->ident.ref_by);
+    else cJSON_AddNullToObject(o, "referredBy");
     return o;
 }
 
@@ -435,6 +754,8 @@ typedef struct {
     int nconf, nbr;
     uint64_t conf[SPC_MAX_PEERS], bridged[SPC_MAX_PEERS];
     int rec_id, rec_mix, player_id, tg_slot;
+    int rec2_id, ann_mute, lhold;     /* lhold: locally held with a valid conf slot (music on hold plays then) */
+    int dn_slot; void* dn_h;          /* incoming voice-isolation processor of this call */
 } topo_ent;
 
 static int ent_find(topo_ent* e, int n, uint64_t cid)
@@ -454,6 +775,55 @@ static void conn(int src, int dst, int want)
     } else pjsua_conf_disconnect(src, dst);
 }
 
+/* The "mic source" of every mic -> call/recorder connection: slot 0, or the voice-isolation processor (msrc >= 0)
+ * which is fed from slot 0. dnm is the processor slot if it exists (so a stale path can be removed after a live
+ * toggle). The new path is connected before the old one is removed, so audio never drops. */
+static void conn_mic(int dst, int want, int msrc, int dnm)
+{
+    if (want) {
+        if (msrc >= 0) { conn(msrc, dst, 1); conn(0, dst, 0); }
+        else { conn(0, dst, 1); if (dnm >= 0) conn(dnm, dst, 0); }
+    } else {
+        conn(0, dst, 0);
+        if (dnm >= 0) conn(dnm, dst, 0);
+    }
+}
+
+int spc_call_mic_source(void)
+{
+    int s = spc_denoise_mic_wanted() ? spc_denoise_mic_slot_peek() : -1;
+    return s >= 0 ? s : 0;
+}
+
+/* Incoming isolation: the call's slot feeds a per-call processor which feeds the speaker (slot 0). */
+static void ensure_in_processor(topo_ent* t)
+{
+    int sl = -1;
+    void* h;
+    spc_call* c;
+    if (t->dn_slot >= 0) return;
+    h = spc_denoise_in_create(&sl);
+    if (!h) return;
+    spc_registry_lock();
+    c = spc_call_find_locked(t->cid);
+    if (c && !c->dn_closed && c->dn_in_slot < 0) { c->dn_in = h; c->dn_in_slot = sl; t->dn_h = h; t->dn_slot = sl; h = NULL; }
+    else if (c && !c->dn_closed) { t->dn_h = c->dn_in; t->dn_slot = c->dn_in_slot; }
+    spc_registry_unlock();
+    if (h) spc_denoise_in_destroy(h, sl);
+}
+
+static void conn_speaker(topo_ent* t, int want, int in_want)
+{
+    if (want && in_want && t->dn_slot >= 0) {
+        conn(t->cslot, t->dn_slot, 1);
+        conn(t->dn_slot, 0, 1);
+        conn(t->cslot, 0, 0);
+    } else {
+        conn(t->cslot, 0, want);
+        if (t->dn_slot >= 0) { conn(t->cslot, t->dn_slot, 0); conn(t->dn_slot, 0, 0); }
+    }
+}
+
 void spc_call_apply_topology(void)
 {
     topo_ent e[PJSUA_MAX_CALLS];
@@ -466,11 +836,13 @@ void spc_call_apply_topology(void)
         t->nconf = c->nconf; memcpy(t->conf, c->conf, sizeof(t->conf));
         t->nbr = c->nbr; memcpy(t->bridged, c->bridged, sizeof(t->bridged));
         t->rec_id = c->rec_id; t->rec_mix = c->rec_mix; t->player_id = c->player_id; t->tg_slot = c->tg_slot;
+        t->rec2_id = c->rec2_id; t->ann_mute = c->ann_mute;
+        t->dn_slot = c->dn_in_slot; t->dn_h = c->dn_in;
     }
     spc_registry_unlock();
     for (i = 0; i < n; i++) {
         pjsua_call_info ci;
-        e[i].cslot = -1; e[i].active = 0;
+        e[i].cslot = -1; e[i].active = 0; e[i].lhold = 0;
         if (e[i].slot >= SPC_ID_IAX_BASE) {
             int act = 0, cs = -1;
             if (spc_iax2_call_conf(e[i].cid, &cs, &act) == 0) { e[i].cslot = cs; e[i].active = (act && cs >= 0); }
@@ -478,26 +850,32 @@ void spc_call_apply_topology(void)
         }
         if (pjsua_call_get_info(e[i].slot, &ci) != PJ_SUCCESS) continue;
         e[i].cslot = ci.conf_slot;
-        e[i].active = (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE && ci.conf_slot >= 0);
+        /* a call the remote party holds still delivers audio (e.g. the holder's music on hold), so it counts as active */
+        e[i].active = ((ci.media_status == PJSUA_CALL_MEDIA_ACTIVE || ci.media_status == PJSUA_CALL_MEDIA_REMOTE_HOLD) && ci.conf_slot >= 0);
+        e[i].lhold = (ci.media_status == PJSUA_CALL_MEDIA_LOCAL_HOLD && ci.conf_slot >= 0);
     }
-    for (i = 0; i < n; i++) {
+    {
+        int in_want = spc_denoise_in_wanted();
+        int msrc = (n > 0 && spc_denoise_mic_wanted()) ? spc_denoise_mic_slot() : -1;
+        int dnm = spc_denoise_mic_slot_peek();
+        if (dnm >= 0) conn(0, dnm, msrc >= 0);       /* processor input: only while it is the active mic source */
+        for (i = 0; i < n; i++) {
         topo_ent* t = &e[i];
         int local_ok;
         if (t->cslot < 0) continue;
         local_ok = t->active && !t->detached && !t->held;
-        conn(0, t->cslot, local_ok && !t->muted);
-        conn(t->cslot, 0, local_ok);
+        if (in_want && local_ok) ensure_in_processor(t);
+        conn_mic(t->cslot, local_ok && !t->muted && !t->ann_mute, msrc, dnm);
+        conn_speaker(t, local_ok, in_want);
         if (t->rec_id >= 0) {
             int rp = pjsua_recorder_get_conf_port(t->rec_id);
             if (rp >= 0) {
                 conn(t->cslot, rp, t->active && (t->rec_mix == 0 || t->rec_mix == 1));
-                conn(0, rp, (t->rec_mix == 0 || t->rec_mix == 2) && !t->muted && !t->detached);
+                conn_mic(rp, (t->rec_mix == 0 || t->rec_mix == 2) && !t->muted && !t->detached, msrc, dnm);
             }
         }
-        if (t->player_id >= 0) {
-            int pp = pjsua_player_get_conf_port(t->player_id);
-            if (pp >= 0) conn(pp, t->cslot, t->active && !t->held);
-        }
+        spc_rec_apply_call(t->rec2_id, t->cslot, t->active, t->muted, t->detached, msrc, dnm);
+        spc_player_apply_call(t->cid, t->cslot, t->active, t->lhold, t->held);     /* media files + music on hold (spc_player.c) */
         if (t->tg_slot >= 0) conn(t->tg_slot, t->cslot, t->active);
         for (k = 0; k < t->nconf + t->nbr; k++) {
             uint64_t peer = k < t->nconf ? t->conf[k] : t->bridged[k - t->nconf];
@@ -505,6 +883,8 @@ void spc_call_apply_topology(void)
             if (j < 0 || e[j].cslot < 0) continue;
             conn(t->cslot, e[j].cslot, t->active && e[j].active && !t->held && !e[j].held);
         }
+        }
+        spc_rec_apply_global(msrc, dnm);        /* microphone recorder (media.recordMicStart), independent of calls */
     }
 }
 
@@ -515,7 +895,8 @@ void spc_call_apply_media_all(void) { spc_call_apply_topology(); }
 /* ------------------------------------------------------------------ */
 void spc_call_cleanup_media(spc_call* c)
 {
-    int rec = -1, pl = -1, tgs = -1, was_rec = 0;
+    int rec = -1, pl = -1, tgs = -1, was_rec = 0, dns = -1, rec2 = 0;
+    void* dnh = NULL;
     pjmedia_port* tg = NULL;
     pj_pool_t* tgp = NULL;
     char file[600];
@@ -526,9 +907,13 @@ void spc_call_cleanup_media(spc_call* c)
     tgs = c->tg_slot; c->tg_slot = -1;
     tg = c->tg_port; c->tg_port = NULL;
     tgp = c->tg_pool; c->tg_pool = NULL;
+    dnh = c->dn_in; dns = c->dn_in_slot; c->dn_in = NULL; c->dn_in_slot = -1; c->dn_closed = 1;
     spc_strlcpy(file, c->rec_file, sizeof(file));
+    rec2 = c->rec2_id; c->rec2_id = 0;
     spc_registry_unlock();
+    spc_player_stop_call(c->cid, "hangup");        /* playDone(hangup) for every file + pending music on hold */
     if (rec >= 0) pjsua_recorder_destroy(rec);
+    if (rec2 > 0) spc_rec_stop(rec2, NULL);
     if (was_rec) {
         cJSON* f = cJSON_CreateObject();
         cJSON_AddNumberToObject(f, "cid", (double)c->cid);
@@ -537,13 +922,13 @@ void spc_call_cleanup_media(spc_call* c)
         spc_call_emit(c->cid, "call.recording", f);
     }
     if (pl >= 0) pjsua_player_destroy(pl);
+    if (dnh) spc_denoise_in_destroy(dnh, dns);
     if (tgs >= 0) pjsua_conf_remove_port(tgs);
     if (tg) {
         spc_mutex_lock(&G.tg_mtx);          /* serialises with inband DTMF playing on the same port */
-        pjmedia_port_destroy(tg);
+        spc_port_destroy_release(tg, tgp);     /* the pool is freed when the bridge drops its last reference */
         spc_mutex_unlock(&G.tg_mtx);
-    }
-    if (tgp) pj_pool_release(tgp);
+    } else if (tgp) pj_pool_release(tgp);
 }
 
 /* ------------------------------------------------------------------ */
@@ -555,6 +940,7 @@ static void emit_incoming(spc_call* c, const pjsua_call_info* ci, pjsip_rx_data*
     cJSON* hdr = rdata ? spc_headers_from_rdata(rdata) : cJSON_CreateObject();
     cJSON* hint = autoanswer_hint(hdr);
     uint64_t repl = 0;
+    if (rdata && rdata->msg_info.msg) id_store(c->cid, rdata->msg_info.msg, 1);
     spc_registry_lock();
     c->incoming_emitted = 1;
     if (rdata && rdata->msg_info.msg) {
@@ -601,11 +987,16 @@ static void cb_call_state(pjsua_call_id call_id, pjsip_event* e)
     int created;
     int terminal;
     cJSON* o;
-    (void)e;
     if (pjsua_call_get_info(call_id, &ci) != PJ_SUCCESS) return;
     c = call_create(call_id, &ci, &created, 0);
     if (!c) return;
     if (created && c->role == 1 && !c->incoming_emitted) emit_incoming(c, &ci, NULL);
+    if (c->role == 0 && e && e->type == PJSIP_EVENT_TSX_STATE && e->body.tsx_state.type == PJSIP_EVENT_RX_MSG) {
+        pjsip_rx_data* rd = e->body.tsx_state.src.rdata;     /* identity of the answering party in 18x/2xx */
+        if (rd && rd->msg_info.msg && rd->msg_info.msg->type == PJSIP_RESPONSE_MSG &&
+            rd->msg_info.msg->line.status.code >= 180 && rd->msg_info.msg->line.status.code < 300)
+            id_store(c->cid, rd->msg_info.msg, 0);
+    }
     terminal = (ci.state == PJSIP_INV_STATE_DISCONNECTED);
     if (!created || ci.state != PJSIP_INV_STATE_NULL) {
         int need;
@@ -669,6 +1060,7 @@ static void cb_call_media_state(pjsua_call_id call_id)
     transport_details(call_id, &ci, &srtp, crypto, sizeof(crypto), ice, sizeof(ice), lt, rt, sizeof(lt));
     secure = dlg_secure(call_id);
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) spc_media_on_call_media(call_id, 1);
+    spc_moh_on_media(cid, (int)ci.media_status);      /* client-side music on hold starts once the hold is acknowledged */
     pjsua_schedule_timer2(&timer_topology, NULL, 0);     /* full re-apply happens off the dialog lock (m7) */
     spc_registry_lock();
     c = spc_call_find_locked(cid);
@@ -789,6 +1181,16 @@ static void cb_call_tsx_state(pjsua_call_id call_id, pjsip_transaction* tsx, pjs
     pjsip_generic_string_hdr* h;
     spc_call* c;
     if (!tsx || !e || e->type != PJSIP_EVENT_TSX_STATE || e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) return;
+    if (tsx->role == PJSIP_ROLE_UAC && tsx->method.id == PJSIP_INVITE_METHOD) {
+        /* outgoing call: P-Asserted-Identity of the answering party from 18x/2xx responses */
+        rd = e->body.tsx_state.src.rdata;
+        if (rd && rd->msg_info.msg && rd->msg_info.msg->type == PJSIP_RESPONSE_MSG &&
+            rd->msg_info.msg->line.status.code >= 180 && rd->msg_info.msg->line.status.code < 300) {
+            uint64_t icid = slot_snapshot(call_id, NULL);
+            if (icid) id_store(icid, rd->msg_info.msg, 0);
+        }
+        return;
+    }
     if (tsx->role != PJSIP_ROLE_UAS || pjsip_method_cmp(&tsx->method, pjsip_get_refer_method()) != 0) return;
     rd = e->body.tsx_state.src.rdata;
     if (!rd || !rd->msg_info.msg) return;
@@ -1058,7 +1460,7 @@ spc_call* spc_call_iax_new(int slot, int acc, const char* uid, int role)
     c->role = role;
     if (uid) spc_strlcpy(c->uid, uid, sizeof(c->uid));
     spc_strlcpy(c->dtmf_method, "iax2", sizeof(c->dtmf_method));
-    c->rec_id = -1; c->player_id = -1; c->tg_slot = -1;
+    c->rec_id = -1; c->player_id = -1; c->tg_slot = -1; c->dn_in_slot = -1;
     c->created_ms = spc_mono_ms();
     spc_strlcpy(c->last_media, "none", sizeof(c->last_media));
     c->next = g_calls;

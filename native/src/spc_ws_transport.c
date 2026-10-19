@@ -165,7 +165,7 @@ void spc_ws_ensure_port(const char* hp, int wss, char* out, size_t outsz)
 }
 
 /* ---- route (path) registry ---- */
-typedef struct { char host[128]; int port; int wss; char path[128]; } ws_route;
+typedef struct { char host[128]; int port; int wss; char path[128]; char cert[256], key[256], pass[96]; } ws_route;
 static ws_route g_routes[32];
 static int g_nroutes;
 static spc_mutex_t g_route_mtx;
@@ -193,6 +193,50 @@ void spc_ws_route_set(const char* host, int port, int wss, const char* path)
         spc_strlcpy(g_routes[i].path, (path && path[0]) ? path : WS_DEFAULT_PATH, sizeof(g_routes[i].path));
     }
     spc_mutex_unlock(&g_route_mtx);
+}
+
+/* per-route TLS client certificate (account tlsClientCert on a wss account); empty cert clears it */
+void spc_ws_route_set_cert(const char* host, int port, int wss, const char* cert, const char* key, const char* pass)
+{
+    char h[128];
+    int i;
+    if (!host || !host[0]) return;
+    if (!g_route_mtx_init) { spc_mutex_init(&g_route_mtx); g_route_mtx_init = 1; }
+    spc_strlcpy(h, host, sizeof(h));
+    lower(h);
+    if (port <= 0) port = wss ? 443 : 80;
+    spc_mutex_lock(&g_route_mtx);
+    for (i = 0; i < g_nroutes; i++)
+        if (g_routes[i].port == port && g_routes[i].wss == wss && strcmp(g_routes[i].host, h) == 0) {
+            spc_strlcpy(g_routes[i].cert, cert ? cert : "", sizeof(g_routes[i].cert));
+            spc_strlcpy(g_routes[i].key, key ? key : "", sizeof(g_routes[i].key));
+            spc_strlcpy(g_routes[i].pass, pass ? pass : "", sizeof(g_routes[i].pass));
+            break;
+        }
+    spc_mutex_unlock(&g_route_mtx);
+}
+
+static int route_cert(const char* host, int port, int wss, char* cert, char* key, char* pass)
+{
+    char h[128];
+    int i, found = 0;
+    cert[0] = key[0] = pass[0] = 0;
+    if (!g_route_mtx_init || !host) return 0;
+    spc_strlcpy(h, host, sizeof(h));
+    lower(h);
+    spc_mutex_lock(&g_route_mtx);
+    for (i = 0; i < g_nroutes; i++)
+        if (g_routes[i].port == port && g_routes[i].wss == wss && strcmp(g_routes[i].host, h) == 0) {
+            if (g_routes[i].cert[0] && g_routes[i].key[0]) {
+                spc_strlcpy(cert, g_routes[i].cert, 256);
+                spc_strlcpy(key, g_routes[i].key, 256);
+                spc_strlcpy(pass, g_routes[i].pass, 96);
+                found = 1;
+            }
+            break;
+        }
+    spc_mutex_unlock(&g_route_mtx);
+    return found;
 }
 
 static int route_lookup(const char* host, int port, int wss, char* path, size_t n)
@@ -1226,9 +1270,22 @@ static pj_status_t lis_create_transport(pjsip_tpfactory* factory, pjsip_tpmgr* m
         sp.grp_lock = gl;
         status = pj_ssl_sock_create(pool, &sp, &ssock);
         if (status != PJ_SUCCESS) { pj_grp_lock_destroy(gl); pj_pool_release(pool); return status; }
-        if (lf->cert) {
-            status = pj_ssl_sock_set_certificate(ssock, pool, lf->cert);
-            if (status != PJ_SUCCESS) { pj_ssl_sock_close(ssock); pj_pool_release(pool); return status; }
+        {   /* the account's own client certificate (tlsClientCert) wins over the global tls.certFile */
+            pj_ssl_cert_t* use = lf->cert;
+            char cc[256], ck[256], cp[96], hk2[128];
+            if (rname.slen > 0 && rname.slen < (pj_ssize_t)sizeof(hk2)) { memcpy(hk2, rname.ptr, (size_t)rname.slen); hk2[rname.slen] = 0; }
+            else pj_sockaddr_print(rem_addr, hk2, sizeof(hk2), 0);
+            if (route_cert(hk2, pj_sockaddr_get_port(rem_addr), 1, cc, ck, cp)) {
+                pj_str_t c = pj_str(cc), k = pj_str(ck), pw = pj_str(cp), n = { NULL, 0 };
+                pj_ssl_cert_t* ac = NULL;
+                pj_status_t cs = pj_ssl_cert_load_from_files2(pool, &lf->tls.ca_list_file, &lf->tls.ca_list_path, &c, &k, cp[0] ? &pw : &n, &ac);
+                if (cs == PJ_SUCCESS) use = ac;
+                else PJ_PERROR(2, (THIS_FILE, cs, "WSS: cannot load the account's client certificate"));
+            }
+            if (use) {
+                status = pj_ssl_sock_set_certificate(ssock, pool, use);
+                if (status != PJ_SUCCESS) { pj_ssl_sock_close(ssock); pj_pool_release(pool); return status; }
+            }
         }
         status = ws_create(lf, pool, &local, rem_addr, &rname, gl, &ws, PJ_INVALID_SOCKET);
         if (status != PJ_SUCCESS) { pj_ssl_sock_close(ssock); return status; }

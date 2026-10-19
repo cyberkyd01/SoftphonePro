@@ -1000,6 +1000,7 @@ static void media_stop(iax_sess* s)
 {
     int slot;
     pj_pool_t* pool;
+    pjmedia_port* port;
     iax_codec cod;
     LK();
     if (s->media_state != 1) { UK(); return; }
@@ -1009,13 +1010,16 @@ static void media_stop(iax_sess* s)
     UK();
     if (slot >= 0) pjsua_conf_remove_port(slot);     /* blocks until the clock thread is out of our callbacks */
     LK();
-    pool = s->pool; cod = s->codec;
+    pool = s->pool; port = s->port; cod = s->codec;
     s->pool = NULL; s->port = NULL; s->jb = NULL;
     pj_bzero(&s->codec, sizeof(s->codec));
     UK();
     codec_close(cod.enc);
     codec_close(cod.dec);
-    if (pool) pj_pool_release(pool);
+    /* the bridge drops ports asynchronously and may still call get_frame: the port (and jitter buffer) live in the pool,
+     * which is released only when the bridge's last reference is gone */
+    if (port) port->port_data.pdata = NULL;
+    spc_port_destroy_release(port, pool);
 }
 
 /* terminal sequence for a call (IAX thread, g_mtx not held) */

@@ -1,5 +1,7 @@
 /* spc_callreq.c: call.* request handlers. */
 #include "spc_internal.h"
+#include "spc_player.h"
+#include "spc_rec.h"
 #include <ctype.h>
 
 #define NEED_CID(var) \
@@ -62,7 +64,9 @@ static int do_make(cJSON* p, const char* extra_name, const char* extra_val, cJSO
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
     if (acc >= SPC_ID_IAX_BASE) return spc_iax2_call_make(acc, p, res);
-    if (spc_uri_normalize(acc, uri, dest, sizeof(dest)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid uri");
+    rc = spc_uri_normalize(acc, uri, dest, sizeof(dest));
+    if (rc == -2) return SPC_E_INVALID_PARAM;      /* sips: on a non-TLS account; message already recorded */
+    if (rc != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid uri");
     d = spc_pjs(dest);
     if (pjsua_verify_url(dest) != PJ_SUCCESS && !spc_strnieq(dest, "tel:", 4))
         return spc_err(SPC_E_INVALID_PARAM, 0, "invalid uri '%s'", dest);
@@ -335,23 +339,44 @@ static int h_hangup_all(cJSON* p, cJSON** res)
 static int h_hold(cJSON* p, cJSON** res)
 {
     NEED_CID(cid);
-    int slot, acc, rc;
+    int slot, acc, rc, moh = 0, moh_loop = 1;
+    float moh_vol = 1.0f;
+    const char* moh_file = NULL;
     pj_status_t st;
+    cJSON* music = spc_jobj(p, "music");
     (void)res;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_jhas(p, "music") && !cJSON_IsNull(cJSON_GetObjectItem(p, "music"))) {
+        spc_fileinfo fi;
+        char perr[200];
+        double v;
+        if (!music) return spc_err(SPC_E_INVALID_PARAM, 0, "'music' must be an object");
+        moh_file = spc_jstr(music, "file");
+        if (!moh_file || !moh_file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "music.file required");
+        if (spc_jhas(music, "loop") && !spc_jbool_strict(music, "loop", &moh_loop)) return spc_err(SPC_E_INVALID_PARAM, 0, "music.loop must be a bool");
+        v = spc_jnum(music, "volume", 1.0);
+        if (!(v >= 0.0 && v <= 4.0)) return spc_err(SPC_E_INVALID_PARAM, 0, "music.volume must be 0..4");
+        moh_vol = (float)v;
+        if (spc_media_file_info(moh_file, &fi, perr, sizeof(perr)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "music.file: %s", perr);
+        moh = 1;
+    }
     if (spc_call_is_iax(cid)) {
         rc = spc_iax2_call_op(SPC_IAXOP_HOLD, cid, p, res);
         spc_call_apply_topology();
+        if (rc == SPC_OK && moh && spc_moh_arm(cid, moh_file, moh_loop, moh_vol) == 0) spc_moh_start_now(cid);   /* IAX2: no media-state callback to wait for */
         return rc;
     }
     set_flag(cid, 3, 1);
     spc_call_apply_topology();
+    if (moh) spc_moh_arm(cid, moh_file, moh_loop, moh_vol);      /* armed first: the media-state callback may fire before set_hold2 returns */
     st = pjsua_call_set_hold2(slot, 0, NULL);
     if (st != PJ_SUCCESS && st != PJ_EEXISTS) {
+        if (moh) spc_moh_disarm(cid);
         set_flag(cid, 3, 0);
         spc_call_apply_topology();
         return map_pj(st, "hold");
     }
+    if (st == PJ_EEXISTS && moh) spc_moh_start_now(cid);        /* already held: no new media-state event will come */
     return SPC_OK;
 }
 
@@ -360,6 +385,7 @@ static int unhold_one(uint64_t cid, int slot)
     pjsua_call_setting opt;
     pj_status_t st;
     set_flag(cid, 3, 0);
+    spc_moh_disarm(cid);
     pjsua_call_setting_default(&opt);
     opt.flag |= PJSUA_CALL_UNHOLD;
     st = pjsua_call_reinvite2(slot, &opt, NULL);
@@ -437,7 +463,7 @@ static int inband_dtmf(uint64_t cid, int slot, const char* digits, int dur)
         st = pjsua_conf_add_port(pool, port, &cs);
         if (st != PJ_SUCCESS) { pjmedia_port_destroy(port); pj_pool_release(pool); return st; }
         c = spc_call_lock_find(cid);
-        if (!c) { pjsua_conf_remove_port(cs); pjmedia_port_destroy(port); pj_pool_release(pool); return PJ_ENOTFOUND; }
+        if (!c) { pjsua_conf_remove_port(cs); spc_port_destroy_release(port, pool); return PJ_ENOTFOUND; }
         c->tg_port = port; c->tg_slot = cs; c->tg_pool = pool;
         spc_registry_unlock();
     }
@@ -645,6 +671,10 @@ static int h_conference(cJSON* p, cJSON** res)
         if (!c) continue;
         slot = c->slot; held = c->held;
         c->detached = 0;
+        spc_registry_unlock();
+        spc_moh_disarm(ids[i]);
+        c = spc_call_lock_find(ids[i]);
+        if (!c) continue;
         for (j = 0; j < n; j++) if (j != i) add_peer(c->conf, &c->nconf, ids[j]);
         spc_registry_unlock();
         if (held) unhold_one(ids[i], slot);
@@ -676,10 +706,12 @@ static int h_record_start(cJSON* p, cJSON** res)
     NEED_CID(cid);
     const char* file = spc_jstr(p, "file");
     const char* mix = spc_jstr(p, "mix");
-    int slot, acc, rc, mixv = 0, id = -1;
+    const char* fmts = spc_jstr(p, "format");
+    int slot, acc, rc, mixv = 0, id = -1, fmt = SPC_REC_WAV_MONO, id2 = 0;
     spc_call* c;
     pj_str_t f;
     pj_status_t st;
+    char err[200];
     if (!file || !file[0] || strlen(file) > 590) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
     if (mix) {
         if (spc_strieq(mix, "both")) mixv = 0;
@@ -687,17 +719,33 @@ static int h_record_start(cJSON* p, cJSON** res)
         else if (spc_strieq(mix, "local")) mixv = 2;
         else return spc_err(SPC_E_INVALID_PARAM, 0, "mix must be both|remote|local");
     }
+    if (spc_jhas(p, "format") && !fmts) return spc_err(SPC_E_INVALID_PARAM, 0, "format must be wav|wavStereo|opus");
+    if (fmts) {
+        if (spc_strieq(fmts, "wav")) fmt = SPC_REC_WAV_MONO;
+        else if (spc_strieq(fmts, "wavStereo")) fmt = SPC_REC_WAV_STEREO;
+        else if (spc_strieq(fmts, "opus")) fmt = SPC_REC_OPUS;
+        else return spc_err(SPC_E_INVALID_PARAM, 0, "format must be wav|wavStereo|opus");
+    }
     if ((rc = need_call(cid, &slot, &acc))) return rc;
     c = spc_call_lock_find(cid);
     if (!c) return spc_err(SPC_E_NOT_FOUND, 0, "call gone");
     if (c->recording) { spc_registry_unlock(); return spc_err(SPC_E_ALREADY, 0, "already recording"); }
     spc_registry_unlock();
-    f = spc_pjs(file);
-    st = pjsua_recorder_create(&f, 0, NULL, 0, 0, &id);
-    if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_recorder_create");
+    if (fmt == SPC_REC_WAV_MONO) {
+        f = spc_pjs(file);
+        st = pjsua_recorder_create(&f, 0, NULL, 0, 0, &id);
+        if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_recorder_create");
+    } else {
+        int r2 = spc_rec_start(fmt, cid, mixv, file, &id2, err, sizeof(err));
+        if (r2 != 0) return spc_err(r2 == -2 ? SPC_E_UNSUPPORTED : SPC_E_INVALID_PARAM, 0, "%s", err);
+    }
     c = spc_call_lock_find(cid);
-    if (!c) { pjsua_recorder_destroy(id); return spc_err(SPC_E_NOT_FOUND, 0, "call gone"); }
-    c->rec_id = id; c->rec_mix = mixv; c->recording = 1;
+    if (!c) {
+        if (id >= 0) pjsua_recorder_destroy(id);
+        if (id2 > 0) spc_rec_stop(id2, NULL);
+        return spc_err(SPC_E_NOT_FOUND, 0, "call gone");
+    }
+    c->rec_id = id; c->rec2_id = id2; c->rec_fmt = fmt; c->rec_mix = mixv; c->recording = 1;
     spc_strlcpy(c->rec_file, file, sizeof(c->rec_file));
     c->rec_start_ms = spc_mono_ms();
     spc_registry_unlock();
@@ -707,6 +755,7 @@ static int h_record_start(cJSON* p, cJSON** res)
         cJSON_AddNumberToObject(f2, "cid", (double)cid);
         cJSON_AddBoolToObject(f2, "recording", 1);
         cJSON_AddStringToObject(f2, "file", file);
+        cJSON_AddStringToObject(f2, "format", fmt == SPC_REC_OPUS ? "opus" : fmt == SPC_REC_WAV_STEREO ? "wavStereo" : "wav");
         spc_call_emit(cid, "call.recording", f2);
     }
     *res = cJSON_CreateObject();
@@ -735,19 +784,23 @@ static int h_record_stop(cJSON* p, cJSON** res)
 {
     NEED_CID(cid);
     spc_call* c;
-    int id, slot, acc, rc;
+    int id, id2, fmt, slot, acc, rc;
     char file[600];
     int64_t dur;
+    spc_rec_result rr;
+    int have_rr = 0;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
     c = spc_call_lock_find(cid);
     if (!c) return spc_err(SPC_E_NOT_FOUND, 0, "call gone");
     if (!c->recording) { spc_registry_unlock(); return spc_err(SPC_E_INVALID_PARAM, 0, "not recording"); }
     id = c->rec_id; c->rec_id = -1; c->recording = 0;
+    id2 = c->rec2_id; c->rec2_id = 0; fmt = c->rec_fmt;
     spc_strlcpy(file, c->rec_file, sizeof(file));
     dur = spc_mono_ms() - c->rec_start_ms;
     spc_registry_unlock();
     if (id >= 0) pjsua_recorder_destroy(id);
-    wait_wav_final(file, 1500);
+    if (id2 > 0 && spc_rec_stop(id2, &rr) == 0) have_rr = 1;
+    else if (id >= 0) wait_wav_final(file, 1500);
     {
         cJSON* f2 = cJSON_CreateObject();
         cJSON_AddNumberToObject(f2, "cid", (double)cid);
@@ -757,7 +810,17 @@ static int h_record_stop(cJSON* p, cJSON** res)
     }
     *res = cJSON_CreateObject();
     cJSON_AddStringToObject(*res, "file", file);
-    cJSON_AddNumberToObject(*res, "durationMs", (double)dur);
+    if (have_rr) {
+        cJSON_AddNumberToObject(*res, "durationMs", rr.durationMs);
+        cJSON_AddStringToObject(*res, "format", rr.format);
+        cJSON_AddNumberToObject(*res, "bytes", (double)rr.bytes);
+    } else {
+        int wd = spc_wav_duration_ms(file);
+        int64_t bytes = spc_file_size(file);
+        cJSON_AddNumberToObject(*res, "durationMs", wd >= 0 ? (double)wd : (double)dur);
+        cJSON_AddStringToObject(*res, "format", fmt == SPC_REC_OPUS ? "opus" : fmt == SPC_REC_WAV_STEREO ? "wavStereo" : "wav");
+        cJSON_AddNumberToObject(*res, "bytes", (double)(bytes < 0 ? 0 : bytes));
+    }
     return SPC_OK;
 }
 
@@ -765,40 +828,36 @@ static int h_play_file(cJSON* p, cJSON** res)
 {
     NEED_CID(cid);
     const char* file = spc_jstr(p, "file");
-    int slot, acc, rc, id = -1, old;
-    spc_call* c;
-    pj_str_t f;
-    pj_status_t st;
-    FILE* fp;
-    (void)res;
+    int slot, acc, rc, id = 0, loop = 0, mon = 0, mute = 0;
+    double vol = 1.0;
+    char err[200];
     if (!file || !file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
+    if (spc_jhas(p, "loop") && !spc_jbool_strict(p, "loop", &loop)) return spc_err(SPC_E_INVALID_PARAM, 0, "'loop' must be a bool");
+    if (spc_jhas(p, "localMonitor") && !spc_jbool_strict(p, "localMonitor", &mon)) return spc_err(SPC_E_INVALID_PARAM, 0, "'localMonitor' must be a bool");
+    if (spc_jhas(p, "muteMic") && !spc_jbool_strict(p, "muteMic", &mute)) return spc_err(SPC_E_INVALID_PARAM, 0, "'muteMic' must be a bool");
+    if (spc_jhas(p, "volume")) {
+        vol = spc_jnum(p, "volume", -1.0);
+        if (!(vol >= 0.0 && vol <= 4.0)) return spc_err(SPC_E_INVALID_PARAM, 0, "'volume' must be 0..4");
+    }
     if ((rc = need_call(cid, &slot, &acc))) return rc;
-    fp = fopen(file, "rb");
-    if (!fp) return spc_err(SPC_E_INVALID_PARAM, 0, "cannot open file '%s'", file);
-    fclose(fp);
-    f = spc_pjs(file);
-    st = pjsua_player_create(&f, spc_jbool(p, "loop", 0) ? 0 : PJMEDIA_FILE_NO_LOOP, &id);
-    if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_player_create");
-    c = spc_call_lock_find(cid);
-    if (!c) { pjsua_player_destroy(id); return spc_err(SPC_E_NOT_FOUND, 0, "call gone"); }
-    old = c->player_id;
-    c->player_id = id;
-    spc_registry_unlock();
-    if (old >= 0) pjsua_player_destroy(old);
-    spc_call_apply_topology();
+    if (spc_player_start(cid, file, loop, (float)vol, mon, mute, 0, &id, err, sizeof(err)) != 0)
+        return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    *res = cJSON_CreateObject();
+    cJSON_AddNumberToObject(*res, "playId", id);
     return SPC_OK;
 }
 
 static int h_stop_file(cJSON* p, cJSON** res)
 {
     NEED_CID(cid);
-    int slot, acc, rc, old = -1;
-    spc_call* c;
-    (void)res;
+    int slot, acc, rc, id = 0, n;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
-    c = spc_call_lock_find(cid);
-    if (c) { old = c->player_id; c->player_id = -1; spc_registry_unlock(); }
-    if (old >= 0) pjsua_player_destroy(old);
+    if (spc_jhas(p, "playId")) {
+        if (!spc_jint_range(p, "playId", 0, 1, 0x7fffffff, &id)) return spc_err(SPC_E_INVALID_PARAM, 0, "'playId' must be a positive integer");
+    }
+    n = spc_player_stop(cid, id, "stopped");
+    *res = cJSON_CreateObject();
+    cJSON_AddNumberToObject(*res, "stopped", n);
     return SPC_OK;
 }
 

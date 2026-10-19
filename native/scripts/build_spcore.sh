@@ -15,6 +15,8 @@
 #   all     every target the current host can build (linux only on Linux/Docker; ios only with Xcode)
 #
 # Prerequisite: the dependency prefixes: build_deps_<platform>.sh. (Windows: build_spcore_windows.ps1.)
+#      SPC_TEST_HOOKS=ON  (linux target only) compiles the hidden __* test methods; used by the CI test build. Shipped
+#      builds (macos/ios/android/windows) never enable it, whatever the environment says.
 # Env: SPC_NDK / ANDROID_HOME, SPC_ANDROID_API (24), SPC_IOS_MIN (13.0), MACOSX_DEPLOYMENT_TARGET (11.0),
 #      SPC_VERSION (framework version string, default 1.0.0), SPC_BUILD_TYPE (Release).
 set -euo pipefail
@@ -42,7 +44,7 @@ while [ $# -gt 0 ]; do
     all) TARGETS+=(all) ;;
     --clean) CLEAN=1 ;;
     -j|--jobs) shift; SPC_JOBS="$1" ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) die "unknown argument '$1' (see --help)" ;;
   esac
   shift
@@ -181,7 +183,7 @@ build_linux() {
     command -v docker >/dev/null || die "linux target on non-Linux hosts needs Docker"
     local image="${SPC_LINUX_IMAGE:-spc-linux-build:ubuntu24.04}"
     docker image inspect "$image" >/dev/null 2>&1 || docker build -t "$image" -f "$HERE/docker/Dockerfile.linux-build" "$HERE/docker"
-    exec docker run --rm --user "$(id -u):$(id -g)" -e SPC_JOBS="$SPC_JOBS" -v "$REPO":/work -w /work "$image" \
+    exec docker run --rm --user "$(id -u):$(id -g)" -e SPC_JOBS="$SPC_JOBS" -e SPC_TEST_HOOKS="${SPC_TEST_HOOKS:-OFF}" -v "$REPO":/work -w /work "$image" \
       bash native/scripts/build_spcore.sh linux -j "$SPC_JOBS" $([ "$CLEAN" = 1 ] && echo --clean)
   fi
   local arch; case "$(uname -m)" in x86_64) arch=x86_64 ;; aarch64|arm64) arch=arm64 ;; *) die "unsupported arch" ;; esac
@@ -190,7 +192,7 @@ build_linux() {
   log "Linux $arch"
   [ "$CLEAN" = 1 ] && rm -rf "$bld"
   cmake -S "$SRC" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE="$SPC_BUILD_TYPE" \
-    -DSPC_DEPS_PREFIX="$NATIVE/out/linux-$arch"
+    -DSPC_DEPS_PREFIX="$NATIVE/out/linux-$arch" -DSPC_TEST_HOOKS="${SPC_TEST_HOOKS:-OFF}"
   cmake --build "$bld" --parallel "$SPC_JOBS"
   local so; so="$(find_one "$bld" -name libspcore.so -type f)"
   [ "$so" = "$bld/libspcore.so" ] || cp "$so" "$bld/libspcore.so"

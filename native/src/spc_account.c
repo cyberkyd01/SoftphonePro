@@ -3,6 +3,10 @@
 #include "spc_ws_transport.h"
 #include <ctype.h>
 #include <math.h>
+#include <sys/stat.h>
+#if defined(_WIN32)
+#  define stat _stat
+#endif
 
 static spc_acc* g_acc[PJSUA_MAX_ACC];
 static spc_acc* g_all;               /* every meta ever allocated this session */
@@ -87,7 +91,7 @@ cJSON* spc_acc_info_json(int acc)
     pjsua_acc_info ai;
     spc_acc* m = spc_acc_from_id(acc);
     cJSON* o;
-    char state[16], reason[96], lerr[200], pres[12], tr[8], uid[96];
+    char state[16], reason[96], lerr[200], pres[12], tr[8], uid[96], resolved[160];
     int code, proto, lan, direct;
     if (acc >= SPC_ID_IAX_BASE) return spc_iax2_acc_info_json(acc);
     if (!m || pjsua_acc_get_info(acc, &ai) != PJ_SUCCESS) return NULL;
@@ -98,6 +102,7 @@ cJSON* spc_acc_info_json(int acc)
     spc_strlcpy(pres, m->presence, sizeof(pres));
     spc_strlcpy(tr, m->transport, sizeof(tr));
     spc_strlcpy(uid, m->uid, sizeof(uid));
+    spc_strlcpy(resolved, m->resolved, sizeof(resolved));
     code = m->reg_code;
     proto = m->proto;
     lan = m->is_lan;
@@ -140,6 +145,7 @@ cJSON* spc_acc_info_json(int acc)
         cJSON_AddNullToObject(o, "contact");
     }
     cJSON_AddStringToObject(o, "transport", tr);
+    spc_jadd_str(o, "resolvedServer", resolved[0] ? resolved : NULL);
     cJSON_AddStringToObject(o, "presence", pres);
     cJSON_AddBoolToObject(o, "isLan", lan);
     cJSON_AddBoolToObject(o, "isDirect", direct);
@@ -194,18 +200,32 @@ static void cb_reg_state2(pjsua_acc_id acc, pjsua_reg_info* info)
     if (code / 100 == 2 && cp->status == PJ_SUCCESS) {
         state = cp->expiration > 0 ? "registered" : "unregistered";
     } else {
-        char em[160];
+        char em[160], hay[270];
         char host_only[128];
         state = "failed";
         spc_strlcpy(host_only, m->domain, sizeof(host_only));
         if (host_only[0] != '[') { char* cc = strchr(host_only, ':'); if (cc && strchr(cc + 1, ':') == NULL) *cc = 0; }
         pj_strerror(cp->status, em, sizeof(em));
+        snprintf(hay, sizeof(hay), "%s %s", em, reason);
         if (code == 401 || code == 403 || code == 407)
             snprintf(err, sizeof(err), "Wrong username/password (%d)", code);
         else if (code == 408)
             snprintf(err, sizeof(err), "Timeout (408)");
         else if (spc_tls_recent_failure(host_only) && (strcmp(m->transport, "tls") == 0 || strcmp(m->transport, "wss") == 0))
             snprintf(err, sizeof(err), "TLS certificate not trusted");
+        else if ((strcmp(m->transport, "tls") == 0 || strcmp(m->transport, "wss") == 0) &&
+                 (strstr(hay, "certificate required") || strstr(hay, "bad certificate") || strstr(hay, "unknown ca") ||
+                  strstr(hay, "certificate unknown") || strstr(hay, "certificate expired") || strstr(hay, "certificate revoked") ||
+                  strstr(hay, "unsupported certificate"))) {
+            int has_cc;
+            spc_registry_lock();
+            has_cc = m->cfg && spc_jobj(m->cfg, "tlsClientCert") != NULL;
+            spc_registry_unlock();
+            if (strstr(hay, "certificate required") && !has_cc)
+                snprintf(err, sizeof(err), "TLS client certificate required by the server (set tlsClientCert): %s (%d)", reason[0] ? reason : em, code);
+            else
+                snprintf(err, sizeof(err), "Server rejected the TLS client certificate: %s (%d)", reason[0] ? reason : em, code);
+        }
         else if (cp->status == PJ_ERESOLVE || strstr(em, "DNS") || strstr(em, "resolve") || strstr(em, "Resolve"))
             snprintf(err, sizeof(err), "DNS lookup failed");
         else if (cp->status != PJ_SUCCESS)
@@ -246,6 +266,14 @@ int spc_uri_normalize(int acc, const char* in, char* out, size_t outsz)
         direct = m->is_direct || m->is_lan;
         spc_registry_unlock();
     }
+    if (spc_strnieq(in, "sips:", 5) && m && !direct && strcmp(transport, "tls") != 0 && strcmp(transport, "auto") != 0) {
+        spc_err(SPC_E_INVALID_PARAM, 0, "sips: URIs need a TLS account (this account uses transport '%s'); use sip: or switch the account to tls", transport);
+        return -2;
+    }
+    if (spc_strnieq(in, "sips:", 5) && direct && G.tls_tp < 0) {
+        spc_err(SPC_E_INVALID_PARAM, 0, "sips: URIs need the TLS transport, which is not enabled");
+        return -2;
+    }
     if (spc_strnieq(in, "sip:", 4) || spc_strnieq(in, "sips:", 5) || spc_strnieq(in, "tel:", 4)) {
         spc_strlcpy(buf, in, sizeof(buf));
     } else if (strchr(in, '@')) {
@@ -255,7 +283,7 @@ int spc_uri_normalize(int acc, const char* in, char* out, size_t outsz)
     } else {
         snprintf(buf, sizeof(buf), "sip:%s@%s", in, domain);
     }
-    if (!spc_strnieq(buf, "tel:", 4) && !strstr(buf, "transport=") && !strstr(buf, "TRANSPORT=")) {
+    if (!spc_strnieq(buf, "tel:", 4) && !spc_strnieq(buf, "sips:", 5) && !strstr(buf, "transport=") && !strstr(buf, "TRANSPORT=")) {
         if (strcmp(transport, "tcp") == 0 || strcmp(transport, "tls") == 0 ||
             strcmp(transport, "ws") == 0 || strcmp(transport, "wss") == 0) {
             if (strlen(buf) + 16 < sizeof(buf)) strcat(buf, ";transport="), strcat(buf, transport);
@@ -308,26 +336,55 @@ static void apply_sip_dscp(spc_acc* m, const cJSON* c, int tp_id)
     if (!tr || spc_strieq(tr, "udp")) spc_udp_set_dscp(G.udp_tp, d);
 }
 
+static unsigned long sig_str(unsigned long h, const char* s)
+{
+    if (s) while (*s) h = h * 131u + (unsigned char)*s++;
+    return h * 131u + 7u;
+}
+static unsigned long sig_file(unsigned long h, const char* path)
+{
+    struct stat st;
+    if (path && stat(path, &st) == 0) h = h * 131u + (unsigned long)st.st_size, h = h * 131u + (unsigned long)st.st_mtime;
+    return h;
+}
+
+/* A dedicated transport is needed for (a) localPort > 0, and (b) tlsClientCert on a TLS account (mutual TLS: the
+ * listener carries the account's own certificate; port 0 = random local port). wss accounts apply the certificate
+ * per connection instead (spc_ws_route_set_cert). `c` carries the effective (resolved) transport. */
 static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size_t errn)
 {
     int port = 0;
     const char* tr = spc_jstr(c, "transport");
+    cJSON* cc = spc_jobj(c, "tlsClientCert");
+    int mtls = cc && tr && spc_strieq(tr, "tls") && spc_jstr(cc, "certFile") && spc_jstr(cc, "keyFile");
     pjsua_transport_config tc;
     pjsip_transport_type_e type = PJSIP_TRANSPORT_UDP;
     pjsua_transport_id id;
     pjsua_transport_info ti;
+    unsigned long sig;
+    pj_status_t cst;
     if (!spc_jint_range(c, "localPort", 0, 0, 65535, &port)) { snprintf(err, errn, "'localPort' must be an integer in 0..65535"); return -1; }
-    if (port <= 0 || (tr && (spc_strieq(tr, "ws") || spc_strieq(tr, "wss")))) {   /* ws/wss: outgoing connections only */
-        if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
+    if ((port <= 0 && !mtls) || (tr && (spc_strieq(tr, "ws") || spc_strieq(tr, "wss")))) {   /* ws/wss: outgoing connections only */
+        if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; m->own_sig = 0; }
         *tp_id = PJSUA_INVALID_ID;
         return 0;
     }
     if (port > 65535) { snprintf(err, errn, "invalid localPort"); return -1; }
-    if (m->own_tp >= 0 && pjsua_transport_get_info(m->own_tp, &ti) == PJ_SUCCESS && (int)ti.local_name.port == port) {
+    sig = sig_str(0, tr);
+    sig = sig * 131u + (unsigned long)port;
+    if (mtls) {
+        sig = sig_str(sig, spc_jstr(cc, "certFile"));
+        sig = sig_str(sig, spc_jstr(cc, "keyFile"));
+        sig = sig_str(sig, spc_jstr(cc, "password"));
+        sig = sig_file(sig, spc_jstr(cc, "certFile"));
+        sig = sig_file(sig, spc_jstr(cc, "keyFile"));
+    }
+    if (m->own_tp >= 0 && m->own_sig == sig && pjsua_transport_get_info(m->own_tp, &ti) == PJ_SUCCESS &&
+        (port <= 0 || (int)ti.local_name.port == port)) {
         *tp_id = m->own_tp;
         return 0;
     }
-    if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
+    if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; m->own_sig = 0; }
     pjsua_transport_config_default(&tc);
     tc.port = (unsigned)port;
     if (G.qos) {
@@ -339,13 +396,24 @@ static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size
     if (tr && spc_strieq(tr, "tcp")) type = PJSIP_TRANSPORT_TCP;
     else if (tr && spc_strieq(tr, "tls")) {
         type = PJSIP_TRANSPORT_TLS;
-        spc_tls_cfg(&tc.tls_setting, G.tls_verify, NULL, NULL, NULL, NULL);
+        spc_tls_cfg(&tc.tls_setting, G.tls_verify, NULL, NULL, NULL, NULL);   /* global CA / protocol policy */
+        if (mtls) {
+            const char* pw = spc_jstr(cc, "password");
+            tc.tls_setting.cert_file = spc_pjs(spc_jstr(cc, "certFile"));
+            tc.tls_setting.privkey_file = spc_pjs(spc_jstr(cc, "keyFile"));
+            if (pw && pw[0]) tc.tls_setting.password = spc_pjs(pw);
+        }
     }
-    if (pjsua_transport_create(type, &tc, &id) != PJ_SUCCESS) {
-        snprintf(err, errn, "cannot bind local port %d", port);
+    cst = pjsua_transport_create(type, &tc, &id);
+    if (cst != PJ_SUCCESS) {
+        char em[120];
+        pj_strerror(cst, em, sizeof(em));
+        if (mtls && port <= 0) snprintf(err, errn, "cannot create the TLS transport for tlsClientCert: %s", em);
+        else snprintf(err, errn, "cannot bind local port %d", port);
         return -1;
     }
     m->own_tp = id;
+    m->own_sig = sig;
     spc_udp_set_dscp(id, acc_sip_dscp(c) < 0 ? 24 : acc_sip_dscp(c));
     *tp_id = id;
     return 0;
@@ -385,6 +453,13 @@ static int apply_ws(pjsua_acc_config* cfg, pj_pool_t* pool, const cJSON* c, cons
     else { colon = strrchr(hp, ':'); n = colon ? (int)(colon - hp) : (int)strlen(hp); memcpy(host, hp, (size_t)n); host[n] = 0; }
     port = colon ? atoi(colon + 1) : (wss ? 443 : 80);
     spc_ws_route_set(host, port, wss, path);
+    {   /* tlsClientCert applies per connection on wss */
+        cJSON* cc = wss ? spc_jobj(c, "tlsClientCert") : NULL;
+        if (cc && spc_jstr(cc, "certFile") && spc_jstr(cc, "keyFile"))
+            spc_ws_route_set_cert(host, port, 1, spc_jstr(cc, "certFile"), spc_jstr(cc, "keyFile"), spc_jstr(cc, "password"));
+        else
+            spc_ws_route_set_cert(host, port, wss, "", "", "");
+    }
     {   char inv[40];
         spc_ws_random_invalid_host(inv, sizeof(inv));
         snprintf(contact, sizeof(contact), "<sip:%s@%s;transport=%s>", user, inv, wss ? "wss" : "ws");
@@ -646,9 +721,23 @@ static void fill_meta(spc_acc* m, const cJSON* c)
     cJSON* e;
     spc_registry_lock();
     s = spc_jstr(c, "uid"); if (s) spc_strlcpy(m->uid, s, sizeof(m->uid));
-    s = spc_jstr(c, "transport"); spc_strlcpy(m->transport, s ? s : "udp", sizeof(m->transport));
-    {   /* normalise to lower case */
-        char* p; for (p = m->transport; *p; p++) *p = (char)tolower((unsigned char)*p);
+    s = spc_jstr(c, "transport");
+    {
+        char tr[8];
+        char* p;
+        int was_auto = m->auto_tr;
+        spc_strlcpy(tr, s ? s : "udp", sizeof(tr));
+        for (p = tr; *p; p++) *p = (char)tolower((unsigned char)*p);     /* normalise to lower case */
+        if (strcmp(tr, "auto") == 0) {
+            m->auto_tr = 1;
+            /* keep showing the previous resolution while a new one is in flight */
+            if (!was_auto || !(strcmp(m->transport, "udp") == 0 || strcmp(m->transport, "tcp") == 0 || strcmp(m->transport, "tls") == 0))
+                spc_strlcpy(m->transport, "auto", sizeof(m->transport));
+        } else {
+            m->auto_tr = 0;
+            m->resolved[0] = 0;
+            spc_strlcpy(m->transport, tr, sizeof(m->transport));
+        }
     }
     s = spc_jstr(c, "domain"); spc_strlcpy(m->domain, s ? s : "", sizeof(m->domain));
     s = spc_jstr(c, "dtmfMethod"); spc_strlcpy(m->dtmf_method, s ? s : "rfc2833", sizeof(m->dtmf_method));
@@ -674,6 +763,390 @@ static void fill_meta(spc_acc* m, const cJSON* c)
 }
 
 /* ------------------------------------------------------------------ */
+/* tlsClientCert validation, effective (resolved) configuration         */
+/* ------------------------------------------------------------------ */
+static spc_mutex_t g_cfg_mtx;            /* serialises account (re)configuration: handlers and the SRV resolver */
+static volatile long g_cfg_once;
+static void cfg_mtx_init(void) { spc_mutex_init(&g_cfg_mtx); }
+static void cfg_lock(void) { spc_once(&g_cfg_once, cfg_mtx_init); spc_mutex_lock(&g_cfg_mtx); }
+static void cfg_unlock(void) { spc_mutex_unlock(&g_cfg_mtx); }
+
+/* tlsClientCert: object {certFile, keyFile, password?}; null / absent = none. 0 ok, -1 with message. */
+static int validate_client_cert(const cJSON* c, char* err, size_t errn)
+{
+    cJSON* v = cJSON_GetObjectItemCaseSensitive((cJSON*)c, "tlsClientCert");
+    const char* tr = spc_jstr(c, "transport");
+    const char* cert;
+    const char* key;
+    const char* pw;
+    if (!v || cJSON_IsNull(v)) return 0;
+    if (!cJSON_IsObject(v)) { snprintf(err, errn, "'tlsClientCert' must be an object {certFile, keyFile, password?}"); return -1; }
+    if (!tr) tr = "udp";
+    if (!(spc_strieq(tr, "tls") || spc_strieq(tr, "wss") || spc_strieq(tr, "auto"))) {
+        snprintf(err, errn, "tlsClientCert needs transport tls, wss or auto (account uses '%s')", tr);
+        return -1;
+    }
+    cert = spc_jstr(v, "certFile");
+    key = spc_jstr(v, "keyFile");
+    pw = spc_jstr(v, "password");
+    if (cJSON_GetObjectItemCaseSensitive(v, "password") && !pw && !cJSON_IsNull(cJSON_GetObjectItemCaseSensitive(v, "password"))) {
+        snprintf(err, errn, "tlsClientCert.password must be a string");
+        return -1;
+    }
+    if (!spc_str_clean(cert) || !spc_str_clean(key) || !spc_str_clean(pw) || (pw && strlen(pw) > 90) || (cert && strlen(cert) > 250) || (key && strlen(key) > 250)) {
+        snprintf(err, errn, "tlsClientCert contains invalid characters or values that are too long");
+        return -1;
+    }
+    return spc_tls_validate_client_cert(cert, key, pw, err, errn);
+}
+
+/* copy of the account JSON with the effective transport substituted for "auto" */
+static cJSON* eff_cfg(const cJSON* c, const char* etr)
+{
+    cJSON* d = cJSON_Duplicate(c, 1);
+    if (!d) return NULL;
+    if (cJSON_GetObjectItemCaseSensitive(d, "transport")) cJSON_ReplaceItemInObjectCaseSensitive(d, "transport", cJSON_CreateString(etr));
+    else cJSON_AddStringToObject(d, "transport", etr);
+    return d;
+}
+
+/* ------------------------------------------------------------------ */
+/* transport:"auto": SRV based transport selection (docs/ENGINE_API.md 9.6)                */
+/* ------------------------------------------------------------------ */
+#define AUTO_TIMEOUT_MS 4000
+static const char* const k_auto_srv[3] = { "_sips._tcp", "_sip._tcp", "_sip._udp" };
+static const char* const k_auto_tr[3] = { "tls", "tcp", "udp" };
+static int g_auto_session;               /* bumped by spc_account_cleanup: pools of older jobs died with the engine */
+
+typedef struct auto_job auto_job;
+typedef struct { auto_job* job; int idx; } auto_ref;
+struct auto_job {
+    spc_mutex_t mtx;
+    int refs;
+    int finished;
+    int session;
+    spc_acc* m;                          /* metas live until core.stop */
+    unsigned gen;
+    int pending;
+    pj_pool_t* pool[3];                  /* one per query: pools are not thread safe, the resolver allocates from them */
+    char host[128];
+    struct {
+        pj_dns_srv_async_query* q;
+        int own;                         /* reference held on behalf of the query; whoever clears it drops it */
+        int count, prio, weight, port;
+        char target[128];
+    } st[3];
+    auto_ref ref[3];
+};
+
+static void auto_unref(auto_job* j)
+{
+    int r;
+    spc_mutex_lock(&j->mtx);
+    r = --j->refs;
+    spc_mutex_unlock(&j->mtx);
+    if (r > 0) return;
+    if (j->session == g_auto_session && G.started) {
+        int i;
+        for (i = 0; i < 3; i++) if (j->pool[i]) pj_pool_release(j->pool[i]);
+    }
+    spc_mutex_destroy(&j->mtx);
+    free(j);
+}
+
+/* parse "sip:host:port;params" / "host" -> host, port (0 none), scheme secure flag, transport param */
+static void split_target(const char* in, char* host, size_t hn, int* port, int* sips, char* tparam, size_t tn)
+{
+    const char* p = in;
+    const char* semi;
+    const char* t;
+    size_t n;
+    char hp[200];
+    *port = 0; *sips = 0; host[0] = 0; tparam[0] = 0;
+    if (spc_strnieq(p, "sips:", 5)) { p += 5; *sips = 1; } else if (spc_strnieq(p, "sip:", 4)) p += 4;
+    semi = strchr(p, ';');
+    n = semi ? (size_t)(semi - p) : strlen(p);
+    if (n >= sizeof(hp)) n = sizeof(hp) - 1;
+    memcpy(hp, p, n); hp[n] = 0;
+    if (semi && (t = strstr(semi, "transport=")) != NULL) {
+        size_t k = 0;
+        t += 10;
+        while (t[k] && t[k] != ';' && k < tn - 1) { tparam[k] = (char)tolower((unsigned char)t[k]); k++; }
+        tparam[k] = 0;
+    }
+    if (hp[0] == '[') {
+        char* rb = strchr(hp, ']');
+        if (rb) { size_t hl = (size_t)(rb - hp - 1); if (hl >= hn) hl = hn - 1; memcpy(host, hp + 1, hl); host[hl] = 0; if (rb[1] == ':') *port = atoi(rb + 2); }
+    } else {
+        char* c1 = strchr(hp, ':');
+        if (c1 && strchr(c1 + 1, ':') == NULL) { *c1 = 0; *port = atoi(c1 + 1); }
+        spc_strlcpy(host, hp, hn);
+    }
+}
+
+static int is_ip_literal(const char* h)
+{
+    pj_in_addr a4;
+    pj_in6_addr a6;
+    pj_str_t s = spc_pjs(h);
+    return pj_inet_pton(pj_AF_INET(), &s, &a4) == PJ_SUCCESS || pj_inet_pton(pj_AF_INET6(), &s, &a6) == PJ_SUCCESS;
+}
+
+/* Cases that need no DNS: explicit transport= in the registrar, IP literal / explicit port (RFC 3263 skips SRV),
+ * or no resolver configured (log note, udp:5060). Returns 1 (decided: etr/resolved set) or 0 (SRV lookup needed,
+ * srvhost = name to query). */
+static int auto_decide_sync(const cJSON* c, char* etr, size_t en, char* resolved, size_t rn, char* srvhost, size_t sn)
+{
+    const char* registrar = spc_jstr(c, "registrar");
+    const char* domain = spc_jstr(c, "domain");
+    char host[128], tparam[8];
+    int port, sips;
+    int defp;
+    split_target((registrar && registrar[0]) ? registrar : (domain ? domain : ""), host, sizeof(host), &port, &sips, tparam, sizeof(tparam));
+    if (tparam[0] && (strcmp(tparam, "udp") == 0 || strcmp(tparam, "tcp") == 0 || strcmp(tparam, "tls") == 0)) {
+        spc_strlcpy(etr, tparam, en);
+    } else if (sips) {
+        spc_strlcpy(etr, "tls", en);
+    } else {
+        etr[0] = 0;
+    }
+    defp = (etr[0] && strcmp(etr, "tls") == 0) ? 5061 : 5060;
+    if (etr[0] || port > 0 || is_ip_literal(host)) {
+        if (!etr[0]) spc_strlcpy(etr, "udp", en);
+        snprintf(resolved, rn, "%s:%d", host, port > 0 ? port : defp);
+        PJ_LOG(4, ("spcore", "account transport auto: %s needs no SRV lookup, using %s", host, etr));
+        return 1;
+    }
+    if (!pjsip_endpt_get_resolver(pjsua_get_pjsip_endpt())) {
+        spc_strlcpy(etr, "udp", en);
+        snprintf(resolved, rn, "%s:5060", host);
+        PJ_LOG(3, ("spcore", "account transport auto: no DNS resolver configured (set core.start nameservers), falling back to udp:5060 for %s", host));
+        return 1;
+    }
+    spc_strlcpy(srvhost, host, sn);
+    return 0;
+}
+
+/* Applies the outcome to a running account: records transport/resolvedServer and re-configures it when the
+ * result changed (or when this is the first resolution and the resolver owes the initial registration). */
+static void auto_commit(spc_acc* m, unsigned gen, const char* etr, const char* resolved)
+{
+    cJSON* c = NULL;
+    cJSON* eff;
+    pjsua_acc_config cfg;
+    pj_pool_t* pool;
+    char err[200];
+    int acc, tp = PJSUA_INVALID_ID, same, initial, reg_wanted, st_registered;
+    pj_status_t st;
+    cfg_lock();
+    spc_registry_lock();
+    if (m->auto_gen != gen || !m->used || !m->auto_tr || !m->cfg || m->acc < 0 || !pjsua_acc_is_valid(m->acc)) {
+        spc_registry_unlock();
+        cfg_unlock();
+        return;
+    }
+    acc = m->acc;
+    same = strcmp(m->transport, etr) == 0 && strcmp(m->resolved, resolved) == 0;
+    initial = m->auto_initial;
+    reg_wanted = m->auto_reg;
+    st_registered = strcmp(m->reg_state, "none") != 0 && strcmp(m->reg_state, "unregistered") != 0;
+    spc_strlcpy(m->transport, etr, sizeof(m->transport));
+    spc_strlcpy(m->resolved, resolved, sizeof(m->resolved));
+    m->auto_initial = 0;
+    c = cJSON_Duplicate(m->cfg, 1);
+    spc_registry_unlock();
+    if (!c) { cfg_unlock(); return; }
+    PJ_LOG(3, ("spcore", "account %d transport auto: %s via %s", acc, etr, resolved));
+    if (same && !initial) { cfg_unlock(); cJSON_Delete(c); return; }
+    eff = eff_cfg(c, etr);
+    cJSON_Delete(c);
+    pool = pjsua_pool_create("spcauto", 4096, 2048);
+    err[0] = 0;
+    if (!eff || !pool || build_cfg(m, eff, &cfg, pool, err, sizeof(err)) != 0 || ensure_own_tp(m, eff, &tp, err, sizeof(err)) != 0) {
+        PJ_LOG(2, ("spcore", "account %d transport auto: cannot apply %s: %s", acc, etr, err));
+        if (pool) pj_pool_release(pool);
+        if (eff) cJSON_Delete(eff);
+        cfg_unlock();
+        return;
+    }
+    cfg.transport_id = tp;
+    if (initial || !st_registered) cfg.disable_reg_on_modify = PJ_TRUE;     /* the registration is started below (or not wanted) */
+    st = pjsua_acc_modify(acc, &cfg);
+    pj_pool_release(pool);
+    cJSON_Delete(eff);
+    if (st == PJ_SUCCESS && initial && reg_wanted) pjsua_acc_set_registration(acc, PJ_TRUE);
+    cfg_unlock();
+    emit_acc_reg(acc);
+}
+
+static void auto_apply(auto_job* j)
+{
+    int i, pick = -1;
+    char etr[8], resolved[160];
+    for (i = 0; i < 3; i++) if (j->st[i].count > 0) { pick = i; break; }
+    if (pick >= 0) {
+        spc_strlcpy(etr, k_auto_tr[pick], sizeof(etr));
+        snprintf(resolved, sizeof(resolved), "%s:%d", j->st[pick].target, j->st[pick].port);
+    } else {
+        spc_strlcpy(etr, "udp", sizeof(etr));
+        snprintf(resolved, sizeof(resolved), "%s:5060", j->host);
+        PJ_LOG(3, ("spcore", "account transport auto: no SRV records for %s, falling back to udp:5060", j->host));
+    }
+    auto_commit(j->m, j->gen, etr, resolved);
+}
+
+static void auto_finish_cb(void* ud)
+{
+    auto_job* j = (auto_job*)ud;
+    auto_apply(j);
+    auto_unref(j);
+}
+
+static void auto_timeout_cb(void* ud)
+{
+    auto_job* j = (auto_job*)ud;
+    pj_dns_srv_async_query* q[3] = { NULL, NULL, NULL };
+    int own[3] = { 0, 0, 0 }, i, run = 0;
+    spc_mutex_lock(&j->mtx);
+    if (!j->finished) {
+        j->finished = 1;
+        run = 1;
+        for (i = 0; i < 3; i++) { q[i] = j->st[i].q; own[i] = j->st[i].own; j->st[i].q = NULL; j->st[i].own = 0; }
+    }
+    spc_mutex_unlock(&j->mtx);
+    if (run) {
+        /* cancel outside our lock (the resolver may be inside srv_cb under its own lock); after a cancel the
+         * callback is not invoked, so the query's reference is dropped here */
+        for (i = 0; i < 3; i++) {
+            if (q[i]) pj_dns_srv_cancel_query(q[i], PJ_FALSE);
+            if (own[i]) auto_unref(j);
+        }
+        PJ_LOG(3, ("spcore", "account transport auto: SRV lookup for %s timed out", j->host));
+        auto_apply(j);
+    }
+    auto_unref(j);                       /* the timer's own reference */
+}
+
+/* all three queries answered: apply from a timer (never from inside the resolver callback) */
+static void auto_srv_cb(void* user, pj_status_t status, const pj_dns_srv_record* rec)
+{
+    auto_ref* r = (auto_ref*)user;
+    auto_job* j = r->job;
+    int i = r->idx, own, fire = 0;
+    spc_mutex_lock(&j->mtx);
+    own = j->st[i].own;
+    j->st[i].own = 0;
+    j->st[i].q = NULL;
+    if (!j->finished) {
+        unsigned k;
+        j->st[i].count = 0;
+        if (status == PJ_SUCCESS && rec) {
+            for (k = 0; k < rec->count; k++) {
+                const pj_dns_srv_record* e = rec;
+                int pr = e->entry[k].priority, w = e->entry[k].weight;
+                if (e->entry[k].port == 0 || e->entry[k].server.name.slen <= 0 || e->entry[k].server.name.slen >= (pj_ssize_t)sizeof(j->st[i].target)) continue;
+                /* lowest priority value wins, then the highest weight (RFC 2782 preference order) */
+                if (j->st[i].count == 0 || pr < j->st[i].prio || (pr == j->st[i].prio && w > j->st[i].weight)) {
+                    j->st[i].prio = pr;
+                    j->st[i].weight = w;
+                    j->st[i].port = e->entry[k].port;
+                    spc_pjcopy(j->st[i].target, sizeof(j->st[i].target), &e->entry[k].server.name);
+                    j->st[i].count++;
+                }
+            }
+        }
+        if (--j->pending == 0) {
+            j->finished = 1;
+            fire = 1;
+            j->refs++;                   /* for the finish timer */
+        }
+    }
+    spc_mutex_unlock(&j->mtx);
+    if (fire && pjsua_schedule_timer2(&auto_finish_cb, j, 0) != PJ_SUCCESS) {
+        auto_apply(j);                   /* no timer available: apply on this thread (resolver lock risk accepted) */
+        auto_unref(j);
+    }
+    if (own) auto_unref(j);
+}
+
+/* starts (or restarts) the lookup for an auto account; a decision that needs no DNS is applied at once */
+static void auto_start(spc_acc* m)
+{
+    char etr[8], resolved[160], srvhost[128];
+    cJSON* c = NULL;
+    auto_job* j;
+    pj_dns_resolver* r;
+    unsigned gen;
+    int i;
+    spc_registry_lock();
+    gen = ++m->auto_gen;
+    if (m->cfg) c = cJSON_Duplicate(m->cfg, 1);
+    spc_registry_unlock();
+    if (!c) return;
+    if (auto_decide_sync(c, etr, sizeof(etr), resolved, sizeof(resolved), srvhost, sizeof(srvhost))) {
+        cJSON_Delete(c);
+        auto_commit(m, gen, etr, resolved);
+        return;
+    }
+    cJSON_Delete(c);
+    r = pjsip_endpt_get_resolver(pjsua_get_pjsip_endpt());
+    j = (auto_job*)calloc(1, sizeof(*j));
+    if (!j || !r) { free(j); auto_commit(m, gen, "udp", "") ; return; }
+    spc_mutex_init(&j->mtx);
+    j->refs = 2;                         /* creator + timeout timer */
+    j->session = g_auto_session;
+    j->m = m;
+    j->gen = gen;
+    j->pending = 3;
+    spc_strlcpy(j->host, srvhost, sizeof(j->host));
+    for (i = 0; i < 3; i++) j->pool[i] = pjsua_pool_create("spcsrv", 2048, 2048);
+    if (!j->pool[0] || !j->pool[1] || !j->pool[2]) {
+        snprintf(resolved, sizeof(resolved), "%s:5060", srvhost);
+        j->refs--;
+        auto_unref(j);
+        auto_commit(m, gen, "udp", resolved);
+        return;
+    }
+    if (pjsua_schedule_timer2(&auto_timeout_cb, j, AUTO_TIMEOUT_MS) != PJ_SUCCESS) j->refs--;   /* no timer: rely on the callbacks */
+    for (i = 0; i < 3; i++) {
+        pj_str_t h = spc_pjs(j->host), rn = spc_pjs(k_auto_srv[i]);
+        pj_dns_srv_async_query* q = NULL;
+        pj_status_t st;
+        j->ref[i].job = j;
+        j->ref[i].idx = i;
+        spc_mutex_lock(&j->mtx);
+        j->st[i].own = 1;
+        j->refs++;
+        spc_mutex_unlock(&j->mtx);
+        st = pj_dns_srv_resolve(&h, &rn, i == 0 ? 5061 : 5060, j->pool[i], r, 0, &j->ref[i], &auto_srv_cb, &q);
+        spc_mutex_lock(&j->mtx);
+        if (st != PJ_SUCCESS) {
+            int own = j->st[i].own, fire = 0;
+            j->st[i].own = 0;
+            if (!j->finished && own && --j->pending == 0) { j->finished = 1; fire = 1; j->refs++; }
+            spc_mutex_unlock(&j->mtx);
+            if (own) auto_unref(j);
+            if (fire && pjsua_schedule_timer2(&auto_finish_cb, j, 0) != PJ_SUCCESS) { auto_apply(j); auto_unref(j); }
+            continue;
+        }
+        if (j->st[i].own) j->st[i].q = q;        /* callback has not run yet */
+        spc_mutex_unlock(&j->mtx);
+    }
+    auto_unref(j);                       /* the creator's reference */
+}
+
+void spc_account_on_ip_change(void)
+{
+    spc_acc* todo[PJSUA_MAX_ACC];
+    int i, n = 0;
+    spc_registry_lock();
+    for (i = 0; i < PJSUA_MAX_ACC; i++)
+        if (g_acc[i] && g_acc[i]->used && g_acc[i]->auto_tr && !g_acc[i]->is_lan && !g_acc[i]->is_direct) todo[n++] = g_acc[i];
+    spc_registry_unlock();
+    for (i = 0; i < n; i++) auto_start(todo[i]);
+}
+
+/* ------------------------------------------------------------------ */
 /* handlers                                                            */
 /* ------------------------------------------------------------------ */
 static int h_account_add(cJSON* p, cJSON** res)
@@ -684,7 +1157,8 @@ static int h_account_add(cJSON* p, cJSON** res)
     pj_pool_t* pool;
     spc_acc* m;
     char err[200];
-    int rc, tp = PJSUA_INVALID_ID, i;
+    int rc, tp = PJSUA_INVALID_ID, i, auto_async = 0;
+    cJSON *eff = NULL, *c;
     pjsua_acc_id id = -1;
     pj_status_t st;
 
@@ -703,26 +1177,49 @@ static int h_account_add(cJSON* p, cJSON** res)
         }
     spc_registry_unlock();
 
+    err[0] = 0;
+    if (validate_client_cert(p, err, sizeof(err)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
     m = meta_alloc();
     if (!m) return spc_err(SPC_E_INTERNAL, 0, "out of memory");
     m->cfg = cJSON_Duplicate(p, 1);
     fill_meta(m, p);
     pool = pjsua_pool_create("spcacc", 4096, 2048);
     if (!pool) return spc_err(SPC_E_INTERNAL, 0, "out of memory");
-    err[0] = 0;
-    rc = build_cfg(m, p, &cfg, pool, err, sizeof(err));
-    if (rc == 0 && ensure_own_tp(m, p, &tp, err, sizeof(err)) != 0) rc = -1;
+    if (m->auto_tr) {      /* transport:"auto": decide now when no DNS is needed, else start on UDP and let the SRV lookup finish the job */
+        char etr[8], resolved[160], srvhost[128];
+        if (auto_decide_sync(p, etr, sizeof(etr), resolved, sizeof(resolved), srvhost, sizeof(srvhost))) {
+            spc_registry_lock();
+            spc_strlcpy(m->transport, etr, sizeof(m->transport));
+            spc_strlcpy(m->resolved, resolved, sizeof(m->resolved));
+            spc_registry_unlock();
+        } else {
+            spc_strlcpy(etr, "udp", sizeof(etr));
+            auto_async = 1;
+        }
+        eff = eff_cfg(p, etr);
+        if (!eff) { pj_pool_release(pool); return spc_err(SPC_E_INTERNAL, 0, "out of memory"); }
+    }
+    c = eff ? eff : p;
+    rc = build_cfg(m, c, &cfg, pool, err, sizeof(err));
+    if (rc == 0 && ensure_own_tp(m, c, &tp, err, sizeof(err)) != 0) rc = -1;
     if (rc != 0) {
         pj_pool_release(pool);
+        if (eff) cJSON_Delete(eff);
         if (m->own_tp >= 0) pjsua_transport_close(m->own_tp, PJ_FALSE);
         m->used = 0;
         return spc_err(rc == -2 ? SPC_E_UNSUPPORTED : SPC_E_INVALID_PARAM, 0, "%s", err);
     }
     cfg.transport_id = tp;
-    apply_sip_dscp(m, p, tp);
+    apply_sip_dscp(m, c, tp);
+    if (eff) cJSON_Delete(eff);
+    if (auto_async) {
+        m->auto_reg = cfg.register_on_acc_add ? 1 : 0;
+        m->auto_initial = 1;
+        cfg.register_on_acc_add = PJ_FALSE;        /* the SRV lookup starts the registration */
+    }
     spc_registry_lock();
     m->used = 1;
-    spc_strlcpy(m->reg_state, cfg.register_on_acc_add ? "registering" : "none", sizeof(m->reg_state));
+    spc_strlcpy(m->reg_state, (cfg.register_on_acc_add || (auto_async && m->auto_reg)) ? "registering" : "none", sizeof(m->reg_state));
     spc_registry_unlock();
     st = pjsua_acc_add(&cfg, PJ_FALSE, &id);
     pj_pool_release(pool);
@@ -738,12 +1235,15 @@ static int h_account_add(cJSON* p, cJSON** res)
     *res = cJSON_CreateObject();
     cJSON_AddNumberToObject(*res, "acc", id);
     if (!cfg.register_on_acc_add) emit_acc_reg(id);
+    if (auto_async) auto_start(m);
     return SPC_OK;
 }
 
 static int h_account_modify(cJSON* p, cJSON** res)
 {
-    int acc, rc, tp;
+    int acc, rc, tp = PJSUA_INVALID_ID, auto_mod = 0, auto_sync = 0;
+    char sync_tr[8] = "", sync_res[160] = "";
+    cJSON *eff = NULL, *c;
     spc_acc* m;
     cJSON* merged;
     cJSON* it;
@@ -773,24 +1273,66 @@ static int h_account_modify(cJSON* p, cJSON** res)
     pool = pjsua_pool_create("spcmod", 4096, 2048);
     if (!pool) { cJSON_Delete(merged); return spc_err(SPC_E_INTERNAL, 0, "out of memory"); }
     err[0] = 0;
-    rc = build_cfg(m, merged, &cfg, pool, err, sizeof(err));
-    if (rc == 0 && ensure_own_tp(m, merged, &tp, err, sizeof(err)) != 0) rc = -1;
+    if (validate_client_cert(merged, err, sizeof(err)) != 0) {
+        pj_pool_release(pool);
+        cJSON_Delete(merged);
+        return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    }
+    cfg_lock();
+    {
+        const char* mt = spc_jstr(merged, "transport");
+        char etr[8], resolved[160], srvhost[128];
+        if (mt && spc_strieq(mt, "auto")) {
+            /* keep the previous resolution while the new lookup runs */
+            if (m->auto_tr && (strcmp(m->transport, "udp") == 0 || strcmp(m->transport, "tcp") == 0 || strcmp(m->transport, "tls") == 0))
+                spc_strlcpy(etr, m->transport, sizeof(etr));
+            else
+                spc_strlcpy(etr, "udp", sizeof(etr));
+            auto_mod = 1;
+            {
+                char dtr[8];
+                if (auto_decide_sync(merged, dtr, sizeof(dtr), resolved, sizeof(resolved), srvhost, sizeof(srvhost))) {
+                    auto_sync = 1;
+                    spc_strlcpy(etr, dtr, sizeof(etr));
+                    spc_strlcpy(sync_res, resolved, sizeof(sync_res));
+                }
+            }
+            eff = eff_cfg(merged, etr);
+            spc_strlcpy(sync_tr, etr, sizeof(sync_tr));
+        }
+    }
+    c = eff ? eff : merged;
+    rc = build_cfg(m, c, &cfg, pool, err, sizeof(err));
+    if (rc == 0 && ensure_own_tp(m, c, &tp, err, sizeof(err)) != 0) rc = -1;
     if (rc != 0) {
         pj_pool_release(pool);
+        cfg_unlock();
+        if (eff) cJSON_Delete(eff);
         cJSON_Delete(merged);
         return spc_err(rc == -2 ? SPC_E_UNSUPPORTED : SPC_E_INVALID_PARAM, 0, "%s", err);
     }
     cfg.transport_id = tp;
-    apply_sip_dscp(m, merged, tp);
+    apply_sip_dscp(m, c, tp);
     st = pjsua_acc_modify(acc, &cfg);
     pj_pool_release(pool);
-    if (st != PJ_SUCCESS) { cJSON_Delete(merged); return spc_pjerr(st, "pjsua_acc_modify"); }
+    if (eff) cJSON_Delete(eff);
+    if (st != PJ_SUCCESS) { cfg_unlock(); cJSON_Delete(merged); return spc_pjerr(st, "pjsua_acc_modify"); }
     spc_registry_lock();
     cJSON_Delete(m->cfg);
     m->cfg = merged;
+    m->auto_gen++;                                  /* an in-flight SRV lookup belongs to the old configuration */
+    m->auto_initial = 0;
     spc_registry_unlock();
     fill_meta(m, merged);
+    if (auto_mod && auto_sync) {
+        spc_registry_lock();
+        spc_strlcpy(m->transport, sync_tr, sizeof(m->transport));
+        spc_strlcpy(m->resolved, sync_res, sizeof(m->resolved));
+        spc_registry_unlock();
+    }
+    cfg_unlock();
     emit_acc_reg(acc);
+    if (auto_mod && !auto_sync) auto_start(m);
     return SPC_OK;
 }
 
@@ -805,8 +1347,10 @@ static int h_account_remove(cJSON* p, cJSON** res)
     if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_remove(acc);
     m = spc_acc_from_id(acc);
     if (!m || m->is_lan || m->is_direct) return spc_err(SPC_E_INVALID_PARAM, 0, "cannot remove this account");
+    cfg_lock();
+    spc_registry_lock(); m->auto_gen++; spc_registry_unlock();      /* cancels a pending SRV result */
     st = pjsua_acc_del(acc);
-    if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_acc_del");
+    if (st != PJ_SUCCESS) { cfg_unlock(); return spc_pjerr(st, "pjsua_acc_del"); }
     {   /* a removed account always ends with a final "unregistered" account.reg */
         cJSON* fin;
         int need;
@@ -831,13 +1375,15 @@ static int h_account_remove(cJSON* p, cJSON** res)
         cJSON_AddBoolToObject(fin, "isUnreg", 1);
         cJSON_AddNullToObject(fin, "contact");
         cJSON_AddStringToObject(fin, "transport", m->transport);
+        cJSON_AddNullToObject(fin, "resolvedServer");
         cJSON_AddStringToObject(fin, "presence", m->presence);
         cJSON_AddBoolToObject(fin, "isLan", 0);
         cJSON_AddBoolToObject(fin, "isDirect", 0);
         if (need) spc_emit("account.reg", fin); else cJSON_Delete(fin);
         spc_registry_unlock();
     }
-    if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
+    if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; m->own_sig = 0; }
+    cfg_unlock();
     return SPC_OK;
 }
 
@@ -978,10 +1524,34 @@ static int add_special(int tp, const char* uid, int lan, int* out)
     return 0;
 }
 
+/* RFC 3261 26.2.2: a request to a sips: URI must carry a sips: Contact (a PBX such as Asterisk answers
+ * "480 SIPS Required" otherwise). pjsua only does that for accounts whose own URI is sips:, so requests whose
+ * Request-URI is sips: get their Contact promoted here, just before encoding. */
+static pj_status_t sips_on_tx_request(pjsip_tx_data* tdata)
+{
+    pjsip_msg* msg = tdata->msg;
+    pjsip_contact_hdr* ch;
+    if (!msg || msg->type != PJSIP_REQUEST_MSG || !PJSIP_URI_SCHEME_IS_SIPS(msg->line.req.uri)) return PJ_SUCCESS;
+    if (tdata->buf.start) return PJ_SUCCESS;                   /* already encoded (retransmission) */
+    for (ch = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL); ch;
+         ch = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, ch->next)) {
+        if (!ch->star && ch->uri && PJSIP_URI_SCHEME_IS_SIP(ch->uri)) pjsip_sip_uri_set_secure((pjsip_sip_uri*)pjsip_uri_get_uri(ch->uri), PJ_TRUE);
+    }
+    return PJ_SUCCESS;
+}
+static pjsip_module g_sips_mod = {
+    NULL, NULL, { "mod-spc-sips", 12 }, -1, PJSIP_MOD_PRIORITY_APPLICATION,
+    NULL, NULL, NULL, NULL,
+    NULL, NULL, &sips_on_tx_request, NULL, NULL
+};
+
 int spc_account_init_special(int direct_tp, int lan_tp)
 {
     (void)lan_tp;
     if (direct_tp < 0) return -1;
+    g_sips_mod.prev = g_sips_mod.next = NULL;                   /* module struct is reused across core.stop / core.start */
+    g_sips_mod.id = -1;
+    pjsip_endpt_register_module(pjsua_get_pjsip_endpt(), &g_sips_mod);
     return add_special(direct_tp, "__direct__", 0, &G.direct_acc);
 }
 
@@ -1021,6 +1591,7 @@ void spc_account_cleanup(void)
 {
     spc_acc* a;
     int i;
+    g_auto_session++;                   /* SRV jobs of this session: their pools died with the engine */
     spc_registry_lock();
     for (i = 0; i < PJSUA_MAX_ACC; i++) g_acc[i] = NULL;
     a = g_all;

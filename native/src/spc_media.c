@@ -1,5 +1,7 @@
 /* spc_media.c: devices, sound modes, codecs, EC, levels, tones, ringer, loopback. */
 #include "spc_internal.h"
+#include "spc_player.h"
+#include "spc_rec.h"
 #include <pjmedia/tonegen.h>
 #include <pjmedia/wav_port.h>
 #include <pjmedia/null_port.h>
@@ -16,6 +18,7 @@ static char g_cur_cap[160] = "default", g_cur_play[160] = "default", g_cur_ring[
 static int g_null_attached;        /* null device currently attached by us */
 static int g_real_open_manual;     /* manual mode: Dart opened a real device */
 static int g_loopback;
+static int g_mic_rec;            /* spc_rec id of the microphone recorder, 0 = none */
 
 /* tone */
 static pj_pool_t* g_tone_pool;
@@ -155,6 +158,7 @@ int spc_media_init(void)
     g_null_attached = 0;
     g_real_open_manual = 0;
     g_loopback = 0;
+    g_mic_rec = 0;
     spc_strlcpy(g_cur_cap, "default", sizeof(g_cur_cap));
     spc_strlcpy(g_cur_play, "default", sizeof(g_cur_play));
     spc_strlcpy(g_cur_ring, "default", sizeof(g_cur_ring));
@@ -176,11 +180,51 @@ int spc_media_init(void)
 
 void spc_media_started(void) {}
 
+/* The bridge removes ports asynchronously and keeps a reference on the port's group lock until its next clock tick, so
+ * memory a port lives in (its pool) must not be freed before the port's on_destroy runs. spc_port_destroy_release()
+ * drops the owner's reference and releases `pool` from the port's on_destroy (chained after the port's own one), i.e.
+ * only when the last reference (ours or the bridge's) is gone. Call it AFTER pjsua_conf_remove_port(). */
+typedef struct pool_guard { struct pool_guard* next; pjmedia_port* port; pj_pool_t* pool; pj_status_t (*orig)(pjmedia_port*); } pool_guard;
+static pool_guard* g_guards;
+static pj_status_t guarded_on_destroy(pjmedia_port* port)
+{
+    pool_guard *g, **pp;
+    pj_status_t st = PJ_SUCCESS;
+    pj_pool_t* pool = NULL;
+    spc_mutex_lock(&G.tg_mtx);
+    for (pp = &g_guards; (g = *pp) != NULL; pp = &g->next)
+        if (g->port == port) { *pp = g->next; break; }
+    spc_mutex_unlock(&G.tg_mtx);
+    if (!g) return PJ_SUCCESS;
+    if (g->orig) st = g->orig(port);
+    pool = g->pool;
+    free(g);
+    if (pool) pj_pool_release(pool);
+    return st;
+}
+
+void spc_port_destroy_release(pjmedia_port* port, pj_pool_t* pool)
+{
+    pool_guard* g;
+    if (!port) { if (pool) pj_pool_release(pool); return; }
+    if (!pool) { pjmedia_port_destroy(port); return; }
+    g = (pool_guard*)calloc(1, sizeof(*g));
+    if (!g) { pjmedia_port_destroy(port); return; }   /* out of memory: leak the pool rather than free memory the bridge may read */
+    g->port = port; g->pool = pool; g->orig = port->on_destroy;
+    spc_mutex_lock(&G.tg_mtx);
+    g->next = g_guards; g_guards = g;
+    spc_mutex_unlock(&G.tg_mtx);
+    port->on_destroy = guarded_on_destroy;
+    pjmedia_port_destroy(port);        /* the pool goes with the last reference */
+}
+
 static void tone_stop(void)
 {
+    pjmedia_port* port = g_tone_port;
+    pj_pool_t* pool = g_tone_pool;
     if (g_tone_slot >= 0) { pjsua_conf_disconnect(g_tone_slot, 0); pjsua_conf_remove_port(g_tone_slot); g_tone_slot = -1; }
-    if (g_tone_port) { pjmedia_port_destroy(g_tone_port); g_tone_port = NULL; }
-    if (g_tone_pool) { pj_pool_release(g_tone_pool); g_tone_pool = NULL; }
+    g_tone_port = NULL; g_tone_pool = NULL;
+    spc_port_destroy_release(port, pool);
 }
 
 static void ring_stop(void)
@@ -194,6 +238,8 @@ static void ring_stop(void)
 
 void spc_media_shutdown(void)
 {
+    spc_player_shutdown();
+    spc_rec_shutdown();
     if (g_loopback) { pjsua_conf_disconnect(0, 0); g_loopback = 0; }
     tone_stop();
     ring_stop();
@@ -655,6 +701,54 @@ static int h_loopback(cJSON* p, cJSON** res)
     return SPC_OK;
 }
 
+/* ---- media files / microphone recorder ---- */
+static int h_file_info(cJSON* p, cJSON** res)
+{
+    const char* file = spc_jstr(p, "file");
+    spc_fileinfo fi;
+    char err[200];
+    if (!file || !file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
+    if (spc_media_file_info(file, &fi, err, sizeof(err)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(*res, "format", fi.format);
+    cJSON_AddNumberToObject(*res, "durationMs", fi.durationMs);
+    cJSON_AddNumberToObject(*res, "sampleRate", fi.sampleRate);
+    cJSON_AddNumberToObject(*res, "channels", fi.channels);
+    return SPC_OK;
+}
+
+
+static int h_record_mic_start(cJSON* p, cJSON** res)
+{
+    const char* file = spc_jstr(p, "file");
+    char err[200];
+    int id = 0;
+    if (!file || !file[0] || strlen(file) > 590) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
+    if (g_mic_rec && spc_rec_mic_id() == g_mic_rec) return spc_err(SPC_E_ALREADY, 0, "microphone recording already active");
+    spc_media_ensure_clock();
+    if (spc_rec_start(SPC_REC_WAV_MONO, 0, 0, file, &id, err, sizeof(err)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    g_mic_rec = id;
+    spc_call_apply_topology();
+    *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(*res, "file", file);
+    return SPC_OK;
+}
+
+static int h_record_mic_stop(cJSON* p, cJSON** res)
+{
+    spc_rec_result rr;
+    (void)p;
+    if (!g_mic_rec) return spc_err(SPC_E_INVALID_PARAM, 0, "not recording");
+    if (spc_rec_stop(g_mic_rec, &rr) != 0) { g_mic_rec = 0; return spc_err(SPC_E_INVALID_PARAM, 0, "not recording"); }
+    g_mic_rec = 0;
+    *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(*res, "file", rr.file);
+    cJSON_AddNumberToObject(*res, "durationMs", rr.durationMs);
+    cJSON_AddStringToObject(*res, "format", "wav");
+    cJSON_AddNumberToObject(*res, "bytes", (double)rr.bytes);
+    return SPC_OK;
+}
+
 const spc_method spc_methods_media[] = {
     { "media.devices", h_devices, 0 }, { "media.setDevices", h_set_devices, 0 },
     { "media.refreshDevices", h_refresh_devices, 0 }, { "media.codecs", h_codecs, 0 },
@@ -664,5 +758,7 @@ const spc_method spc_methods_media[] = {
     { "media.tone", h_tone, 0 }, { "media.toneStop", h_tone_stop, 0 },
     { "media.ringStart", h_ring_start, 0 }, { "media.ringStop", h_ring_stop, 0 },
     { "media.loopback", h_loopback, 0 },
+    { "media.fileInfo", h_file_info, SPC_M_PRESTART },
+    { "media.recordMicStart", h_record_mic_start, 0 }, { "media.recordMicStop", h_record_mic_stop, 0 },
     { NULL, NULL, 0 }
 };

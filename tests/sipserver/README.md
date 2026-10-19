@@ -33,7 +33,7 @@ With the gRPC forwarder UDP/TCP/TLS/WS/WSS/IAX2/RTP all work via `127.0.0.1`. Ve
 | Mac host (pjsua, desktop app, tests) | `127.0.0.1` (`export PBX_HOST=127.0.0.1`) | default mode |
 | Android emulator | `10.0.2.2` | run `up.sh --emulator` |
 
-Ports: UDP/TCP **5060**, TLS **5061**, WS **8088** (`/ws`), WSS **8089** (`/ws`), IAX2 **4569/udp**, RTP **10000-10099/udp**, AMI **5038** (`test`/`test`).
+Ports: UDP/TCP **5060**, TLS **5061**, mutual TLS **5062** (client certificate required, see below), WS **8088** (`/ws`), WSS **8089** (`/ws`), IAX2 **4569/udp**, RTP **10000-10099/udp**, AMI **5038** (`test`/`test`).
 
 **Why one mode at a time:** behind Docker port-forwarding the PBX cannot know which address the client used to reach it, so
 it puts one configured address (`PBX_EXTERNAL_ADDR`, default `127.0.0.1`) into SDP `c=`, Contact and ICE candidates.
@@ -41,7 +41,16 @@ Media is then latched symmetrically (`rtp_symmetric`, `force_rport`, `rewrite_co
 with `up.sh --emulator` (or `PBX_EXTERNAL_ADDR=10.0.2.2 docker compose up -d`). Host and emulator clients cannot do media simultaneously
 (signaling would work for both). A real LAN device could use `PBX_EXTERNAL_ADDR=<Mac LAN IP>`.
 
+`sips:600@127.0.0.1` over TLS 5061 works (the dialplan answers 600; the client must send a `sips:` Contact, which spcore does).
+
 TLS/WSS: self-signed CA exported to `tests/sipserver/certs/ca.crt` (also `docker cp softphonepro-pbx:/etc/asterisk/keys/ca.crt .`).
+Mutual TLS (second TLS transport `transport-tls-mtls`, **5062**): `verify_client=yes`, `require_client_cert=yes`; any endpoint
+(e.g. 1019) can register over it, but only with a client certificate signed by the test CA. The image build creates the certificate
+(CN `spcore-test-client`, EKU clientAuth) and `up.sh` copies it to `tests/sipserver/certs/`: `client.crt`, `client.key` and
+`client-enc.key` (the same key encrypted with password `secret`). Without a certificate the TLS handshake ends with
+`tlsv13 alert certificate required`. Used by `native/tests/test_n3.py` (AccountConfig `tlsClientCert`).
+The CA is created in an earlier image layer, so rebuilding with a warm cache keeps `ca.crt` unchanged. A cold rebuild creates a new CA
+(update `certs/*`; `up.sh` does).
 Server cert SANs: `localhost, softphonepro-pbx, pbx.test, 127.0.0.1, 10.0.2.2, ::1`. TLS method is `sslv23` (negotiates TLS1.2/1.3).
 Realm is the default (`asterisk`); pjsua needs `--realm '*'`.
 
@@ -110,6 +119,7 @@ scripts/cli.sh "originate PJSIP/1001 extension 603@default"  # ring 1001 from th
 
 ## Verified from the Mac host (pjsua 2.17, colima gRPC forwarder)
 
+Mutual TLS (5062): REGISTER 200 + call with `client.crt`, handshake rejected without it (`native/tests/test_n3.py`).
 REGISTER 200 + echo call (600) with ~350+ RTP packets received in 7 s for UDP, TCP and TLS (CA verified); WS and WSS REGISTER
 (`scripts/ws_register_check.py HOST ws|wss EXT`) -> 401 then 200; IAX2 peer 2001 registered from a second Asterisk and PBX->IAX2 call answered; 601 tone received;
 602 DTMF logged; 1011 SRTP/SDES; 1998 headers; 1999 REFER; MESSAGE; MWI NOTIFY; directed pickup; 800/604/`*97`/700/603 answer.

@@ -14,6 +14,14 @@ RUN mkdir -p /etc/asterisk/keys && cd /etc/asterisk/keys \
  && openssl x509 -req -in asterisk.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile ext.cnf -out asterisk.crt \
  && cat asterisk.crt asterisk.key > asterisk.pem && rm -f asterisk.csr ext.cnf ca.srl && chmod 644 *
 
+# --- Client certificate (mutual TLS on 5062): signed by the test CA; client-enc.key is the same key encrypted with password "secret" ---
+RUN cd /etc/asterisk/keys \
+ && openssl req -newkey rsa:2048 -nodes -subj "/O=SoftphonePro Test/CN=spcore-test-client" -keyout client.key -out client.csr \
+ && printf 'basicConstraints=CA:FALSE\nauthorityKeyIdentifier=keyid\nsubjectKeyIdentifier=hash\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=clientAuth\n' > cext.cnf \
+ && openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile cext.cnf -out client.crt \
+ && openssl pkey -in client.key -aes256 -passout pass:secret -out client-enc.key \
+ && rm -f client.csr cext.cnf ca.srl && chmod 644 client.*
+
 # --- Test audio (sox): long tone for ext 601/604, short prompt for 1999, MOH ---
 RUN mkdir -p /usr/share/asterisk/sounds/custom /var/lib/asterisk/moh-test \
  && sox -n -r 8000 -c 1 -b 16 /usr/share/asterisk/sounds/custom/tone-long.wav synth 30 sine 440 vol 0.5 \
@@ -30,5 +38,5 @@ RUN for m in 1001 1002; do d=/var/spool/asterisk/voicemail/default/$m/INBOX; mkd
 COPY config/ /opt/asterisk-conf/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && mkdir -p /var/log/asterisk /var/run/asterisk
-EXPOSE 5060/udp 5060/tcp 5061/tcp 8088/tcp 8089/tcp 4569/udp 5038/tcp 10000-10099/udp
+EXPOSE 5060/udp 5060/tcp 5061/tcp 5062/tcp 8088/tcp 8089/tcp 4569/udp 5038/tcp 10000-10099/udp
 ENTRYPOINT ["/entrypoint.sh"]
