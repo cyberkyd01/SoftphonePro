@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SoftphonePro needs the microphone to carry your voice during calls.</string>
 </dict>
 </plist>

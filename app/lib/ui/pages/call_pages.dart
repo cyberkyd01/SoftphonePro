@@ -1,0 +1,555 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/theme.dart';
+import '../../platform/platform_services.dart';
+import '../../services/accounts_controller.dart';
+import '../../services/calls_controller.dart';
+import '../../services/contacts_controller.dart';
+import '../../services/messages_controller.dart';
+import '../../services/providers.dart';
+import '../helpers.dart';
+import '../widgets/basic_widgets.dart';
+import '../widgets/call_widgets.dart';
+import '../widgets/dial_pad.dart';
+
+/// Full-screen in-call page (compact layouts).
+class InCallPage extends ConsumerStatefulWidget {
+  const InCallPage({super.key});
+  @override
+  ConsumerState<InCallPage> createState() => _InCallPageState();
+}
+
+class _InCallPageState extends ConsumerState<InCallPage> {
+  bool _keypad = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(callsProvider);
+    final calls = ref.read(callsProvider.notifier);
+    final contacts = ref.watch(contactsProvider);
+    final acc = ref.watch(accountsProvider);
+    final c = s.focused;
+    final t = Theme.of(context);
+    final colors = context.colors;
+
+    if (c == null) {
+      return Scaffold(
+        body: Center(
+          child: TextButton(onPressed: () => context.go('/keypad'), child: const Text('Back')),
+        ),
+      );
+    }
+    final title = callTitle(c, contacts);
+    final profile = acc.byId(c.accountId);
+    final others = s.ongoing.where((o) => o.cid != c.cid).toList();
+    final waiting = s.ringing;
+    final mergeable = s.ongoing.where((o) => o.isConfirmed).length >= 2;
+    final route = ref.watch(audioRouteProvider).value ?? AudioRoute.earpiece;
+    final speakerOn = route == AudioRoute.speaker;
+    final consult = c.consultOf != null;
+
+    return Scaffold(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final small = box.maxHeight < 640;
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Back to app (call stays active)',
+                        onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
+                      ),
+                      const Spacer(),
+                      if (profile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
+                        ),
+                    ],
+                  ),
+                ),
+                for (final w in waiting) _WaitingBanner(call: w, title: callTitle(w, contacts)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          SizedBox(height: small ? 0 : 8),
+                          Text(
+                            title,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          if (title != c.number && c.number.isNotEmpty)
+                            Text(c.number, style: tabular(t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                          const SizedBox(height: 6),
+                          if (c.isConfirmed && !c.isHeld)
+                            CallTimer(call: c, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))
+                          else
+                            Text(
+                              callStateText(c),
+                              style: t.textTheme.titleMedium?.copyWith(
+                                color: c.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (c.isConfirmed && c.isHeld) CallTimer(call: c, style: t.textTheme.bodyMedium),
+                          const SizedBox(height: 6),
+                          if (c.isConfirmed)
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              children: [
+                                QualityIndicator(mos: c.stats?.mos ?? 0, onTap: () => showStatsSheet(context, c.cid)),
+                                SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
+                                if (c.recording)
+                                  Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
+                                    Text(' REC', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
+                                  ]),
+                              ],
+                            ),
+                          if (consult) _ConsultBanner(call: c),
+                          if (others.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            for (final o in others)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _StackedCall(call: o, title: callTitle(o, contacts)),
+                              ),
+                          ],
+                          if (_keypad && c.isConfirmed) ...[
+                            const SizedBox(height: 8),
+                            InCallKeypad(cid: c.cid, compact: true),
+                          ] else if (others.isEmpty) ...[
+                            SizedBox(height: small ? 12 : 24),
+                            Avatar(name: title, size: small ? 84 : 120),
+                          ],
+                          const SizedBox(height: 16),
+                          _ActionGrid(
+                            children: [
+                              CallActionButton(
+                                icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                                label: 'Mute',
+                                active: c.muted,
+                                onPressed: c.isConfirmed ? () => calls.toggleMute(c.cid) : null,
+                              ),
+                              CallActionButton(
+                                icon: Icons.dialpad_rounded,
+                                label: 'Keypad',
+                                active: _keypad,
+                                onPressed: c.isConfirmed ? () => setState(() => _keypad = !_keypad) : null,
+                              ),
+                              CallActionButton(
+                                icon: audioRouteIcon(speakerOn ? AudioRoute.speaker : route),
+                                label: speakerOn ? 'Speaker' : (route == AudioRoute.earpiece ? 'Speaker' : _routeName(route)),
+                                active: speakerOn || route == AudioRoute.bluetooth || route == AudioRoute.wired,
+                                onPressed: () => _onSpeaker(context, ref, route),
+                              ),
+                              CallActionButton(
+                                icon: Icons.pause_rounded,
+                                label: c.isHeld ? 'Resume' : 'Hold',
+                                active: c.isHeld,
+                                activeColor: colors.holdAmber,
+                                onPressed: c.isConfirmed ? () => calls.toggleHold(c.cid) : null,
+                              ),
+                              CallActionButton(
+                                icon: Icons.person_add_alt_1_rounded,
+                                label: 'Add call',
+                                onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
+                              ),
+                              CallActionButton(
+                                icon: Icons.phone_forwarded_rounded,
+                                label: 'Transfer',
+                                onPressed: c.isConfirmed ? () => showTransferSheet(context, c.cid) : null,
+                              ),
+                              CallActionButton(
+                                icon: Icons.fiber_manual_record_rounded,
+                                label: c.recording ? 'Stop' : 'Record',
+                                active: c.recording,
+                                activeColor: colors.endRed,
+                                onPressed: c.isConfirmed ? () => calls.toggleRecording(c.cid) : null,
+                              ),
+                              CallActionButton(
+                                icon: c.isConference ? Icons.call_split_rounded : Icons.call_merge_rounded,
+                                label: c.isConference ? 'Split' : 'Merge',
+                                active: c.isConference,
+                                onPressed: c.isConference ? () => calls.split() : (mergeable ? () => calls.merge() : null),
+                              ),
+                              CallActionButton(
+                                icon: Icons.more_horiz_rounded,
+                                label: 'More',
+                                onPressed: () => showMoreSheet(context, c.cid),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20, top: 4),
+                  child: RoundCallButton(
+                    key: const Key('end-call'),
+                    icon: Icons.call_end_rounded,
+                    color: colors.endRed,
+                    label: 'End call',
+                    size: 72,
+                    onPressed: () => calls.hangup(c.cid),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  String _routeName(AudioRoute r) => switch (r) {
+    AudioRoute.bluetooth => 'Bluetooth',
+    AudioRoute.wired => 'Headset',
+    _ => 'Speaker',
+  };
+
+  Future<void> _onSpeaker(BuildContext context, WidgetRef ref, AudioRoute cur) async {
+    final p = ref.read(platformServicesProvider);
+    final routes = await p.availableAudioRoutes();
+    if (!context.mounted) return;
+    if (routes.length > 2 || cur == AudioRoute.bluetooth || cur == AudioRoute.wired) {
+      await showAudioSheet(context);
+    } else {
+      await p.setAudioRoute(cur == AudioRoute.speaker ? AudioRoute.earpiece : AudioRoute.speaker);
+    }
+  }
+}
+
+class _ActionGrid extends StatelessWidget {
+  const _ActionGrid({required this.children});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 340),
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.08,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _StackedCall extends ConsumerWidget {
+  const _StackedCall({required this.call, required this.title});
+  final UiCall call;
+  final String title;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final calls = ref.read(callsProvider.notifier);
+    final t = Theme.of(context);
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(kRadius),
+        border: Border.all(color: t.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Avatar(name: title, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(callStateText(call), style: t.textTheme.bodySmall?.copyWith(color: call.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          if (call.isConfirmed) ...[
+            TextButton(onPressed: () => calls.swap(), child: const Text('Swap')),
+            TextButton(onPressed: () => calls.merge(), child: const Text('Merge')),
+          ],
+          IconButton(
+            tooltip: 'End call with $title',
+            onPressed: () => calls.hangup(call.cid),
+            icon: Icon(Icons.call_end_rounded, color: colors.endRed),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConsultBanner extends ConsumerWidget {
+  const _ConsultBanner({required this.call});
+  final UiCall call;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final calls = ref.read(callsProvider.notifier);
+    final t = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(kRadius),
+      ),
+      child: Column(
+        children: [
+          Text('Attended transfer. The original caller is on hold.', style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  key: const Key('complete-transfer'),
+                  onPressed: call.isConfirmed ? () => calls.completeAttended(call.cid) : null,
+                  child: const Text('Complete transfer'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(key: const Key('cancel-transfer'), onPressed: () => calls.cancelConsult(call.cid), child: const Text('Cancel')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WaitingBanner extends ConsumerWidget {
+  const _WaitingBanner({required this.call, required this.title});
+  final UiCall call;
+  final String title;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final calls = ref.read(callsProvider.notifier);
+    final colors = context.colors;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: colors.raised,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Call waiting', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          IconButton.filled(
+            key: Key('waiting-answer-${call.cid}'),
+            tooltip: 'Hold current call and answer',
+            style: IconButton.styleFrom(backgroundColor: colors.callGreen),
+            onPressed: () => calls.answer(call.cid),
+            icon: const Icon(Icons.call_rounded),
+          ),
+          const SizedBox(width: 4),
+          IconButton.filled(
+            tooltip: 'Decline',
+            style: IconButton.styleFrom(backgroundColor: colors.endRed),
+            onPressed: () => calls.decline(call.cid),
+            icon: const Icon(Icons.call_end_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/// Full-screen incoming call page (compact layouts).
+class IncomingCallPage extends ConsumerWidget {
+  const IncomingCallPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(callsProvider);
+    final calls = ref.read(callsProvider.notifier);
+    final contacts = ref.watch(contactsProvider);
+    final acc = ref.watch(accountsProvider);
+    final lan = ref.watch(lanHandoffProvider);
+    final c = s.ringing.isEmpty ? null : s.ringing.first;
+    final t = Theme.of(context);
+    final colors = context.colors;
+    if (c == null) {
+      return Scaffold(body: Center(child: TextButton(onPressed: () => context.go('/keypad'), child: const Text('Back'))));
+    }
+    final title = callTitle(c, contacts);
+    final profile = acc.byId(c.accountId);
+    final hasVoicemail = (profile?.effectiveVoicemail ?? '').isNotEmpty;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+                Text(
+                  'Incoming call',
+                  style: t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                ),
+                if (profile != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
+                  ),
+                const Spacer(),
+                PulseRing(size: 120, child: Avatar(name: title, size: 120)),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (title != c.number && c.number.isNotEmpty)
+                  Text(c.number, style: tabular(t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    CallActionButton(icon: Icons.message_rounded, label: 'Reply', size: 54, onPressed: () => _reply(context, ref, c)),
+                    CallActionButton(icon: Icons.voicemail_rounded, label: 'Voicemail', size: 54, onPressed: hasVoicemail ? () => calls.redirectToVoicemail(c.cid) : null),
+                    CallActionButton(
+                      icon: Icons.devices_rounded,
+                      label: 'To device',
+                      size: 54,
+                      onPressed: lan.available && lan.devices.isNotEmpty ? () => calls.forwardIncomingToLan(c.cid, lan.devices.first) : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    RoundCallButton(
+                      key: const Key('decline-call'),
+                      icon: Icons.call_end_rounded,
+                      color: colors.endRed,
+                      label: 'Decline',
+                      showLabel: true,
+                      size: 76,
+                      onPressed: () => calls.decline(c.cid),
+                    ),
+                    RoundCallButton(
+                      key: const Key('answer-call'),
+                      icon: Icons.call_rounded,
+                      color: colors.callGreen,
+                      label: 'Answer',
+                      showLabel: true,
+                      size: 76,
+                      onPressed: () => calls.answer(c.cid),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reply(BuildContext context, WidgetRef ref, UiCall c) async {
+    final calls = ref.read(callsProvider.notifier);
+    final msgs = ref.read(messagesProvider.notifier);
+    const quick = ["Can't talk now, I'll call you back.", "I'm in a meeting. Text me?", 'On my way.'];
+    final text = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [for (final q in quick) ListTile(title: Text(q), onTap: () => Navigator.pop(ctx, q))],
+        ),
+      ),
+    );
+    if (text == null) return;
+    final to = c.info.remoteUri;
+    final acc = c.accountId;
+    await calls.decline(c.cid, code: 486);
+    if (acc.isNotEmpty) await msgs.send(acc, to, text);
+  }
+}
+
+/// Green call bar shown on compact layouts while a call is active.
+class CallBar extends ConsumerWidget {
+  const CallBar({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(callsProvider);
+    final c = s.focused;
+    final ringing = s.ringing.where((r) => !r.waiting).toList();
+    if (c == null && ringing.isEmpty) return const SizedBox.shrink();
+    final contacts = ref.watch(contactsProvider);
+    final colors = context.colors;
+    final shown = c ?? ringing.first;
+    final title = callTitle(shown, contacts);
+    return Semantics(
+      button: true,
+      label: 'Return to call with $title',
+      child: Material(
+        color: colors.callGreen,
+        child: InkWell(
+          onTap: () => context.push(c == null ? '/incoming' : '/call'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    c == null ? 'Incoming: $title' : 'In call with $title',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (c != null && c.isConfirmed) CallTimer(call: c, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

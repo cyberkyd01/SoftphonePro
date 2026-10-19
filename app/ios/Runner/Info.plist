@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Softphonepro</string>
+	<string>SoftphonePro</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SoftphonePro needs the microphone to carry your voice during calls.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>SoftphonePro can show your device contacts when you search or dial.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>SoftphonePro discovers other SoftphonePro devices on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array><string>_softphonepro._tcp</string></array>
+	<key>UIBackgroundModes</key>
+	<array><string>audio</string><string>voip</string></array>
 </dict>
 </plist>
