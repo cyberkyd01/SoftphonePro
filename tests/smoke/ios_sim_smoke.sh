@@ -33,7 +33,18 @@ for i in 1 2 3 4 5 6; do
   echo "launch attempt $i failed (SpringBoard not ready?): $(tr '\n' ' ' < "$OUT/launch-err.log" | cut -c1-200)"
   LAUNCH_OUT=""; sleep 20
 done
-[ -n "$LAUNCH_OUT" ] || { xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png" || true; echo "FAIL: could not launch"; exit 1; }
+if [ -z "$LAUNCH_OUT" ]; then
+  xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png" || true
+  echo "--- diagnostics"
+  ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || true
+  for f in ~/Library/Logs/DiagnosticReports/Runner*; do [ -f "$f" ] && { cp "$f" "$OUT/"; head -c 6000 "$f"; }; done
+  xcrun simctl spawn "$UDID" log show --last 5m --style compact --predicate 'eventMessage CONTAINS[c] "softphonepro" OR process == "Runner"' > "$OUT/device.log" 2>&1 || true
+  tail -n 60 "$OUT/device.log"
+  vtool -show-build "$APP/Runner" 2>&1 | head -12 || true
+  for fw in "$APP"/Frameworks/*.framework; do echo "$fw"; vtool -show-build "$fw/$(basename "$fw" .framework)" 2>&1 | grep -E "platform|minos|arch" | head -3; done
+  codesign -dv "$APP" 2>&1 | head -5 || true
+  echo "FAIL: could not launch"; exit 1
+fi
 echo "$LAUNCH_OUT"
 PID="${LAUNCH_OUT##*: }"
 alive() { kill -0 "$1" 2>/dev/null; }
