@@ -401,9 +401,13 @@ class TestCore(Base):
         self.assertTrue(r["ok"])
         c.send({"m": "core.ping", "p": "notjson"})
         c.sleep(100)
-        self.assertEqual(c.raw("account.add", {"uid": "w", "username": "1", "domain": "x", "transport": "wss"})["error"]["code"], "UNSUPPORTED")
-        self.assertEqual(c.raw("account.add", {"uid": "w", "username": "1", "domain": "x", "transport": "ws"})["error"]["code"], "UNSUPPORTED")
-        self.assertEqual(c.raw("account.add", {"uid": "i", "proto": "iax2", "username": "1", "domain": "x"})["error"]["code"], "UNSUPPORTED")
+        # ws/wss (SIP over WebSocket) are supported now; see test_ws.py for the behaviour tests
+        self.assertEqual(c.raw("account.add", {"uid": "w", "username": "1", "domain": "x", "transport": "wss", "register": False})["ok"], True)
+        self.assertEqual(c.raw("account.add", {"uid": "w2", "username": "1", "domain": "x", "transport": "ws", "register": False})["ok"], True)
+        self.assertEqual(c.raw("account.add", {"uid": "w3", "username": "1", "domain": "x", "transport": "carrier-pigeon"})["error"]["code"], "INVALID_PARAM")
+        # IAX2 is supported now: a bad host is not an add-time error (like SIP, it shows up as a failed registration)
+        self.assertEqual(c.raw("account.add", {"uid": "i", "proto": "iax2", "username": "1", "domain": "x", "register": False})["ok"], True)
+        self.assertEqual(c.raw("account.add", {"uid": "i2", "proto": "bogus", "username": "1", "domain": "x"})["error"]["code"], "INVALID_PARAM")
 
     def test_02_media_misc(self):
         c = self.cli()

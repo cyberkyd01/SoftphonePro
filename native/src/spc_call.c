@@ -265,6 +265,7 @@ cJSON* spc_call_info_json(uint64_t cid)
     spc_call* c;
     cJSON* o;
     if (spc_call_cid_to_slot(cid, &slot, &acc) != 0) return NULL;
+    if (slot >= SPC_ID_IAX_BASE) return spc_iax2_call_info_json(cid);
     if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS) return NULL;
     c = spc_call_lock_find(cid);
     if (!c) return NULL;
@@ -427,6 +428,11 @@ void spc_call_apply_topology(void)
     for (i = 0; i < n; i++) {
         pjsua_call_info ci;
         e[i].cslot = -1; e[i].active = 0;
+        if (e[i].slot >= SPC_ID_IAX_BASE) {
+            int act = 0, cs = -1;
+            if (spc_iax2_call_conf(e[i].cid, &cs, &act) == 0) { e[i].cslot = cs; e[i].active = (act && cs >= 0); }
+            continue;
+        }
         if (pjsua_call_get_info(e[i].slot, &ci) != PJ_SUCCESS) continue;
         e[i].cslot = ci.conf_slot;
         e[i].active = (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE && ci.conf_slot >= 0);
@@ -755,6 +761,7 @@ void spc_call_hangup_all_and_wait(int ms)
 {
     int64_t t0 = spc_mono_ms();
     if (spc_calls_active() == 0) return;
+    spc_iax2_hangup_all();
     pjsua_call_hangup_all();
     while (spc_calls_active() > 0 && spc_mono_ms() - t0 < ms) spc_sleep_ms(10);
 }
@@ -773,7 +780,7 @@ void spc_call_cleanup_all(void)
         cJSON_AddNumberToObject(f, "call", c->slot);
         cJSON_AddNumberToObject(f, "acc", c->acc);
         cJSON_AddStringToObject(f, "uid", c->uid);
-        cJSON_AddStringToObject(f, "proto", "sip");
+        cJSON_AddStringToObject(f, "proto", c->proto ? "iax2" : "sip");
         cJSON_AddStringToObject(f, "role", c->role ? "callee" : "caller");
         cJSON_AddStringToObject(f, "state", "disconnected");
         cJSON_AddNumberToObject(f, "stateCode", 487);
@@ -808,6 +815,7 @@ cJSON* spc_call_stats_json(uint64_t cid, int* err)
     pjmedia_transport_info ti;
     *err = 0;
     if (spc_call_cid_to_slot(cid, &slot, &acc) != 0) { *err = SPC_E_NOT_FOUND; return NULL; }
+    if (slot >= SPC_ID_IAX_BASE) return spc_iax2_call_stats_json(cid, err);
     if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS) { *err = SPC_E_NOT_FOUND; return NULL; }
     idx = spc_call_media_audio_idx(&ci);
     if (idx < 0 || pjsua_call_get_stream_stat(slot, (unsigned)idx, &st) != PJ_SUCCESS) {
@@ -911,4 +919,68 @@ uint64_t spc_call_cid_of_slot(int slot)
 {
     spc_call* c = slot_lookup(slot);
     return c ? c->cid : 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* IAX2 calls live in the same registry (cid, conference lists, flags)   */
+/* ------------------------------------------------------------------ */
+int spc_call_is_iax(uint64_t cid)
+{
+    spc_call* c = spc_call_lock_find(cid);
+    int r;
+    if (!c) return 0;
+    r = c->proto == 1;
+    spc_registry_unlock();
+    return r;
+}
+
+int spc_call_conf_slot(uint64_t cid, int slot)
+{
+    pjsua_call_info ci;
+    if (slot >= SPC_ID_IAX_BASE) {
+        int cs = -1, act = 0;
+        if (spc_iax2_call_conf(cid, &cs, &act) != 0) return -1;
+        return cs;
+    }
+    if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS) return -1;
+    return ci.conf_slot;
+}
+
+spc_call* spc_call_iax_new(int slot, int acc, const char* uid, int role)
+{
+    spc_call* c = (spc_call*)calloc(1, sizeof(*c));
+    if (!c) return NULL;
+    spc_registry_lock();
+    c->cid = (uint64_t)(++G.cid_counter);
+    c->slot = slot;
+    c->acc = acc;
+    c->proto = 1;
+    c->role = role;
+    if (uid) spc_strlcpy(c->uid, uid, sizeof(c->uid));
+    spc_strlcpy(c->dtmf_method, "iax2", sizeof(c->dtmf_method));
+    c->rec_id = -1; c->player_id = -1; c->tg_slot = -1;
+    c->created_ms = spc_mono_ms();
+    spc_strlcpy(c->last_media, "none", sizeof(c->last_media));
+    c->next = g_calls;
+    g_calls = c;
+    spc_registry_unlock();
+    return c;
+}
+
+/* emits the (already built) terminal call.state, unlinks and frees the call */
+void spc_call_iax_finish(spc_call* c, cJSON* terminal_state)
+{
+    spc_call* p;
+    int i, j;
+    spc_registry_lock();
+    c->ended = 1;
+    if (terminal_state) spc_emit("call.state", terminal_state);
+    if (g_calls == c) g_calls = c->next;
+    else for (p = g_calls; p; p = p->next) if (p->next == c) { p->next = c->next; break; }
+    for (p = g_calls; p; p = p->next) {
+        for (i = 0; i < p->nconf; i++) if (p->conf[i] == c->cid) { for (j = i; j < p->nconf - 1; j++) p->conf[j] = p->conf[j + 1]; p->nconf--; i--; }
+        for (i = 0; i < p->nbr; i++) if (p->bridged[i] == c->cid) { for (j = i; j < p->nbr - 1; j++) p->bridged[j] = p->bridged[j + 1]; p->nbr--; i--; }
+    }
+    spc_registry_unlock();
+    free(c);
 }

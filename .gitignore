@@ -38,3 +38,4 @@ key.properties
 .claude/
 __pycache__/
 *.pyc
+app/test/failures/

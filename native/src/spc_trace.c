@@ -10,7 +10,10 @@ static const char* tp_name(const pjsip_transport* t)
     switch (t->key.type & ~PJSIP_TRANSPORT_IPV6) {
     case PJSIP_TRANSPORT_TCP: return "TCP";
     case PJSIP_TRANSPORT_TLS: return "TLS";
-    default: return "UDP";
+    default:
+        if (t->type_name && spc_strieq(t->type_name, "WSS")) return "WSS";
+        if (t->type_name && spc_strieq(t->type_name, "WS")) return "WS";
+        return "UDP";
     }
 }
 
