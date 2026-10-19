@@ -53,6 +53,7 @@ object NotificationHelper {
         val i = Intent(ctx, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             configure()
+            putExtra(MainActivity.EXTRA_NONCE, Prefs.intentNonce(ctx))
         }
         return PendingIntent.getActivity(ctx, req, i, flags())
     }

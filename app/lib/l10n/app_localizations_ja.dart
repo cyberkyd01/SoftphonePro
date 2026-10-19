@@ -998,7 +998,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'ローカルデータベースをAES-256-GCMで暗号化します。鍵はシステムのキーチェーン／キーストアに保管され、紛失するとデータを復元できません。通話の録音とエクスポートしたファイルは暗号化されません。変更は次回SoftphoneProを起動したときに反映されます（先に完全に終了してください）。以前のファイルは、その次の起動までバックアップとして保持されます。';
+      'ローカルデータベースをAES-256-GCMで暗号化します。鍵はシステムのキーチェーン／キーストアに保管され、紛失するとデータを復元できません。通話の録音とエクスポートしたファイルは暗号化されません。変更は次回SoftphoneProを起動したときに反映されます（先に完全に終了してください）。以前のファイルは、新しいデータベースを開いて検証した直後に上書きして削除されます。';
 
   @override
   String get encryptionSwitchTitle => 'このデバイスの通話履歴、連絡先、メッセージを暗号化';
@@ -6470,4 +6470,54 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'このデバイスでは利用できません';
+
+  @override
+  String get callLinkNotLocal => 'この種類のリンクは、このコンピューターのコマンドラインからのみ使用できます。';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'デバイス $name に接続しますか？';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      '他のアプリまたはウェブページからのリンクが、SoftphoneProをこのデバイスに接続しようとしています。心当たりがある場合のみ接続してください。';
+
+  @override
+  String get linkLanConnectAction => '接続';
+
+  @override
+  String get linkImportSensitiveHeader => 'この設定に含まれる重要な変更:';
+
+  @override
+  String get linkImportFlagAutoAnswer => '着信に自動で応答します';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return '通話を $target に転送します';
+  }
+
+  @override
+  String get linkImportFlagIntercom => 'インターコムの開始や通話の引き取りを許可する相手を変更します（LAN）';
+
+  @override
+  String get linkImportFlagDialRewrite => 'ダイヤルする番号を書き換えます';
+
+  @override
+  String get linkImportFlagLinksImmediately => 'ウェブリンクからの発信が確認なしですぐに始まります';
+
+  @override
+  String get linkImportFlagDiagnostics => '詳細ログまたはSIPトレースを有効にします';
+
+  @override
+  String get linkImportAllowAutoAnswer => 'インポートしたアカウントの自動応答を許可する';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'このリンクは、ファイルまたはコマンドラインからのみ設定できる「$setting」を変更しようとしています。何もインポートされませんでした。';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'ペアリング済みのデバイスはインターコム通話を要求できます。毎回確認が表示されます（設定 > LAN で変更できます）。';
 }

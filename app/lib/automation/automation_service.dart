@@ -21,6 +21,16 @@ class AutomationStatus {
   final String? error;
 }
 
+/// The automation API exists on desktop only (its settings UI is desktop-only).
+/// Imported or restored settings can never switch it on elsewhere.
+bool automationSupportedOnThisPlatform() => switch (defaultTargetPlatform) {
+  TargetPlatform.macOS || TargetPlatform.windows || TargetPlatform.linux => true,
+  _ => false,
+};
+
+/// Whether this platform may run the API (tests override it).
+final automationSupportedProvider = Provider<bool>((ref) => automationSupportedOnThisPlatform());
+
 /// Starts / stops / rebinds the API when the settings change. Disabled by
 /// default; binds 127.0.0.1 only.
 class AutomationService extends Notifier<AutomationStatus> {
@@ -56,7 +66,7 @@ class AutomationService extends Notifier<AutomationStatus> {
 
   Future<void> _sync() async {
     final s = ref.read(settingsProvider);
-    final wanted = s.automationEnabled;
+    final wanted = s.automationEnabled && ref.read(automationSupportedProvider);
     final key = wanted
         ? '${s.automationPort}|${s.automationToken}|${s.automationOrigins.join(',')}'
         : 'off';

@@ -87,6 +87,8 @@ class _PairingDialogState extends State<PairingDialog> {
             ),
             const SizedBox(height: 4),
             Text(l.lanPairCheckCode, textAlign: TextAlign.center, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 4),
+            Text(l.lanPairIntercomNote, key: const Key('pair-intercom-note'), textAlign: TextAlign.center, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
             const SizedBox(height: 16),
             Semantics(
               label: l.lanPairCodeSemantics(code),

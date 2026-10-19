@@ -164,6 +164,34 @@ class Provisioning {
     }
   }
 
+  /// User-facing settings that a provisioning export may carry. Everything else
+  /// (automation token / origins, app lock, instance id, update state,
+  /// onboarding flag, machine-specific paths) never leaves the device.
+  static const exportableSettings = <String>{
+    'themeMode', 'accent', 'compactDensity', 'language',
+    'dnd', 'dndRejectCode', 'callWaiting', 'busyRejectCode',
+    'autoAnswer', 'autoAnswerDelay', 'allowAutoAnswerHeaders', 'rejectAnonymous',
+    'blocklist', 'ringtone', 'ringerVolume', 'emergencyNumbers', 'defaultCountryPrefix',
+    'micLevel', 'speakerLevel', 'ecAlgo', 'ecTailMs', 'noiseSuppression', 'agc', 'vad',
+    'codecOrder', 'codecsDisabled', 'opusBitrate', 'opusFec', 'opusDtx', 'opusCbr', 'opusComplexity',
+    'udpEnabled', 'udpPort', 'tcpEnabled', 'tcpPort', 'tlsEnabled', 'tlsPort', 'tlsVerify',
+    'stunServers', 'ipv6', 'qos', 'dnsServers', 'tlsPins', 'rtpPort', 'rtpPortRange',
+    'autoRecord', 'recordBeep', 'recordFormat', 'recordRule', 'recordNotice',
+    'recordAutoDeleteDays', 'recordContinueTransfers',
+    'minimizeToTray', 'sendTyping', 'dialRules', 'stripPrefix', 'plusReplacement',
+    'callLinksImmediately', 'syncFeatureCodes',
+    'jbInitMs', 'jbMinPreMs', 'jbMaxPreMs', 'jbMaxMs', 'ptime', 'progressTones',
+    'holdMusic', 'holdMusicVolume', 'viMicOn', 'viMicStrength', 'viInOn', 'viInStrength',
+    'lanAllowIntercom', 'lanIntercomPrompt', 'lanAllowPull',
+    'logLevel',
+  };
+
+  /// [settings] reduced to [exportableSettings].
+  static Map<String, dynamic> exportSettings(Map<String, dynamic> settings) => {
+    for (final e in settings.entries)
+      if (exportableSettings.contains(e.key)) e.key: e.value,
+  };
+
   static String export(
     List<AccountProfile> accounts,
     Map<String, dynamic> settings, {
@@ -174,7 +202,7 @@ class Provisioning {
       'accounts': [
         for (final a in accounts) a.toJson(includePassword: includePasswords),
       ],
-      'settings': settings,
+      'settings': exportSettings(settings),
     });
   }
 }

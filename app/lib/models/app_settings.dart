@@ -124,7 +124,7 @@ class AppSettings {
   int get lanLinkPort => _i('lanLinkPort', 0);
 
   /// Ask before allowing an intercom from a paired device (else auto-allow).
-  bool get lanIntercomPrompt => _b('lanIntercomPrompt', false);
+  bool get lanIntercomPrompt => _b('lanIntercomPrompt', true);
 
   // ---- developer / flow
   int get logLevel => _i('logLevel', 3);

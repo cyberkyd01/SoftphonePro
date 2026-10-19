@@ -53,15 +53,15 @@ void main() {
       forwarding: const ForwardingConfig(mode: ForwardMode.busy, target: '200'),
       config: const AccountConfig(uid: 'abc', username: 'u', password: 'pw', domain: 'd.org', transport: AccTransport.tcp),
     );
-    final without = Provisioning.export([p], {'x': 1});
+    final without = Provisioning.export([p], {'ptime': 30});
     expect(without.contains('"pw"'), isFalse);
-    final withPw = Provisioning.export([p], {'x': 1}, includePasswords: true);
+    final withPw = Provisioning.export([p], {'ptime': 30}, includePasswords: true);
     final r = Provisioning.parse(withPw);
     expect(r.accounts.single.config.password, 'pw');
     expect(r.accounts.single.label, 'Home');
     expect(r.accounts.single.forwarding.mode, ForwardMode.busy);
     expect(r.accounts.single.id, isNot('abc'), reason: 'imports get fresh ids');
-    expect(r.settings['x'], 1);
+    expect(r.settings['ptime'], 30);
   });
 
   test('fetch from URL', () async {

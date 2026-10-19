@@ -31,6 +31,8 @@ Future<bool> isEncryptedDbFile(String path) async {
   }
 }
 
+Future<Map<String, int>> countRecords(Database db) => _counts(db);
+
 Future<Map<String, int>> _counts(Database db) async {
   final out = <String, int>{};
   for (final name in getNonEmptyStoreNames(db)) {
@@ -107,6 +109,29 @@ Future<String> swapInMigrated(String path, String tmp, {DateTime? now}) async {
     throw DbMigrationException('swap failed: $e');
   }
   return bak;
+}
+
+/// Overwrites [f] with zeros, then deletes it. Used for the plaintext backup
+/// that an encryption migration leaves behind. Best effort.
+Future<void> shredFile(File f) async {
+  try {
+    if (!await f.exists()) return;
+    try {
+      final len = await f.length();
+      final raf = await f.open(mode: FileMode.write);
+      try {
+        const chunk = 64 * 1024;
+        final z = List<int>.filled(chunk, 0);
+        for (var w = 0; w < len; w += chunk) {
+          await raf.writeFrom(z, 0, (len - w) < chunk ? len - w : chunk);
+        }
+        await raf.flush();
+      } finally {
+        await raf.close();
+      }
+    } catch (_) {}
+    await f.delete();
+  } catch (_) {}
 }
 
 Future<void> _delete(String path) async {

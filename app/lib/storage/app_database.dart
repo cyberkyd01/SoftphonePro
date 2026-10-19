@@ -127,6 +127,7 @@ class AppDatabase {
     var current = db;
     String? bak;
     try {
+      final want = await countRecords(current);
       String? key;
       if (toEncrypted) {
         key = await secrets.read(keySecret);
@@ -151,6 +152,19 @@ class AppDatabase {
         path,
         codec: toEncrypted ? sembastCodecForKey(key!) : null,
       );
+      // The reopened file must read back every record before the
+      // previous file goes: a plaintext backup must not linger after enabling encryption.
+      final got = await countRecords(reopened);
+      for (final e in want.entries) {
+        if ((got[e.key] ?? 0) != e.value) {
+          await reopened.close();
+          throw DbMigrationException('post-migration check failed in "${e.key}"');
+        }
+      }
+      for (final b in await backupFiles(path)) {
+        await shredFile(b);
+      }
+      bak = null;
       return AppDatabase(reopened, directory: dir, encrypted: toEncrypted);
     } catch (e) {
       // Roll back: put the original file back if it was moved.

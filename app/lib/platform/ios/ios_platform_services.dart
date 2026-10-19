@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../android/android_platform_services.dart' show DeviceContact;
+import '../desktop/launch_args.dart' show parseLink;
 import '../platform_services.dart';
 
 /// iOS host services over a MethodChannel + one EventChannel implemented in
@@ -86,7 +87,7 @@ class IosPlatformServices extends NoopPlatformServices {
           _dtmf.add((callKey: key, digits: digits));
         }
       case 'link':
-        final u = Uri.tryParse(raw['url'] as String? ?? '');
+        final u = parseLink(raw['url'] as String? ?? '');
         if (u != null) _links.add(u);
     }
   }
@@ -249,7 +250,7 @@ class IosPlatformServices extends NoopPlatformServices {
   @override
   Future<Uri?> initialLink() async {
     final s = await _call<String>('initialLink');
-    return s == null ? null : Uri.tryParse(s);
+    return s == null ? null : parseLink(s);
   }
 
   @override

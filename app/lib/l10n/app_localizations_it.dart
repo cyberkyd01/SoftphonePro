@@ -1036,7 +1036,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Cifra il database locale con AES-256-GCM. La chiave è conservata nel portachiavi / keystore di sistema; se viene persa i dati non possono essere recuperati. Le registrazioni delle chiamate e i file esportati non sono cifrati. La modifica ha effetto al prossimo avvio di SoftphonePro (chiudilo prima completamente); il file precedente viene conservato come backup fino all’avvio successivo.';
+      'Cifra il database locale con AES-256-GCM. La chiave è conservata nel portachiavi / keystore di sistema; se viene persa i dati non possono essere recuperati. Le registrazioni delle chiamate e i file esportati non sono cifrati. La modifica ha effetto al prossimo avvio di SoftphonePro (chiudilo prima completamente); il file precedente viene sovrascritto ed eliminato non appena il nuovo database è stato aperto e verificato.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6721,4 +6721,61 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Non disponibile su questo dispositivo';
+
+  @override
+  String get callLinkNotLocal =>
+      'Questo tipo di link può essere usato solo dalla riga di comando di questo computer.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Connettersi al dispositivo $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Un link di un’altra app o di una pagina web vuole collegare SoftphonePro a questo dispositivo. Connettiti solo se te lo aspetti.';
+
+  @override
+  String get linkLanConnectAction => 'Connetti';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Modifiche sensibili in questa configurazione:';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Risponde automaticamente alle chiamate in arrivo';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Inoltra le chiamate a $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Cambia chi può avviare un interfono o prelevare una chiamata (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Riscrive i numeri che componi';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Le chiamate dai link web partono subito, senza conferma';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Attiva la registrazione dettagliata o la traccia SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Consenti la risposta automatica per gli account importati';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Questo link tenta di modificare «$setting», impostabile solo da un file o dalla riga di comando. Non è stato importato nulla.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'I dispositivi associati possono chiedere una chiamata interfono; ti verrà chiesto prima di ognuna (modificabile in Impostazioni > LAN).';
 }

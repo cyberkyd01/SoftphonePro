@@ -17,6 +17,16 @@ class MainActivity : FlutterFragmentActivity() {
         const val EXTRA_CALL_KEY = "callKey"
         const val EXTRA_INCOMING = "incoming"
         const val EXTRA_ROUTE = "route"
+        const val EXTRA_NONCE = "nonce"
+
+        /** Only these schemes are ever forwarded to Dart from an (externally launchable) intent. */
+        val ALLOWED_SCHEMES = setOf("tel", "sip", "sips", "callto", "softphonepro")
+
+        /** Constant-time check of the app-internal nonce. */
+        fun nonceOk(ctx: Context, i: Intent): Boolean {
+            val got = i.getStringExtra(EXTRA_NONCE) ?: return false
+            return java.security.MessageDigest.isEqual(got.toByteArray(), Prefs.intentNonce(ctx).toByteArray())
+        }
 
         /** Link that launched the process, consumed by initialLink(). */
         @Volatile
@@ -86,9 +96,13 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun handleIntent(i: Intent?, cold: Boolean) {
         if (i == null) return
-        if (i.getBooleanExtra(EXTRA_INCOMING, false)) showOverLockScreen(true)
+        // MainActivity is exported, so explicit intents from any app reach this point. Everything
+        // privileged requires the nonce that only our own PendingIntents carry.
+        val internal = nonceOk(this, i)
+        if (internal && i.getBooleanExtra(EXTRA_INCOMING, false)) showOverLockScreen(true)
         when (i.action) {
             ACTION_ANSWER -> {
+                if (!internal) { Hub.log("ignored ACTION_ANSWER without nonce"); i.action = null; return }
                 val key = i.getStringExtra(EXTRA_CALL_KEY) ?: return
                 showOverLockScreen(true)
                 PlatformBridge.markActive(key)
@@ -97,12 +111,18 @@ class MainActivity : FlutterFragmentActivity() {
                 i.action = null
             }
             ACTION_OPEN_ROUTE -> {
+                if (!internal) { Hub.log("ignored ACTION_OPEN_ROUTE without nonce"); i.action = null; return }
                 i.getStringExtra(EXTRA_ROUTE)?.let { Hub.emit("route", "route" to it) }
                 i.action = null
             }
             Intent.ACTION_VIEW, Intent.ACTION_DIAL -> {
                 val d: Uri = i.data ?: return
-                if (cold) launchLink = d.toString() else Hub.emit("link", "uri" to d.toString())
+                val scheme = d.scheme?.lowercase()
+                if (scheme != null && scheme in ALLOWED_SCHEMES) {
+                    if (cold) launchLink = d.toString() else Hub.emit("link", "uri" to d.toString())
+                } else {
+                    Hub.log("ignored link with scheme $scheme")
+                }
                 i.data = null
             }
         }

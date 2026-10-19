@@ -1034,7 +1034,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Шифрует локальную базу данных алгоритмом AES-256-GCM. Ключ хранится в системной связке ключей / хранилище ключей; если он будет утерян, данные не восстановить. Записи звонков и экспортированные файлы не шифруются. Изменение вступит в силу при следующем запуске SoftphonePro (сначала полностью закройте его); предыдущий файл хранится как резервная копия до запуска после следующего.';
+      'Шифрует локальную базу данных алгоритмом AES-256-GCM. Ключ хранится в системной связке ключей / хранилище ключей; если он будет утерян, данные не восстановить. Записи звонков и экспортированные файлы не шифруются. Изменение вступит в силу при следующем запуске SoftphonePro (сначала полностью закройте его); предыдущий файл перезаписывается и удаляется, как только новая база данных открыта и проверена.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6748,4 +6748,61 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Недоступно на этом устройстве';
+
+  @override
+  String get callLinkNotLocal =>
+      'Этот тип ссылки можно использовать только из командной строки этого компьютера.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Подключиться к устройству $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Ссылка из другого приложения или веб-страницы хочет подключить SoftphonePro к этому устройству. Подключайтесь, только если ожидали этого.';
+
+  @override
+  String get linkLanConnectAction => 'Подключиться';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Чувствительные изменения в этой конфигурации:';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Автоматически отвечает на входящие звонки';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Переадресует звонки на $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Меняет, кто может начать интерком или перехватить звонок (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Переписывает набираемые номера';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Звонки по веб-ссылкам начинаются сразу, без подтверждения';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Включает подробное журналирование или трассировку SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Разрешить автоответ для импортированных учётных записей';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Эта ссылка пытается изменить «$setting», что можно задать только из файла или командной строки. Ничего не импортировано.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Сопряжённые устройства могут запросить интерком-вызов; перед каждым вас спросят (меняется в Настройки > LAN).';
 }

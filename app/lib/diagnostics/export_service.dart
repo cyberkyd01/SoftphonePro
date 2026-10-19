@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../services/providers.dart';
+import 'redaction.dart';
 
 /// Saves bytes through a platform save dialog; returns the saved path/name,
 /// or null when cancelled. Override in tests.
@@ -54,6 +55,11 @@ String readEngineLogTail(String? path, {int maxBytes = 200 * 1024}) {
     return '';
   }
 }
+
+/// [readEngineLogTail] with secrets (digest responses, SRTP keys, passwords) masked;
+/// the only form that may enter a diagnostic bundle.
+String redactedEngineLogTail(String? path, {int maxBytes = 200 * 1024}) =>
+    redactSecrets(readEngineLogTail(path, maxBytes: maxBytes));
 
 /// Save/copy helpers that report through the app notice bar.
 class DiagnosticsExporter {

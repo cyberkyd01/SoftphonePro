@@ -374,7 +374,8 @@ object PlatformBridge : MethodChannel.MethodCallHandler {
                     try {
                         ctx.startActivity(
                             Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                .putExtra(MainActivity.EXTRA_INCOMING, true),
+                                .putExtra(MainActivity.EXTRA_INCOMING, true)
+                                .putExtra(MainActivity.EXTRA_NONCE, Prefs.intentNonce(ctx)),
                         )
                     } catch (e: Throwable) {
                         Hub.log("bringToFront blocked", e)

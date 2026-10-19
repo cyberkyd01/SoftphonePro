@@ -7,6 +7,8 @@ import android.content.Intent
 /** Starts the background service (and with it the Dart engine) after boot / app update. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val act = intent.action
+        if (act != Intent.ACTION_BOOT_COMPLETED && act != Intent.ACTION_MY_PACKAGE_REPLACED) return
         Hub.init(context)
         val p = Prefs.of(context)
         if (p.getBoolean(Prefs.START_AT_BOOT, false) || (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED && p.getBoolean(Prefs.SERVICE_WANTED, false))) {

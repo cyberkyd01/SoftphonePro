@@ -1032,7 +1032,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Yerel veritabanını AES-256-GCM ile şifreler. Anahtar sistem anahtar zincirinde / anahtar deposunda tutulur; kaybolursa veriler kurtarılamaz. Arama kayıtları ve dışa aktarılan dosyalar şifrelenmez. Değişiklik SoftphonePro\'nun bir sonraki başlatılışında geçerli olur (önce tamamen kapatın); önceki dosya, ondan sonraki başlatmaya kadar yedek olarak saklanır.';
+      'Yerel veritabanını AES-256-GCM ile şifreler. Anahtar sistem anahtar zincirinde / anahtar deposunda tutulur; kaybolursa veriler kurtarılamaz. Arama kayıtları ve dışa aktarılan dosyalar şifrelenmez. Değişiklik SoftphonePro\'nun bir sonraki başlatılışında geçerli olur (önce tamamen kapatın); önceki dosya, yeni veritabanı açılıp doğrulanır doğrulanmaz üzerine yazılarak silinir.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6666,4 +6666,61 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Bu cihazda kullanılamıyor';
+
+  @override
+  String get callLinkNotLocal =>
+      'Bu bağlantı türü yalnızca bu bilgisayarın komut satırından kullanılabilir.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return '$name cihazına bağlanılsın mı?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Başka bir uygulamadan veya web sayfasından gelen bir bağlantı SoftphonePro\'yu bu cihaza bağlamak istiyor. Yalnızca bunu bekliyorsanız bağlanın.';
+
+  @override
+  String get linkLanConnectAction => 'Bağlan';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Bu yapılandırmadaki hassas değişiklikler:';
+
+  @override
+  String get linkImportFlagAutoAnswer => 'Gelen aramaları otomatik yanıtlar';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Aramaları $target numarasına yönlendirir';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Kimin interkom başlatabileceğini veya arama devralabileceğini değiştirir (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite =>
+      'Çevirdiğiniz numaraları yeniden yazar';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Web bağlantılarından gelen aramalar onay olmadan hemen başlar';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Ayrıntılı günlüğü veya SIP izlemeyi açar';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'İçe aktarılan hesaplar için otomatik yanıtlamaya izin ver';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Bu bağlantı yalnızca bir dosyadan veya komut satırından ayarlanabilen \"$setting\" ayarını değiştirmeye çalışıyor. Hiçbir şey içe aktarılmadı.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Eşleştirilmiş cihazlar interkom araması isteyebilir; her seferinde size sorulur (Ayarlar > LAN bölümünden değiştirilebilir).';
 }

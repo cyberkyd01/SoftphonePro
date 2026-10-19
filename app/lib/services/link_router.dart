@@ -45,12 +45,13 @@ class RejectedLinkAction extends LinkAction {
 }
 
 /// Why a link was rejected; see [linkRejectionText].
-enum LinkRejection { missingArgument, httpsRequired, invalidLan }
+enum LinkRejection { missingArgument, httpsRequired, invalidLan, notLocal }
 
 String linkRejectionText(AppLocalizations l, LinkRejection r) => switch (r) {
   LinkRejection.missingArgument => l.callLinkMissingArgument,
   LinkRejection.httpsRequired => l.callLinkHttpsRequired,
   LinkRejection.invalidLan => l.callLinkInvalidLan,
+  LinkRejection.notLocal => l.callLinkNotLocal,
 };
 
 /// https only; plain http is accepted for localhost testing.
@@ -64,8 +65,13 @@ bool isAllowedProvisionUrl(Uri u) {
   return false;
 }
 
-LinkAction classifyLink(Uri uri) {
+/// [isLocal] must be true only for links built from this process's own command
+/// line (see `isLocalLaunchLink`). OS / web / other-app delivered links are never
+/// local, so the CLI scheme (dial without consent, provisioning with automation)
+/// is refused for them on every platform.
+LinkAction classifyLink(Uri uri, {bool isLocal = false}) {
   if (uri.scheme == kCliScheme) {
+    if (!isLocal) return const RejectedLinkAction(LinkRejection.notLocal);
     final v = uri.queryParameters['v'] ?? '';
     if (v.isEmpty) return const RejectedLinkAction(LinkRejection.missingArgument);
     return uri.host == 'provision' ? ProvisionCliAction(v) : DialCliAction(v);
@@ -84,6 +90,9 @@ LinkAction classifyLink(Uri uri) {
         if (t == null) return const RejectedLinkAction(LinkRejection.invalidLan);
         return LanLinkAction(t, uri.toString());
     }
+  }
+  if (!kLinkSchemes.contains(uri.scheme.toLowerCase())) {
+    return const RejectedLinkAction(LinkRejection.notLocal);
   }
   return DialLinkAction(dialTargetFromLink(uri));
 }

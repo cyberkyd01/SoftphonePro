@@ -1037,7 +1037,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Criptografa o banco de dados local com AES-256-GCM. A chave fica no chaveiro / keystore do sistema; se for perdida, os dados não poderão ser recuperados. As gravações de ligações e os arquivos exportados não são criptografados. A alteração entra em vigor na próxima vez que o SoftphonePro for iniciado (feche-o completamente antes); o arquivo anterior é mantido como backup até a inicialização seguinte.';
+      'Encripta a base de dados local com AES-256-GCM. A chave fica no porta-chaves / keystore do sistema; se for perdida, os dados não poderão ser recuperados. As gravações de chamadas e os ficheiros exportados não são encriptados. A alteração entra em vigor na próxima vez que o SoftphonePro for iniciado (feche-o completamente antes); o ficheiro anterior é substituído e eliminado assim que a nova base de dados for aberta e verificada.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6717,6 +6717,63 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Não disponível neste dispositivo';
+
+  @override
+  String get callLinkNotLocal =>
+      'Este tipo de link só pode ser usado a partir da linha de comandos deste computador.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Ligar ao dispositivo $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Um link de outra aplicação ou de uma página web quer ligar o SoftphonePro a este dispositivo. Ligue apenas se estiver à espera disto.';
+
+  @override
+  String get linkLanConnectAction => 'Ligar';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Alterações sensíveis nesta configuração:';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Atende automaticamente as chamadas recebidas';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Reencaminha as chamadas para $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Altera quem pode iniciar um intercomunicador ou captar uma chamada (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Reescreve os números que marca';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'As chamadas a partir de links web começam de imediato, sem confirmação';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Ativa o registo detalhado ou o rastreio SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Permitir o atendimento automático nas contas importadas';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Este link tenta alterar «$setting», que só pode ser definido a partir de um ficheiro ou da linha de comandos. Nada foi importado.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Os dispositivos emparelhados podem pedir uma chamada de intercomunicador; será perguntado antes de cada uma (altere em Definições > LAN).';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -7752,7 +7809,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get encryptionFooter =>
-      'Criptografa o banco de dados local com AES-256-GCM. A chave fica no chaveiro / keystore do sistema; se for perdida, os dados não poderão ser recuperados. As gravações de ligações e os arquivos exportados não são criptografados. A alteração entra em vigor na próxima vez que o SoftphonePro for iniciado (feche-o completamente antes); o arquivo anterior é mantido como backup até a inicialização seguinte.';
+      'Criptografa o banco de dados local com AES-256-GCM. A chave fica no chaveiro / keystore do sistema; se for perdida, os dados não poderão ser recuperados. As gravações de ligações e os arquivos exportados não são criptografados. A alteração entra em vigor na próxima vez que o SoftphonePro for iniciado (feche-o completamente antes); o arquivo anterior é sobrescrito e excluído assim que o novo banco de dados for aberto e verificado.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -13432,4 +13489,61 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get voiceNotAvailableDevice => 'Não disponível neste dispositivo';
+
+  @override
+  String get callLinkNotLocal =>
+      'Este tipo de link só pode ser usado pela linha de comando deste computador.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Conectar ao dispositivo $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Um link de outro app ou de uma página da web quer conectar o SoftphonePro a este dispositivo. Conecte apenas se você esperava isso.';
+
+  @override
+  String get linkLanConnectAction => 'Conectar';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Alterações sensíveis nesta configuração:';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Atende automaticamente as ligações recebidas';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Encaminha as ligações para $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Altera quem pode iniciar um interfone ou capturar uma ligação (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Reescreve os números que você disca';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Ligações de links da web começam imediatamente, sem confirmação';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Ativa o registro detalhado ou o rastreamento SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Permitir atendimento automático nas contas importadas';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Este link tenta alterar \"$setting\", que só pode ser definido por um arquivo ou pela linha de comando. Nada foi importado.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Dispositivos pareados podem pedir uma chamada de interfone; você será perguntado antes de cada uma (altere em Configurações > LAN).';
 }

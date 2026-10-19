@@ -81,7 +81,8 @@ void main() {
     expect(raw, isNot(contains('Zebra')));
     expect(raw, isNot(contains('Secretname')));
     expect(await secrets.read(AppDatabase.keySecret), isNotNull);
-    expect((await backupFiles(dbPath())).length, 1);
+    // The plaintext backup is shredded right after the verified first reopen.
+    expect(await backupFiles(dbPath()), isEmpty);
 
     // Next successful start removes the backup.
     db = await AppDatabase.openIn(dir.path, secrets);

@@ -165,10 +165,10 @@ void main() {
     });
     test('CLI flags become local intents; links cannot forge them', () {
       var a = parseLaunchArgs(['--provision', '/tmp/p.json']);
-      expect(classifyLink(a.link!), isA<ProvisionCliAction>());
-      expect((classifyLink(a.link!) as ProvisionCliAction).source, '/tmp/p.json');
+      expect(classifyLink(a.link!, isLocal: isLocalLaunchLink(a.link!)), isA<ProvisionCliAction>());
+      expect((classifyLink(a.link!, isLocal: isLocalLaunchLink(a.link!)) as ProvisionCliAction).source, '/tmp/p.json');
       a = parseLaunchArgs(['--dial=sip:100@x.org', '--minimized']);
-      expect((classifyLink(a.link!) as DialCliAction).target, 'sip:100@x.org');
+      expect((classifyLink(a.link!, isLocal: isLocalLaunchLink(a.link!)) as DialCliAction).target, 'sip:100@x.org');
       expect(a.minimized, isTrue);
       expect(parseLink('softphonepro-cli://provision?v=/etc/passwd'), isNull);
       expect(parseLaunchArgs(['--dial']).link, isNull);

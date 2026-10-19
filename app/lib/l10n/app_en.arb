@@ -1331,7 +1331,7 @@
   "@encryptionTitle": {
     "description": "Settings group title for database encryption."
   },
-  "encryptionFooter": "Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is kept as a backup until the start after that.",
+  "encryptionFooter": "Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is overwritten and deleted as soon as the new database has been opened and verified.",
   "@encryptionFooter": {
     "description": "Footer explaining local database encryption."
   },
@@ -9071,5 +9071,76 @@
   "voiceNotAvailableDevice": "Not available on this device",
   "@voiceNotAvailableDevice": {
     "description": "Subtitle when an Android audio effect is not available."
+  },
+  "callLinkNotLocal": "This link type can only be used from the command line of this computer.",
+  "@callLinkNotLocal": {
+    "description": "Security hardening (final review)."
+  },
+  "linkLanConnectTitle": "Connect to device {name}?",
+  "@linkLanConnectTitle": {
+    "description": "Security hardening (final review).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "linkLanConnectBody": "A link from another app or web page wants to connect SoftphonePro to this device. Connect only if you expect this.",
+  "@linkLanConnectBody": {
+    "description": "Security hardening (final review)."
+  },
+  "linkLanConnectAction": "Connect",
+  "@linkLanConnectAction": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportSensitiveHeader": "Sensitive changes in this configuration:",
+  "@linkImportSensitiveHeader": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportFlagAutoAnswer": "Answers incoming calls automatically",
+  "@linkImportFlagAutoAnswer": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportFlagForwarding": "Forwards calls to {target}",
+  "@linkImportFlagForwarding": {
+    "description": "Security hardening (final review).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "linkImportFlagIntercom": "Changes who may start an intercom or pull a call (LAN)",
+  "@linkImportFlagIntercom": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportFlagDialRewrite": "Rewrites the numbers you dial",
+  "@linkImportFlagDialRewrite": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportFlagLinksImmediately": "Calls from web links start immediately, without confirmation",
+  "@linkImportFlagLinksImmediately": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportFlagDiagnostics": "Turns on detailed logging or SIP tracing",
+  "@linkImportFlagDiagnostics": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportAllowAutoAnswer": "Allow auto-answer for the imported account(s)",
+  "@linkImportAllowAutoAnswer": {
+    "description": "Security hardening (final review)."
+  },
+  "linkImportRefused": "This link tries to change \"{setting}\", which can only be set from a file or the command line. Nothing was imported.",
+  "@linkImportRefused": {
+    "description": "Security hardening (final review).",
+    "placeholders": {
+      "setting": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPairIntercomNote": "Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).",
+  "@lanPairIntercomNote": {
+    "description": "Security hardening (final review)."
   }
 }

@@ -85,3 +85,77 @@ Future<ProvisioningResult> loadProvisioningSource(Ref ref, String source) async 
     throw ProvisioningException(ref.read(l10nProvider).provisioningCouldNotRead(e.path ?? source));
   }
 }
+
+// ---- web-link provisioning safety ---------------------------------------------
+
+/// Settings a web link can never change (local-only state and secrets).
+bool _webForbiddenSetting(String k) =>
+    k.startsWith('automation') ||
+    k.startsWith('appLock') ||
+    k.startsWith('update') ||
+    k == 'instanceMac' ||
+    k == 'onboardingDone';
+
+/// The first setting in [r] that a web link must refuse outright (so that nothing
+/// is imported): turning TLS verification off or pointing at a custom CA file
+/// (a man-in-the-middle recipe). Such settings are for file / command-line
+/// import only. Null when the link is acceptable.
+String? refusedWebSetting(ProvisioningResult r) {
+  if (r.settings['tlsVerify'] == false) return 'tlsVerify';
+  final ca = r.settings['customCaFile'];
+  if (ca != null && '$ca'.isNotEmpty) return 'customCaFile';
+  return null;
+}
+
+enum ImportFlagKind { autoAnswer, forwarding, intercom, dialRewrite, linksImmediately, diagnostics }
+
+class ImportFlag {
+  const ImportFlag(this.kind, [this.arg]);
+  final ImportFlagKind kind;
+  final String? arg;
+}
+
+/// What in [r] deserves a warning in the confirmation dialog.
+List<ImportFlag> sensitiveImportFlags(ProvisioningResult r) {
+  final out = <ImportFlag>[];
+  bool has(ImportFlagKind k) => out.any((f) => f.kind == k);
+  void add(ImportFlag f) {
+    if (f.kind == ImportFlagKind.forwarding || !has(f.kind)) out.add(f);
+  }
+
+  final st = r.settings;
+  if (st['autoAnswer'] == true) add(const ImportFlag(ImportFlagKind.autoAnswer));
+  for (final a in r.accounts) {
+    if (a.autoAnswer.enabled) add(const ImportFlag(ImportFlagKind.autoAnswer));
+    if (a.forwarding.active) add(ImportFlag(ImportFlagKind.forwarding, a.forwarding.target));
+  }
+  if (st['lanAllowIntercom'] == true || st['lanIntercomPrompt'] == false || st['lanAllowPull'] == true) {
+    add(const ImportFlag(ImportFlagKind.intercom));
+  }
+  if ('${st['stripPrefix'] ?? ''}'.isNotEmpty ||
+      '${st['plusReplacement'] ?? ''}'.isNotEmpty ||
+      (st['dialRules'] is List && (st['dialRules'] as List).isNotEmpty)) {
+    add(const ImportFlag(ImportFlagKind.dialRewrite));
+  }
+  if (st['callLinksImmediately'] == true) add(const ImportFlag(ImportFlagKind.linksImmediately));
+  if (st['sipTrace'] == true || st.containsKey('logLevel')) add(const ImportFlag(ImportFlagKind.diagnostics));
+  return out;
+}
+
+/// Number of settings in [r] that are not shown as a flagged item.
+int unflaggedSettingCount(ProvisioningResult r) => r.settings.keys.where((k) => !_webForbiddenSetting(k)).length;
+
+/// [r] as a web link may apply it: local-only settings dropped and, unless
+/// [allowAutoAnswer], every auto-answer switch (global and per account) off.
+ProvisioningResult sanitizeForWebLink(ProvisioningResult r, {required bool allowAutoAnswer}) {
+  final st = {...r.settings}..removeWhere((k, _) => _webForbiddenSetting(k));
+  if (!allowAutoAnswer) st.remove('autoAnswer');
+  return ProvisioningResult(
+    accounts: [
+      for (final a in r.accounts)
+        allowAutoAnswer || !a.autoAnswer.enabled ? a : a.copyWith(autoAnswer: a.autoAnswer.copyWith(enabled: false)),
+    ],
+    settings: st,
+    warnings: r.warnings,
+  );
+}

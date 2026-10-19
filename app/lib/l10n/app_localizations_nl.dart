@@ -1036,7 +1036,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Versleutelt de lokale database met AES-256-GCM. De sleutel wordt bewaard in de systeemsleutelhanger/keystore; als die verloren gaat, kunnen de gegevens niet worden hersteld. Gespreksopnamen en geëxporteerde bestanden worden niet versleuteld. De wijziging gaat in bij de volgende start van SoftphonePro (sluit de app eerst volledig af); het vorige bestand wordt als back-up bewaard tot de start daarna.';
+      'Versleutelt de lokale database met AES-256-GCM. De sleutel wordt bewaard in de systeemsleutelhanger/keystore; als die verloren gaat, kunnen de gegevens niet worden hersteld. Gespreksopnamen en geëxporteerde bestanden worden niet versleuteld. De wijziging gaat in bij de volgende start van SoftphonePro (sluit de app eerst volledig af); het vorige bestand wordt overschreven en verwijderd zodra de nieuwe database is geopend en gecontroleerd.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6710,4 +6710,61 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Niet beschikbaar op dit apparaat';
+
+  @override
+  String get callLinkNotLocal =>
+      'Dit linktype kan alleen vanaf de opdrachtregel van deze computer worden gebruikt.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Verbinden met apparaat $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Een link uit een andere app of van een webpagina wil SoftphonePro met dit apparaat verbinden. Verbind alleen als u dit verwacht.';
+
+  @override
+  String get linkLanConnectAction => 'Verbinden';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Gevoelige wijzigingen in deze configuratie:';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Beantwoordt inkomende gesprekken automatisch';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Stuurt gesprekken door naar $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Wijzigt wie een intercom mag starten of een gesprek mag overnemen (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Herschrijft de nummers die u kiest';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Gesprekken vanuit weblinks starten direct, zonder bevestiging';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Schakelt uitgebreide logging of SIP-tracing in';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Automatisch beantwoorden toestaan voor de geïmporteerde account(s)';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Deze link probeert „$setting” te wijzigen; dat kan alleen via een bestand of de opdrachtregel. Er is niets geïmporteerd.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Gekoppelde apparaten kunnen een intercomgesprek aanvragen; u wordt eerst gevraagd (te wijzigen onder Instellingen > LAN).';
 }

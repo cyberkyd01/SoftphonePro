@@ -993,7 +993,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      '使用 AES-256-GCM 加密本地数据库。密钥保存在系统钥匙串/密钥库中；如果丢失，数据将无法恢复。通话录音和导出的文件不会被加密。更改将在 SoftphonePro 下次启动时生效（请先完全退出）；旧文件会作为备份保留，直到再下一次启动。';
+      '使用 AES-256-GCM 加密本地数据库。密钥保存在系统钥匙串/密钥库中；如果丢失，数据将无法恢复。通话录音和导出的文件不会被加密。更改将在 SoftphonePro 下次启动时生效（请先完全退出）；新数据库打开并验证后，旧文件会立即被覆盖并删除。';
 
   @override
   String get encryptionSwitchTitle => '在此设备上加密通话记录、联系人和消息';
@@ -6417,4 +6417,53 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => '此设备不可用';
+
+  @override
+  String get callLinkNotLocal => '此类链接只能从本机的命令行使用。';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return '连接到设备 $name？';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      '来自其他应用或网页的链接想把 SoftphonePro 连接到此设备。仅在您预期此操作时才连接。';
+
+  @override
+  String get linkLanConnectAction => '连接';
+
+  @override
+  String get linkImportSensitiveHeader => '此配置中的敏感更改：';
+
+  @override
+  String get linkImportFlagAutoAnswer => '自动接听来电';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return '将来电转接到 $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom => '更改谁可以发起对讲或代接来电（局域网）';
+
+  @override
+  String get linkImportFlagDialRewrite => '改写您拨打的号码';
+
+  @override
+  String get linkImportFlagLinksImmediately => '来自网页链接的呼叫会立即开始，无需确认';
+
+  @override
+  String get linkImportFlagDiagnostics => '开启详细日志或 SIP 跟踪';
+
+  @override
+  String get linkImportAllowAutoAnswer => '允许对导入的账户自动接听';
+
+  @override
+  String linkImportRefused(String setting) {
+    return '此链接试图更改“$setting”，该项只能通过文件或命令行设置。未导入任何内容。';
+  }
+
+  @override
+  String get lanPairIntercomNote => '已配对的设备可以请求对讲通话；每次都会先询问您（可在 设置 > 局域网 中更改）。';
 }

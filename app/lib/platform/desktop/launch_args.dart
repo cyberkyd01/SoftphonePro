@@ -12,6 +12,13 @@ const kLinkSchemes = {'sip', 'sips', 'tel', 'callto', 'softphonepro'};
 /// line arguments are local user intent, web links are not.
 const kCliScheme = 'softphonepro-cli';
 
+final Expando<bool> _localLaunchUris = Expando('localLaunchUri');
+
+/// True only for links that [parseLaunchArgs] built from this process's own
+/// command line (`--provision` / `--dial`). Identity based: a URL string
+/// delivered by the OS, a web page or another app can never carry this mark.
+bool isLocalLaunchLink(Uri uri) => _localLaunchUris[uri] == true;
+
 /// Result of parsing a launch / forwarded command line.
 class LaunchArgs {
   const LaunchArgs({this.link, this.minimized = false, this.show = false});
@@ -64,10 +71,9 @@ LaunchArgs parseLaunchArgs(Iterable<String> args) {
       value = a.substring(flag.length + 3);
     }
     if (value == null || value.isEmpty) continue;
-    return (
-      uri: Uri(scheme: kCliScheme, host: flag, queryParameters: {'v': value}),
-      consumed: consumed,
-    );
+    final uri = Uri(scheme: kCliScheme, host: flag, queryParameters: {'v': value});
+    _localLaunchUris[uri] = true;
+    return (uri: uri, consumed: consumed);
   }
   return null;
 }

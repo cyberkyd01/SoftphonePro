@@ -1020,7 +1020,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is kept as a backup until the start after that.';
+      'Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is overwritten and deleted as soon as the new database has been opened and verified.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6635,4 +6635,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Not available on this device';
+
+  @override
+  String get callLinkNotLocal =>
+      'This link type can only be used from the command line of this computer.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Connect to device $name?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'A link from another app or web page wants to connect SoftphonePro to this device. Connect only if you expect this.';
+
+  @override
+  String get linkLanConnectAction => 'Connect';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Sensitive changes in this configuration:';
+
+  @override
+  String get linkImportFlagAutoAnswer => 'Answers incoming calls automatically';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Forwards calls to $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Changes who may start an intercom or pull a call (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'Rewrites the numbers you dial';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Calls from web links start immediately, without confirmation';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Turns on detailed logging or SIP tracing';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Allow auto-answer for the imported account(s)';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'This link tries to change \"$setting\", which can only be set from a file or the command line. Nothing was imported.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).';
 }

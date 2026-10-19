@@ -299,6 +299,8 @@ laptops and phones. No server or account is involved.
     it locks, or use *Lock now*.
   * Incoming calls still show and can be answered while the app is
     locked.
+  * App lock gates the screen only: calls, hotkeys, links and the
+    automation API keep working while the app is locked.
 * **Passwords** are stored in the operating system's keystore. They're
   never included in exports unless you choose to include them.
 * **Encrypted local data (optional):** in **Settings → Privacy and security**

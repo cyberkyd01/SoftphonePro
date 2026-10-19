@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:softphonepro/automation/automation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softphonepro/app.dart';
 import 'package:softphonepro/models/account_profile.dart';
@@ -47,13 +48,17 @@ class TestEnv {
     );
   }
 
-  List<Override> get overrides => [
+  List<Override> get overrides => overridesWith();
+
+  List<Override> overridesWith({bool automationSupported = true}) => [
     appDatabaseProvider.overrideWithValue(db),
     secretsStoreProvider.overrideWithValue(secrets),
     bootDataProvider.overrideWithValue(boot),
     engineFactoryProvider.overrideWithValue(({required bool simulator}) async => EngineHandle(engine, demo: false)),
     connectivityStreamProvider.overrideWithValue(const Stream.empty()),
     recordingsDirProvider.overrideWithValue(() async => tempDir.path),
+    // Widget tests report Android as the platform; the API itself is desktop-only.
+    automationSupportedProvider.overrideWithValue(automationSupported),
   ];
 
   Widget app() => ProviderScope(overrides: overrides, child: const SoftphoneApp());

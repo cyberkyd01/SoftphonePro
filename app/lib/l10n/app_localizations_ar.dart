@@ -1024,7 +1024,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'يشفّر قاعدة البيانات المحلية باستخدام AES-256-GCM. يُحفظ المفتاح في سلسلة مفاتيح النظام / مخزن المفاتيح؛ وإذا فُقد فلا يمكن استرداد البيانات. تسجيلات المكالمات والملفات المصدّرة غير مشفّرة. يسري التغيير عند التشغيل التالي لـ SoftphonePro (أغلقه تمامًا أولًا)؛ ويُحتفظ بالملف السابق كنسخة احتياطية حتى التشغيل الذي يليه.';
+      'يشفّر قاعدة البيانات المحلية باستخدام AES-256-GCM. يُحفظ المفتاح في سلسلة مفاتيح النظام / مخزن المفاتيح؛ وإذا فُقد فلا يمكن استرداد البيانات. تسجيلات المكالمات والملفات المصدّرة غير مشفّرة. يسري التغيير عند التشغيل التالي لـ SoftphonePro (أغلقه تمامًا أولًا)؛ ويُستبدل الملف السابق ويُحذف فور فتح قاعدة البيانات الجديدة والتحقق منها.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6698,4 +6698,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'غير متاح على هذا الجهاز';
+
+  @override
+  String get callLinkNotLocal =>
+      'لا يمكن استخدام هذا النوع من الروابط إلا من سطر الأوامر في هذا الكمبيوتر.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'الاتصال بالجهاز $name؟';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'يريد رابط من تطبيق آخر أو صفحة ويب ربط SoftphonePro بهذا الجهاز. اتصل فقط إذا كنت تتوقع ذلك.';
+
+  @override
+  String get linkLanConnectAction => 'اتصال';
+
+  @override
+  String get linkImportSensitiveHeader => 'تغييرات حساسة في هذا الإعداد:';
+
+  @override
+  String get linkImportFlagAutoAnswer => 'يرد على المكالمات الواردة تلقائيًا';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'يحوّل المكالمات إلى $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'يغيّر من يمكنه بدء اتصال داخلي أو سحب مكالمة (الشبكة المحلية)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'يعيد كتابة الأرقام التي تطلبها';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'تبدأ المكالمات من روابط الويب فورًا دون تأكيد';
+
+  @override
+  String get linkImportFlagDiagnostics => 'يشغّل التسجيل المفصّل أو تتبّع SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'السماح بالرد التلقائي للحسابات المستوردة';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'يحاول هذا الرابط تغيير \"$setting\"، وهو إعداد لا يمكن ضبطه إلا من ملف أو من سطر الأوامر. لم يُستورد شيء.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'يمكن للأجهزة المقترنة طلب مكالمة داخلية؛ سيُطلب منك الإذن قبل كل واحدة (غيّر ذلك من الإعدادات > الشبكة المحلية).';
 }

@@ -120,7 +120,7 @@ class OverviewView extends ConsumerWidget {
     final logs = ref.read(logsProvider.notifier).lines;
     b.writeln('== Engine log (last ${logs.length > 300 ? 300 : logs.length}) ==');
     b.writeln(formatLogs(logs.length > 300 ? logs.sublist(logs.length - 300) : logs));
-    final fileLog = readEngineLogTail(ref.read(engineProvider.notifier).logFilePath);
+    final fileLog = redactedEngineLogTail(ref.read(engineProvider.notifier).logFilePath);
     if (fileLog.isNotEmpty) {
       b.writeln('== Engine log file (logs/engine.log, tail) ==');
       b.writeln(fileLog);

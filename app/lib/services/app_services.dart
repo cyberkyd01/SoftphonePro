@@ -15,6 +15,7 @@ import 'calls_controller.dart';
 import 'contacts_controller.dart';
 import 'engine_controller.dart';
 import 'history_controller.dart';
+import '../platform/desktop/launch_args.dart' show isLocalLaunchLink;
 import 'link_handler.dart';
 import 'messages_controller.dart';
 import 'presence_controller.dart';
@@ -81,7 +82,7 @@ final appServicesProvider = Provider<void>((ref) {
   ref.read(desktopShellProvider);
 
   // Incoming links: provision / LAN / dial (see link_handler.dart).
-  Future<void> handleLink(Uri uri) => handleIncomingLink(ref, uri);
+  Future<void> handleLink(Uri uri) => handleIncomingLink(ref, uri, isLocal: isLocalLaunchLink(uri));
 
   final linkSub = platform.incomingLinks.listen(handleLink);
   ref.onDispose(linkSub.cancel);

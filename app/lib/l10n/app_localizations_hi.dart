@@ -1023,7 +1023,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'स्थानीय डेटाबेस को AES-256-GCM से एन्क्रिप्ट करता है। कुंजी सिस्टम कीचेन / कीस्टोर में रखी जाती है; खो जाने पर डेटा वापस नहीं पाया जा सकता। कॉल रिकॉर्डिंग और एक्सपोर्ट की गई फ़ाइलें एन्क्रिप्ट नहीं होतीं। बदलाव SoftphonePro के अगली बार शुरू होने पर लागू होगा (पहले इसे पूरी तरह बंद करें); पुरानी फ़ाइल उसके अगले स्टार्ट तक बैकअप के रूप में रखी जाती है।';
+      'स्थानीय डेटाबेस को AES-256-GCM से एन्क्रिप्ट करता है। कुंजी सिस्टम कीचेन / कीस्टोर में रखी जाती है; खो जाने पर डेटा वापस नहीं पाया जा सकता। कॉल रिकॉर्डिंग और एक्सपोर्ट की गई फ़ाइलें एन्क्रिप्ट नहीं होतीं। बदलाव SoftphonePro के अगली बार शुरू होने पर लागू होगा (पहले इसे पूरी तरह बंद करें); नया डेटाबेस खुलने और जाँच लिए जाने के तुरंत बाद पुरानी फ़ाइल ओवरराइट करके हटा दी जाती है।';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6640,4 +6640,60 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'इस डिवाइस पर उपलब्ध नहीं';
+
+  @override
+  String get callLinkNotLocal =>
+      'इस प्रकार का लिंक केवल इस कंप्यूटर की कमांड लाइन से इस्तेमाल किया जा सकता है।';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'डिवाइस $name से कनेक्ट करें?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'किसी दूसरे ऐप या वेब पेज का लिंक SoftphonePro को इस डिवाइस से जोड़ना चाहता है। केवल तभी कनेक्ट करें जब आप इसकी उम्मीद कर रहे हों।';
+
+  @override
+  String get linkLanConnectAction => 'कनेक्ट करें';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'इस कॉन्फ़िगरेशन में संवेदनशील बदलाव:';
+
+  @override
+  String get linkImportFlagAutoAnswer => 'आने वाली कॉल अपने-आप उठाता है';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'कॉल को $target पर फ़ॉरवर्ड करता है';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'बदलता है कि कौन इंटरकॉम शुरू कर सकता है या कॉल खींच सकता है (LAN)';
+
+  @override
+  String get linkImportFlagDialRewrite => 'आपके डायल किए नंबर बदल देता है';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'वेब लिंक से की गई कॉल बिना पुष्टि के तुरंत शुरू हो जाती हैं';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'विस्तृत लॉगिंग या SIP ट्रेस चालू करता है';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'इम्पोर्ट किए गए खातों के लिए ऑटो-आंसर की अनुमति दें';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'यह लिंक \"$setting\" बदलने की कोशिश करता है, जिसे केवल फ़ाइल या कमांड लाइन से सेट किया जा सकता है। कुछ भी इम्पोर्ट नहीं हुआ।';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'पेयर किए गए डिवाइस इंटरकॉम कॉल का अनुरोध कर सकते हैं; हर बार आपसे पूछा जाएगा (सेटिंग > LAN में बदलें)।';
 }

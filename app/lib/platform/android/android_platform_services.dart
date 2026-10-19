@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../desktop/launch_args.dart' show parseLink;
 import '../platform_services.dart';
 
 /// A device contact (name + phone numbers) read from the Android address book.
@@ -109,6 +110,9 @@ class AndroidPlatformServices extends NoopPlatformServices {
     _sub = null;
   }
 
+  @visibleForTesting
+  void debugDeliverEvent(dynamic ev) => _onEvent(ev);
+
   void _onEvent(dynamic ev) {
     if (ev is! Map) return;
     switch (ev['type']) {
@@ -120,7 +124,7 @@ class AndroidPlatformServices extends NoopPlatformServices {
         final r = _route('${ev['route']}');
         if (r != null) _routes.add(r);
       case 'link':
-        final u = Uri.tryParse('${ev['uri']}');
+        final u = parseLink('${ev['uri']}'); // scheme allowlist, never a bare Uri.tryParse
         if (u != null) _links.add(u);
       case 'dns':
         _dns.add([for (final s in (ev['servers'] as List? ?? const [])) '$s']);
@@ -324,7 +328,7 @@ class AndroidPlatformServices extends NoopPlatformServices {
   @override
   Future<Uri?> initialLink() async {
     final s = await _call<String>('initialLink');
-    return s == null ? null : Uri.tryParse(s);
+    return s == null ? null : parseLink(s);
   }
 
   @override

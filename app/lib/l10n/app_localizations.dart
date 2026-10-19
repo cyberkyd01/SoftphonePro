@@ -1946,7 +1946,7 @@ abstract class AppLocalizations {
   /// Footer explaining local database encryption.
   ///
   /// In en, this message translates to:
-  /// **'Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is kept as a backup until the start after that.'**
+  /// **'Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is overwritten and deleted as soon as the new database has been opened and verified.'**
   String get encryptionFooter;
 
   /// Switch title for local database encryption.
@@ -11214,6 +11214,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not available on this device'**
   String get voiceNotAvailableDevice;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'This link type can only be used from the command line of this computer.'**
+  String get callLinkNotLocal;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to device {name}?'**
+  String linkLanConnectTitle(String name);
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'A link from another app or web page wants to connect SoftphonePro to this device. Connect only if you expect this.'**
+  String get linkLanConnectBody;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get linkLanConnectAction;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Sensitive changes in this configuration:'**
+  String get linkImportSensitiveHeader;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Answers incoming calls automatically'**
+  String get linkImportFlagAutoAnswer;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Forwards calls to {target}'**
+  String linkImportFlagForwarding(String target);
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Changes who may start an intercom or pull a call (LAN)'**
+  String get linkImportFlagIntercom;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Rewrites the numbers you dial'**
+  String get linkImportFlagDialRewrite;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Calls from web links start immediately, without confirmation'**
+  String get linkImportFlagLinksImmediately;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Turns on detailed logging or SIP tracing'**
+  String get linkImportFlagDiagnostics;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow auto-answer for the imported account(s)'**
+  String get linkImportAllowAutoAnswer;
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'This link tries to change \"{setting}\", which can only be set from a file or the command line. Nothing was imported.'**
+  String linkImportRefused(String setting);
+
+  /// Security hardening (final review).
+  ///
+  /// In en, this message translates to:
+  /// **'Paired devices can ask to start an intercom call; you will be asked before each one (change this in Settings > LAN).'**
+  String get lanPairIntercomNote;
 }
 
 class _AppLocalizationsDelegate

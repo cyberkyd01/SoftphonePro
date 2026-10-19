@@ -1046,7 +1046,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get encryptionFooter =>
-      'Chiffre la base de données locale avec AES-256-GCM. La clé est conservée dans le trousseau / coffre du système ; si elle est perdue, les données sont irrécupérables. Les enregistrements d’appels et les fichiers exportés ne sont pas chiffrés. La modification prend effet au prochain démarrage de SoftphonePro (quittez-le complètement d’abord) ; l’ancien fichier est conservé comme sauvegarde jusqu’au démarrage suivant.';
+      'Chiffre la base de données locale avec AES-256-GCM. La clé est conservée dans le trousseau / coffre du système ; si elle est perdue, les données sont irrécupérables. Les enregistrements d’appels et les fichiers exportés ne sont pas chiffrés. La modification prend effet au prochain démarrage de SoftphonePro (quittez-le complètement d’abord) ; l’ancien fichier est écrasé puis supprimé dès que la nouvelle base est ouverte et vérifiée.';
 
   @override
   String get encryptionSwitchTitle =>
@@ -6743,4 +6743,62 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get voiceNotAvailableDevice => 'Non disponible sur cet appareil';
+
+  @override
+  String get callLinkNotLocal =>
+      'Ce type de lien ne peut être utilisé que depuis la ligne de commande de cet ordinateur.';
+
+  @override
+  String linkLanConnectTitle(String name) {
+    return 'Se connecter à l’appareil $name ?';
+  }
+
+  @override
+  String get linkLanConnectBody =>
+      'Un lien provenant d’une autre application ou d’une page web veut connecter SoftphonePro à cet appareil. Ne continuez que si vous vous y attendiez.';
+
+  @override
+  String get linkLanConnectAction => 'Se connecter';
+
+  @override
+  String get linkImportSensitiveHeader =>
+      'Modifications sensibles dans cette configuration :';
+
+  @override
+  String get linkImportFlagAutoAnswer =>
+      'Répond automatiquement aux appels entrants';
+
+  @override
+  String linkImportFlagForwarding(String target) {
+    return 'Renvoie les appels vers $target';
+  }
+
+  @override
+  String get linkImportFlagIntercom =>
+      'Modifie qui peut lancer un interphone ou récupérer un appel (réseau local)';
+
+  @override
+  String get linkImportFlagDialRewrite =>
+      'Réécrit les numéros que vous composez';
+
+  @override
+  String get linkImportFlagLinksImmediately =>
+      'Les appels depuis des liens web démarrent immédiatement, sans confirmation';
+
+  @override
+  String get linkImportFlagDiagnostics =>
+      'Active la journalisation détaillée ou la trace SIP';
+
+  @override
+  String get linkImportAllowAutoAnswer =>
+      'Autoriser la réponse automatique pour les comptes importés';
+
+  @override
+  String linkImportRefused(String setting) {
+    return 'Ce lien tente de modifier « $setting », qui ne peut être défini que depuis un fichier ou la ligne de commande. Rien n’a été importé.';
+  }
+
+  @override
+  String get lanPairIntercomNote =>
+      'Les appareils appairés peuvent demander un appel interphone ; une confirmation vous sera demandée à chaque fois (à modifier dans Réglages > Réseau local).';
 }
