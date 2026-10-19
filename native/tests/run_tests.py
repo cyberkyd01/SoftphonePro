@@ -1050,5 +1050,23 @@ class TestCalls(Base):
         self.assertIsInstance(snap["buddies"], list)
 
 
+def load_tests(loader, standard_tests, pattern):
+    """Also run extension suites in native/tests/test_*.py (IAX2, WebSocket, ...).
+
+    Those modules can `from run_tests import Base, Cli, ...` to reuse the harness.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    for name in sorted(os.listdir(here)):
+        if name.startswith("test_") and name.endswith(".py"):
+            mod = __import__(name[:-3])
+            standard_tests.addTests(loader.loadTestsFromModule(mod))
+    return standard_tests
+
+
 if __name__ == "__main__":
+    # Make the harness importable as `run_tests` from extension modules even
+    # when this file runs as __main__.
+    sys.modules.setdefault("run_tests", sys.modules[__name__])
     unittest.main(verbosity=2)
