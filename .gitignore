@@ -33,3 +33,8 @@ dist/
 *.jks
 *.keystore
 key.properties
+
+# Tooling
+.claude/
+__pycache__/
+*.pyc
