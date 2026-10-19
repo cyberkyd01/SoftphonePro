@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">SoftphonePro</string>
+    <string name="ch_service">Background service</string>
+    <string name="ch_service_desc">Keeps your SIP accounts registered so calls can reach you.</string>
+    <string name="ch_incoming">Incoming calls</string>
+    <string name="ch_incoming_desc">Ringing calls with answer and decline actions.</string>
+    <string name="ch_ongoing">Ongoing calls</string>
+    <string name="ch_missed">Missed calls</string>
+    <string name="ch_messages">Messages</string>
+    <string name="act_open">Open</string>
+    <string name="act_answer">Answer</string>
+    <string name="act_decline">Decline</string>
+    <string name="act_hangup">Hang up</string>
+    <string name="phone_account_label">SoftphonePro</string>
+    <string name="fgs_special_use_reason">Keeps SIP accounts registered to receive incoming calls while the app is in the background.</string>
+</resources>

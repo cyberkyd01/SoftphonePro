@@ -11,6 +11,7 @@ import '../models/account_profile.dart';
 import '../models/app_settings.dart';
 import '../models/call_record.dart';
 import '../models/chat.dart';
+import '../lan/lan_handoff_impl.dart';
 import '../models/contact.dart';
 import '../platform/lan_handoff.dart';
 import '../platform/platform_services.dart';
@@ -77,7 +78,7 @@ final engineFactoryProvider = Provider<EngineFactory>(
 final platformServicesProvider = Provider<PlatformServices>(
   (ref) => NoopPlatformServices(),
 );
-final lanHandoffProvider = Provider<LanHandoff>((ref) => NoopLanHandoff());
+final lanHandoffProvider = Provider<LanHandoff>((ref) => ref.watch(lanHandoffFacadeProvider));
 
 /// Connectivity changes; override with an empty stream in tests.
 final connectivityStreamProvider = Provider<Stream<List<ConnectivityResult>>>(

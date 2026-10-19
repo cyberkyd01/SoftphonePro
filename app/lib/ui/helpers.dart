@@ -6,6 +6,14 @@ import '../services/contacts_controller.dart';
 
 /// Display name for a live call: contact name, remote display, or number.
 String callTitle(UiCall c, List<Contact> contacts) {
+  final lan = c.lan;
+  if (lan != null) {
+    // Transferred calls are about the original caller; other LAN calls about the device.
+    if (lan.isHandoff && !lan.outgoing && lan.callerLabel.isNotEmpty) return lan.callerLabel;
+    if ((lan.isHandoff && lan.outgoing) || lan.paired || lan.outgoing) {
+      if (lan.peerName.isNotEmpty && !(lan.isHandoff && !lan.outgoing)) return lan.peerName;
+    }
+  }
   final byContact = findContact(contacts, c.number)?.displayName;
   if (byContact != null && byContact.isNotEmpty) return byContact;
   if (c.info.remoteDisplay.isNotEmpty) return c.info.remoteDisplay;

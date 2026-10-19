@@ -7,6 +7,7 @@ import 'pages/add_account.dart';
 import 'pages/call_pages.dart';
 import 'pages/contacts_page.dart';
 import 'pages/keypad_page.dart';
+import 'pages/lan/lan_page.dart';
 import 'pages/messages_page.dart';
 import 'pages/misc_pages.dart';
 import 'pages/presence_page.dart';
@@ -67,7 +68,7 @@ GoRouter buildRouter({required bool onboarded, CallRouteObserver? observer}) {
       GoRoute(
         path: '/thread',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, s) => ThreadPage(accountId: s.uri.queryParameters['acc'] ?? '', peer: s.uri.queryParameters['peer'] ?? ''),
+        builder: (_, s) => ThreadPage(accountId: s.uri.queryParameters['acc'] ?? '', peer: s.uri.queryParameters['peer'] ?? '', channel: s.uri.queryParameters['ch'] ?? 'sip'),
       ),
       GoRoute(path: '/settings/accounts/:id', parentNavigatorKey: rootNavigatorKey, builder: (_, s) => AccountEditorPage(accountId: s.pathParameters['id']!)),
       ShellRoute(

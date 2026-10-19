@@ -14,69 +14,6 @@ import '../widgets/settings_tiles.dart';
 import 'keypad_page.dart';
 import 'recents_page.dart';
 
-class LanPage extends StatelessWidget {
-  const LanPage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Column(
-      children: [
-        const PageHeader(title: 'LAN Link'),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: t.colorScheme.primary.withValues(alpha: 0.1)),
-                      child: Icon(Icons.lan_rounded, size: 44, color: t.colorScheme.primary),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(color: t.colorScheme.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-                      child: Text('Coming soon', style: t.textTheme.labelLarge?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 12),
-                    Text('Your devices, talking directly', style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Text(
-                      'LAN Link finds SoftphonePro on your other devices and lets them work together without any server.',
-                      style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    const SettingsGroup(
-                      children: [
-                        ListTile(leading: Icon(Icons.radar_rounded), title: Text('Automatic discovery'), subtitle: Text('Secure pairing with a 6-digit code')),
-                        ListTile(leading: Icon(Icons.chat_rounded), title: Text('LAN chat and file drop')),
-                        ListTile(leading: Icon(Icons.call_rounded), title: Text('Direct calls and intercom')),
-                        ListTile(leading: Icon(Icons.swap_horiz_rounded), title: Text('Hand off any call to another device')),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: () => context.push('/settings/lan'),
-                      icon: const Icon(Icons.tune_rounded),
-                      label: const Text('LAN settings'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// "More" menu on compact layouts.
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -91,7 +28,7 @@ class MorePage extends ConsumerWidget {
         SettingsGroup(
           children: [
             NavTile(icon: Icons.grid_view_rounded, title: 'Presence', subtitle: 'Busy lamp field', onTap: () => context.go('/presence')),
-            NavTile(icon: Icons.lan_rounded, title: 'LAN Link', subtitle: 'Coming soon', onTap: () => context.go('/lan')),
+            NavTile(icon: Icons.lan_rounded, title: 'LAN Link', subtitle: 'Nearby devices, chat and file drop', onTap: () => context.go('/lan')),
             NavTile(
               icon: Icons.voicemail_rounded,
               title: 'Voicemail',

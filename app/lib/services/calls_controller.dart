@@ -13,6 +13,8 @@ import '../models/app_settings.dart';
 import '../models/call_record.dart';
 import '../models/chat.dart';
 import '../storage/repositories.dart';
+import '../lan/lan_handoff_impl.dart';
+import '../lan/lan_models.dart';
 import '../platform/lan_handoff.dart';
 import '../platform/platform_services.dart';
 import 'accounts_controller.dart';
@@ -45,6 +47,11 @@ class UiCall {
   bool waiting = false;
   CallStats? stats;
   final List<double> mosHistory = [];
+
+  /// Quality time series (decimated to <= 240 points) for charts and history.
+  final List<QualitySample> samples = [];
+  int _sampleStride = 1;
+  int _sampleTick = 0;
   double _mosSum = 0;
   int _mosN = 0;
   double mosMin = 0;
@@ -60,6 +67,12 @@ class UiCall {
 
   /// Handled by policy (rejected/forwarded) before ever ringing; not shown.
   bool hidden = false;
+
+  /// Internal LAN relay leg: hidden, never recorded in history.
+  bool silent = false;
+
+  /// Set for calls over the LAN transport / transferred by a LAN device.
+  LanCallMeta? lan;
 
   /// For a consultation call: the call being transferred.
   int? consultOf;
@@ -112,11 +125,25 @@ class UiCall {
     lossMax = max(lossMax, loss);
   }
 
+  void addSample(CallStats s) {
+    if (_sampleTick++ % _sampleStride != 0) return;
+    final t = connectedAt == null ? 0.0 : DateTime.now().difference(connectedAt!).inMilliseconds / 1000;
+    samples.add(QualitySample(t: t, mos: s.mos, jitter: s.rx.jitterMs, loss: s.rx.lossPct, rtt: s.rtt.lastMs));
+    if (samples.length > 240) {
+      final keep = <QualitySample>[for (var i = 0; i < samples.length; i += 2) samples[i]];
+      samples
+        ..clear()
+        ..addAll(keep);
+      _sampleStride *= 2;
+    }
+  }
+
   QualitySummary get quality => QualitySummary(
     mosAvg: _mosN == 0 ? 0 : _mosSum / _mosN,
     mosMin: mosMin,
     jitterMax: jitterMax,
     lossPct: lossMax,
+    samples: samples.length <= 120 ? List.of(samples) : [for (var i = 0; i < samples.length; i += 2) samples[i]],
   );
 }
 
@@ -201,6 +228,10 @@ class CallsController extends Notifier<CallsState> {
   final Set<String> _notified = {};
   int _generation = -1;
   bool _fgService = false;
+  // Per-cid LAN call attributes: the engine's call events can be processed
+  // before or after makeCall returns, so both paths consult these maps.
+  final Map<int, LanCallMeta?> _lanOutMeta = {};
+  final Set<int> _silentCids = {};
 
   EngineController get _ctl => ref.read(engineProvider.notifier);
   SipEngine get _engine => _ctl.engine;
@@ -477,9 +508,14 @@ class CallsController extends Notifier<CallsState> {
         return;
       }
       _calls[e.cid] = c;
-      if (c.direction == CallDirection.outgoing) {
+      if (c.direction == CallDirection.outgoing && _silentCids.contains(e.cid)) {
+        c.hidden = true;
+        c.silent = true;
+        c.lan = _lanOutMeta[e.cid];
+      } else if (c.direction == CallDirection.outgoing) {
         _focused = e.cid;
         c.dialed = s.remoteUser;
+        c.lan = _lanOutMeta[e.cid];
         unawaited(
           _guard(
             () => _platform.reportOutgoingCall(
@@ -544,6 +580,7 @@ class CallsController extends Notifier<CallsState> {
     if (c == null) return;
     c.stats = s;
     c.addMos(s.mos, s.rx.jitterMaxMs, s.rx.lossPct);
+    c.addSample(s);
     _emit();
   }
 
@@ -596,6 +633,11 @@ class CallsController extends Notifier<CallsState> {
     final others = _calls.values.where((o) => !o.isEnded && !o.isRingingIn).toList();
     c.waiting = others.isNotEmpty;
     _calls[ev.cid] = c;
+    final isLan = info.uid == kLanAccountUid;
+    final lan = ref.read(lanCallPolicyProvider).classifyIncoming(info);
+    c.lan = lan;
+    // A transferred call we agreed to take is answered without further ado.
+    final lanForce = lan?.handoffAccepted ?? false;
 
     Future<void> reject(int code, String reason, CallResult result) async {
       c.hidden = true;
@@ -619,30 +661,30 @@ class CallsController extends Notifier<CallsState> {
     final fwd = profile?.forwarding;
 
     // 1. blocklist / anonymous
-    if (_isBlocked(info)) {
+    if (!lanForce && _isBlocked(info)) {
       unawaited(reject(603, 'Blocked', CallResult.rejected));
       _emit();
       return;
     }
-    if (s.rejectAnonymous && _isAnonymous(info)) {
+    if (!lanForce && s.rejectAnonymous && _isAnonymous(info)) {
       unawaited(reject(433, 'Anonymity disallowed', CallResult.rejected));
       _emit();
       return;
     }
     // 2. DND (global, status, account)
-    if (s.dnd || s.globalStatus == 'dnd' || (profile?.dnd ?? false)) {
+    if (!lanForce && (s.dnd || s.globalStatus == 'dnd' || (profile?.dnd ?? false))) {
       unawaited(reject(s.dndRejectCode, 'Do not disturb', CallResult.rejected));
       _emit();
       return;
     }
     // 3. forward always
-    if (fwd != null && fwd.mode == ForwardMode.always && fwd.active) {
+    if (!lanForce && fwd != null && fwd.mode == ForwardMode.always && fwd.active) {
       unawaited(redirect(fwd.target, 'Forwarded (always)'));
       _emit();
       return;
     }
     // 4. busy handling
-    if (others.isNotEmpty) {
+    if (others.isNotEmpty && !lanForce) {
       if (fwd != null && fwd.mode == ForwardMode.busy && fwd.active) {
         unawaited(redirect(fwd.target, 'Forwarded (busy)'));
         _emit();
@@ -663,12 +705,16 @@ class CallsController extends Notifier<CallsState> {
     if (cfgOn && (!cfgNeedsHeader || hint != null)) {
       answerAfter = (aa?.enabled ?? false) ? aa!.delaySec : s.autoAnswerDelay;
     }
-    if (answerAfter == null && hint != null && s.allowAutoAnswerHeaders) {
+    // Auto-answer headers on LAN calls are honoured only for paired devices
+    // that are allowed to intercom us.
+    final hintOk = !isLan || (lan?.intercom ?? false);
+    if (answerAfter == null && hint != null && s.allowAutoAnswerHeaders && hintOk) {
       answerAfter = hint.afterSec;
     }
     if (answerAfter != null && others.isNotEmpty && !(hint?.require ?? false)) {
       answerAfter = null; // never steal an ongoing call
     }
+    if (lanForce) answerAfter = 0;
     // 6. ring
     unawaited(_guard(() => _engine.ring(ev.cid)));
     if (c.waiting) {
@@ -731,6 +777,7 @@ class CallsController extends Notifier<CallsState> {
       unawaited(_guard(() => _platform.cancelIncomingCallNotification('${c.cid}')));
     }
     unawaited(_guard(() => _platform.reportCallEnded('${c.cid}')));
+    if (c.silent) return; // internal relay leg: not part of the history
 
     final incoming = c.direction == CallDirection.incoming;
     CallResult result;
@@ -775,6 +822,7 @@ class CallsController extends Notifier<CallsState> {
       reason: c.forcedReason.isNotEmpty ? c.forcedReason : c.info.stateReason,
       recordingPath: c.recordingFile,
       quality: c.quality,
+      callId: c.info.callId,
     );
     unawaited(ref.read(historyProvider.notifier).add(rec));
 
@@ -1071,6 +1119,8 @@ class CallsController extends Notifier<CallsState> {
   }
 
   Future<bool> completeAttended(int consultCid) async {
+    final relay = ref.read(lanCallPolicyProvider);
+    if (relay.isRelayConsult(consultCid)) return relay.completeAttendedRelay(consultCid);
     final consult = _calls[consultCid];
     final orig = consult?.consultOf == null ? null : _calls[consult!.consultOf!];
     if (consult == null || orig == null) return false;
@@ -1229,31 +1279,113 @@ class CallsController extends Notifier<CallsState> {
     return dial(code, accountId: profile.id, applyRules: false);
   }
 
+  // ---- LAN Link hooks ---------------------------------------------------------
+
+  /// Places a call through the engine's LAN account (`__lan__`). [silent]
+  /// calls are internal relay legs: hidden from the UI and the history.
+  Future<int?> placeLanCall(
+    String uri, {
+    Map<String, String>? headers,
+    LanCallMeta? meta,
+    bool silent = false,
+    bool holdOthers = false,
+  }) async {
+    final notices = ref.read(noticeProvider.notifier);
+    if (!_ctl.hasEngine) {
+      notices.error('The call engine is not running yet');
+      return null;
+    }
+    if (holdOthers) await _holdActive();
+    try {
+      final r = await _engine.makeCall(
+        acc: const AccountRef.uid(kLanAccountUid),
+        uri: uri,
+        headers: headers,
+      );
+      _lanOutMeta[r.cid] = meta;
+      if (silent) _silentCids.add(r.cid);
+      final c = _calls[r.cid];
+      if (c != null) {
+        // The call event was already processed: apply the attributes now.
+        c.lan = meta;
+        if (silent) {
+          c.hidden = true;
+          c.silent = true;
+        } else {
+          c.dialed = uri;
+          _focused = r.cid;
+        }
+      }
+      _emit();
+      return r.cid;
+    } on EngineException catch (e) {
+      notices.error('Could not place the call', details: e.toString());
+      return null;
+    }
+  }
+
+  /// A visible, direct LAN call (or intercom) to a nearby device.
+  Future<int?> dialLan(String uri, {Map<String, String>? headers, LanCallMeta? meta}) =>
+      placeLanCall(uri, headers: headers, meta: meta, holdOthers: true);
+
+  /// The call object including hidden (policy-handled / relay) calls.
+  UiCall? rawCall(int cid) => _calls[cid];
+
+  /// Hides a call from the UI and history (a relay leg that is now bridged).
+  void setSilent(int cid, bool silent) {
+    final c = _calls[cid];
+    if (c == null) return;
+    c.silent = silent;
+    c.hidden = silent;
+    c.consultOf = silent ? null : c.consultOf;
+    _emit();
+  }
+
+  /// Records that [cid] now lives on another device ("Handed off" in history).
+  void markHandedOff(int cid, String reason) {
+    final c = _calls[cid];
+    if (c == null) return;
+    c.forcedResult = CallResult.handedOff;
+    c.forcedReason = reason;
+    _emit();
+  }
+
+  void clearHandedOff(int cid) {
+    final c = _calls[cid];
+    if (c == null) return;
+    if (c.forcedResult == CallResult.handedOff) {
+      c.forcedResult = null;
+      c.forcedReason = '';
+    }
+    _emit();
+  }
+
+  void markConsult(int lanCid, int origCid) {
+    final c = _calls[lanCid];
+    if (c == null) return;
+    c.consultOf = origCid;
+    _emit();
+  }
+
   Future<void> handoffToLan(
     int cid,
     LanDevice device, {
     HandoffMode mode = HandoffMode.blind,
   }) async {
-    final c = _calls[cid];
     try {
-      await ref.read(lanHandoffProvider).handoff(cid: cid, device: device, mode: mode);
-      if (c != null) {
-        c.forcedResult = CallResult.handedOff;
-        c.forcedReason = 'Handed off to ${device.name}';
-      }
+      await ref.read(lanHandoffImplProvider).handoff(cid: cid, peerId: device.id, attended: mode == HandoffMode.attended);
+    } on LanHandoffException catch (e) {
+      ref.read(noticeProvider.notifier).show(e.message);
     } catch (e) {
       ref.read(noticeProvider.notifier).error('Hand-off failed', details: '$e');
     }
   }
 
   Future<void> forwardIncomingToLan(int cid, LanDevice device) async {
-    final c = _calls[cid];
     try {
-      await ref.read(lanHandoffProvider).forwardIncoming(cid: cid, device: device);
-      if (c != null) {
-        c.forcedResult = CallResult.handedOff;
-        c.forcedReason = 'Sent to ${device.name}';
-      }
+      await ref.read(lanHandoffImplProvider).forwardIncoming(cid: cid, peerId: device.id);
+    } on LanHandoffException catch (e) {
+      ref.read(noticeProvider.notifier).show(e.message);
     } catch (e) {
       ref.read(noticeProvider.notifier).error('Could not send to device', details: '$e');
     }

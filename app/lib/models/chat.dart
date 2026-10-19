@@ -1,4 +1,4 @@
-enum MessageStatus { sending, sent, delivered, failed, received }
+enum MessageStatus { sending, sent, delivered, read, failed, received }
 
 /// 'sip' for SIP MESSAGE, 'lan' for LAN Link chat.
 const String kChannelSip = 'sip';

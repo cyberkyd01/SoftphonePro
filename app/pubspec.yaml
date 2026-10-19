@@ -60,6 +60,15 @@ dependencies:
   launch_at_startup: ^0.5.1
   hotkey_manager: ^0.2.3
   screen_retriever: ^0.2.2
+  bonsoir: ^2.2.0+1
+  lan_link:
+    path: ../packages/lan_link
+
+dependency_overrides:
+  # bonsoir_android 2.2.0 still uses the removed v1 plugin Registrar API and
+  # does not compile on current Flutter; patched copy (MIT) in third_party/.
+  bonsoir_android:
+    path: ../third_party/bonsoir_android
 
 dev_dependencies:
   flutter_test:

@@ -9,9 +9,13 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'platform/android/android_background.dart';
+import 'platform/android/android_platform_services.dart';
 import 'platform/desktop/window_state.dart';
 import 'platform/desktop_platform_services.dart';
+import 'platform/ios/ios_platform_services.dart';
 import 'platform/platform_services.dart';
+import 'services/app_services.dart';
 import 'services/providers.dart';
 import 'storage/app_database.dart';
 import 'storage/secrets_store.dart';
@@ -30,7 +34,13 @@ Future<void> main(List<String> args) async {
 
   final PlatformServices platform = fullDesktop
       ? DesktopPlatformServices(startupArgs: args)
-      : (desktop ? NoopPlatformServices() : NoopPlatformServices(mobile: true));
+      : desktop
+          ? NoopPlatformServices()
+          : (!kIsWeb && Platform.isAndroid)
+              ? AndroidPlatformServices()
+              : (!kIsWeb && Platform.isIOS)
+                  ? IosPlatformServices()
+                  : NoopPlatformServices(mobile: true);
   await platform.init();
   final startMinimized = platform is DesktopPlatformServices ? platform.startMinimized : args.contains('--minimized');
 
@@ -68,15 +78,20 @@ Future<void> main(List<String> args) async {
     );
   }
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        secretsStoreProvider.overrideWithValue(secrets),
-        bootDataProvider.overrideWithValue(boot),
-        platformServicesProvider.overrideWithValue(platform),
-      ],
-      child: const SoftphoneApp(),
-    ),
+  final container = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      secretsStoreProvider.overrideWithValue(secrets),
+      bootDataProvider.overrideWithValue(boot),
+      platformServicesProvider.overrideWithValue(platform),
+    ],
   );
+  if (!kIsWeb && Platform.isAndroid) {
+    // The Android engine may run headless (boot / background service): start
+    // the controllers now instead of waiting for the first frame.
+    container.read(appServicesProvider);
+    container.read(androidBackgroundProvider);
+  }
+
+  runApp(UncontrolledProviderScope(container: container, child: const SoftphoneApp()));
 }

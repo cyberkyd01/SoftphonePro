@@ -7,6 +7,9 @@ import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../diagnostics/sip_trace_controller.dart';
+import '../pages/diagnostics/quality_view.dart';
+import '../../platform/lan_handoff.dart' show HandoffMode;
 import '../../platform/platform_services.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
@@ -15,6 +18,7 @@ import '../../services/engine_controller.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../helpers.dart';
+import '../pages/lan/lan_call_widgets.dart';
 import 'basic_widgets.dart';
 import 'dial_pad.dart';
 import 'settings_tiles.dart';
@@ -271,8 +275,8 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
                       Expanded(
                         child: Text(
                           lan.available
-                              ? 'No SoftphonePro devices found on your network.'
-                              : 'LAN Link is coming soon. You will be able to hand this call to another device on your network.',
+                              ? 'No paired SoftphonePro devices found on your network. Pair one on the LAN page.'
+                              : 'Turn on LAN Link (Settings, LAN Link) to hand this call to another device on your network.',
                         ),
                       ),
                     ],
@@ -285,9 +289,21 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
                     title: Text(d.name),
                     subtitle: Text(d.busy ? 'On a call' : (d.online ? 'Available' : 'Offline')),
                     enabled: d.online,
+                    trailing: TextButton(
+                      key: Key('lan-talk-first-${d.id}'),
+                      onPressed: d.online
+                          ? () async {
+                              final calls = ref.read(callsProvider.notifier);
+                              Navigator.pop(context);
+                              await calls.handoffToLan(widget.cid, d, mode: HandoffMode.attended);
+                            }
+                          : null,
+                      child: const Text('Talk first'),
+                    ),
                     onTap: () async {
-                      await ref.read(callsProvider.notifier).handoffToLan(widget.cid, d);
-                      if (context.mounted) Navigator.pop(context);
+                      final calls = ref.read(callsProvider.notifier);
+                      Navigator.pop(context);
+                      await calls.handoffToLan(widget.cid, d);
                     },
                   ),
             ] else ...[
@@ -380,10 +396,23 @@ Future<void> showMoreSheet(BuildContext context, int cid) {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.account_tree_outlined),
-            title: const Text('SIP trace'),
+            leading: const Icon(Icons.graphic_eq_rounded),
+            title: const Text('Call quality'),
+            subtitle: const Text('Live MOS, jitter, loss and round-trip time'),
             onTap: () {
               Navigator.pop(ctx);
+              showLiveQuality(context, cid);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_tree_outlined),
+            title: const Text('SIP trace'),
+            subtitle: const Text('Ladder diagram of this call'),
+            onTap: () {
+              Navigator.pop(ctx);
+              if (c != null && c.info.callId.isNotEmpty) {
+                ref.read(diagnosticsFocusProvider.notifier).focus(c.info.callId);
+              }
               context.push('/settings/diagnostics');
             },
           ),
@@ -660,6 +689,8 @@ class _CallCardState extends ConsumerState<CallCard> {
                 ],
               ),
             ],
+            LanCallLabel(call: c, center: false),
+            RelayedBanner(call: c),
             if (_stats && c.isConfirmed) ...[const SizedBox(height: 10), CallStatsPanel(call: c)],
             if (consult) ...[
               const SizedBox(height: 10),
@@ -861,6 +892,7 @@ class IncomingBanners extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      LanCallLabel(call: c, center: false),
                       const SizedBox(height: 12),
                       Row(
                         children: [

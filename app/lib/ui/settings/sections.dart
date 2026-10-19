@@ -1,5 +1,7 @@
+import '../pages/diagnostics/diagnostics_page.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../models/chat.dart';
+import '../../platform/android/android_reliability_group.dart';
 import '../../platform/platform_services.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/contacts_controller.dart';
@@ -645,6 +648,7 @@ class NotificationsSection extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
+        if (defaultTargetPlatform == TargetPlatform.android && !kIsWeb) const AndroidReliabilityGroup(),
         SettingsGroup(
           title: 'Ringtone',
           children: [
@@ -796,16 +800,21 @@ class LanSection extends ConsumerWidget {
       children: [
         SettingsGroup(
           title: 'LAN Link',
-          footer: 'LAN Link is coming soon. These settings are saved for when it arrives.',
+          footer: 'Devices on the same network find each other, pair with a 6-digit code and talk directly, without any server.',
           children: [
             SwitchTile(icon: Icons.lan_rounded, title: 'Enable LAN Link', value: s.lanEnabled, onChanged: (v) => _s(ref).update({'lanEnabled': v})),
             TextTile(icon: Icons.badge_rounded, title: 'Device name', hint: 'This device', value: s.lanDeviceName, onChanged: (v) => _s(ref).update({'lanDeviceName': v})),
             SwitchTile(icon: Icons.volume_up_rounded, title: 'Allow intercom', subtitle: 'Let paired devices call you and be auto-answered', value: s.lanAllowIntercom, onChanged: (v) => _s(ref).update({'lanAllowIntercom': v})),
+            SwitchTile(icon: Icons.download_for_offline_rounded, title: 'Auto-accept files from paired devices', subtitle: 'Otherwise you are asked for every file', value: s.lanAutoAcceptFiles, onChanged: (v) => _s(ref).update({'lanAutoAcceptFiles': v})),
+            SwitchTile(icon: Icons.call_received_rounded, title: 'Let paired devices pull my calls', subtitle: 'A paired device can take over a call that is active here', value: s.lanAllowPull, onChanged: (v) => _s(ref).update({'lanAllowPull': v})),
+            TextTile(icon: Icons.folder_rounded, title: 'Downloads folder', hint: 'Default (Downloads/SoftphonePro)', value: s.lanDownloadsDir, onChanged: (v) => _s(ref).update({'lanDownloadsDir': v})),
+            TextTile(icon: Icons.settings_ethernet_rounded, title: 'Link port', hint: 'Automatic', value: s.lanLinkPort == 0 ? '' : '${s.lanLinkPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'lanLinkPort': int.tryParse(v.trim()) ?? 0})),
           ],
         ),
         if (acc.profiles.isNotEmpty)
           SettingsGroup(
             title: 'Accounts shared with paired devices',
+            footer: 'Sharing a registered account lets a paired device on the same server receive your calls directly (call transfer) instead of relaying them.',
             children: [
               for (final p in acc.profiles)
                 CheckboxListTile(
@@ -826,59 +835,14 @@ class LanSection extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Diagnostics (placeholder, replaceable through diagnosticsPageBuilderProvider)
+// Diagnostics (replaceable through diagnosticsPageBuilderProvider)
 
-final diagnosticsPageBuilderProvider = Provider<WidgetBuilder>((ref) => (context) => const _DiagnosticsPlaceholder());
+final diagnosticsPageBuilderProvider = Provider<WidgetBuilder>((ref) => (context) => const DiagnosticsPage());
 
 class DiagnosticsSection extends ConsumerWidget {
   const DiagnosticsSection({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) => Builder(builder: ref.watch(diagnosticsPageBuilderProvider));
-}
-
-class _DiagnosticsPlaceholder extends ConsumerWidget {
-  const _DiagnosticsPlaceholder();
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final e = ref.watch(engineProvider);
-    final s = ref.watch(settingsProvider);
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
-      children: [
-        SettingsGroup(
-          title: 'Engine',
-          children: [
-            ListTile(title: const Text('Status'), trailing: Text(e.phase.name)),
-            ListTile(title: const Text('Version'), trailing: Text(e.version.isEmpty ? '--' : e.version)),
-            ListTile(title: const Text('Mode'), trailing: Text(e.demo ? 'Simulator' : 'Native')),
-            SwitchTile(title: 'SIP trace', subtitle: 'Capture SIP messages for the trace viewer', value: s.sipTrace, onChanged: (v) {
-              _s(ref).update({'sipTrace': v});
-              final c = ref.read(engineProvider.notifier);
-              if (c.hasEngine) c.engine.setSipTrace(v);
-            }),
-          ],
-        ),
-        SettingsGroup(
-          title: 'Recent engine events',
-          children: [
-            for (final l in ref.watch(engineLogProvider).reversed.take(40))
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: SelectableText(l, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              ),
-            if (ref.watch(engineLogProvider).isEmpty) const ListTile(title: Text('No events yet')),
-          ],
-        ),
-        const SettingsGroup(
-          title: 'Tools',
-          children: [
-            ListTile(leading: Icon(Icons.account_tree_outlined), title: Text('SIP trace viewer'), subtitle: Text('Coming soon')),
-            ListTile(leading: Icon(Icons.network_check_rounded), title: Text('Network wizard'), subtitle: Text('NAT type, DNS/SRV, OPTIONS ping. Coming soon')),
-          ],
-        ),
-      ],
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------

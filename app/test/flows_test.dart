@@ -184,7 +184,7 @@ void main() {
     expect(results, contains(CallResult.transferred));
   });
 
-  testWidgets('transfer sheet: LAN tab shows coming soon', (tester) async {
+  testWidgets('transfer sheet: LAN tab explains LAN Link is off', (tester) async {
     final env = await TestEnv.create(profiles: [testProfile()]);
     await pumpApp(tester, env);
     await waitRegistered(tester, env);
@@ -195,7 +195,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('LAN device'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('LAN Link is coming soon'), findsOneWidget);
+    expect(find.textContaining('Turn on LAN Link'), findsOneWidget);
   });
 
   testWidgets('call waiting: second incoming call holds the first on answer', (tester) async {

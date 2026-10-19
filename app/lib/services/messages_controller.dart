@@ -175,6 +175,22 @@ class MessagesController extends Notifier<MessagesState> {
   /// Appends a message produced by another channel (LAN Link).
   void addExternal(ChatMessage m) => _put(m);
 
+  /// Typing indicator for a conversation owned by another channel.
+  void setExternalTyping(String key, bool typing) {
+    if (state.typing.contains(key) == typing) return;
+    final set = {...state.typing};
+    typing ? set.add(key) : set.remove(key);
+    state = MessagesState(messages: state.messages, typing: set);
+  }
+
+  Future<void> removeMessage(String id) async {
+    state = MessagesState(
+      messages: state.messages.where((m) => m.id != id).toList(),
+      typing: state.typing,
+    );
+    await ref.read(messagesRepoProvider).delete(id);
+  }
+
   void _onEvent(EngineEvent e) {
     switch (e) {
       case ImIncomingEvent():

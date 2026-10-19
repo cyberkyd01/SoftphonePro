@@ -113,6 +113,12 @@ class AppSettings {
   String get lanDeviceName => _s('lanDeviceName', '');
   List<String> get lanShareAors => _l('lanShareAors');
   bool get lanAllowIntercom => _b('lanAllowIntercom', true);
+  bool get lanAllowPull => _b('lanAllowPull', false);
+  bool get lanAutoAcceptFiles => _b('lanAutoAcceptFiles', false);
+  String get lanDownloadsDir => _s('lanDownloadsDir', '');
+
+  /// Fixed LAN Link TCP port (0 = random).
+  int get lanLinkPort => _i('lanLinkPort', 0);
 
   // ---- developer / flow
   int get logLevel => _i('logLevel', 3);

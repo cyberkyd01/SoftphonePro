@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../diagnostics/diagnostics_hub.dart';
+import '../diagnostics/sip_trace_controller.dart';
+import '../lan/lan_controller.dart';
+import '../lan/lan_handoff_impl.dart';
+import '../ui/pages/lan/lan_dialogs.dart';
 import 'accounts_controller.dart';
 import 'calls_controller.dart';
 import 'contacts_controller.dart';
@@ -51,6 +56,13 @@ final appServicesProvider = Provider<void>((ref) {
   ref.read(presenceProvider);
   ref.read(historyProvider);
   ref.read(contactsProvider);
+  // Diagnostics collectors listen from the first frame (trace, logs, TLS).
+  ref.read(sipTraceProvider);
+  ref.read(logsProvider);
+  ref.read(diagnosticsHubProvider);
+  ref.read(lanControllerProvider);
+  ref.read(lanHandoffImplProvider);
+  ref.read(lanUiCoordinatorProvider);
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
 
@@ -70,6 +82,19 @@ final appServicesProvider = Provider<void>((ref) {
       if (u != null) handleLink(u);
     }),
   );
+
+  // iOS (sndMode manual): CallKit owns the audio session; open the engine's
+  // sound devices only while it is active (ENGINE_API section 5).
+  final sessionSub = platform.audioSessionActive.listen((active) async {
+    try {
+      final name = active ? 'default' : 'none';
+      await ref
+          .read(engineProvider.notifier)
+          .engine
+          .setAudioDevices(capture: name, playback: name);
+    } catch (_) {}
+  });
+  ref.onDispose(sessionSub.cancel);
 
   // Badge / tray reflect missed calls and unread messages.
   ref.listen<int>(unreadMessagesProvider, (_, n) {

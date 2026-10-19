@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,15 +7,18 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../models/chat.dart';
+import '../../lan/lan_controller.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
 import '../../services/contacts_controller.dart';
 import '../../services/messages_controller.dart';
 import '../../services/providers.dart';
 import '../widgets/basic_widgets.dart';
+import 'lan/lan_widgets.dart';
 import '../widgets/settings_tiles.dart';
 
 String convTitle(Conversation c, List<dynamic> contacts) {
+  if (c.channel == kChannelLan) return c.peerDisplay.isNotEmpty ? c.peerDisplay : c.peer;
   final named = findContact(List.castFrom(contacts), c.peer)?.displayName;
   if (named != null && named.isNotEmpty) return named;
   if (c.peerDisplay.isNotEmpty) return c.peerDisplay;
@@ -30,6 +35,16 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
   String? _selected;
 
   Future<void> _newMessage() async {
+    final lan = ref.read(lanControllerProvider);
+    if (lan.running && lan.paired.isNotEmpty) {
+      final pick = await pickLanChatPeer(context, lan.paired);
+      if (!mounted) return;
+      if (pick != null && pick != 'sip') {
+        _openThread(kChannelLan, pick, pick);
+        return;
+      }
+      if (pick == null) return;
+    }
     final acc = ref.read(accountsProvider);
     if (acc.profiles.isEmpty) {
       ref.read(noticeProvider.notifier).error('Add an account to send messages');
@@ -38,12 +53,16 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
     final to = await promptText(context, title: 'New message', hint: 'Number or SIP address', keyboardType: TextInputType.emailAddress);
     if (to == null || to.isEmpty || !mounted) return;
     final accId = acc.defaultProfile?.id ?? acc.profiles.first.id;
-    final key = '$kChannelSip|$accId|${ChatMessage.peerKey(to)}';
+    _openThread(kChannelSip, accId, to);
+  }
+
+  void _openThread(String channel, String accId, String peer) {
+    final key = '$channel|$accId|${ChatMessage.peerKey(peer)}';
     if (context.isExpanded) {
       setState(() => _selected = key);
-      ref.read(_draftPeerProvider.notifier).set((accId, to));
+      ref.read(_draftPeerProvider.notifier).set((accId, peer));
     } else {
-      context.push('/thread?acc=$accId&peer=${Uri.encodeQueryComponent(to)}');
+      context.push('/thread?acc=$accId&peer=${Uri.encodeQueryComponent(peer)}&ch=$channel');
     }
   }
 
@@ -81,8 +100,13 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                       key: ValueKey(c.key),
                       selected: expanded && _selected == c.key,
                       selectedTileColor: t.colorScheme.primary.withValues(alpha: 0.08),
-                      leading: Avatar(name: title),
-                      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: c.unread > 0 ? FontWeight.w700 : FontWeight.w600)),
+                      leading: Avatar(name: title, icon: c.channel == kChannelLan ? Icons.devices_rounded : null),
+                      title: Row(
+                        children: [
+                          Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: c.unread > 0 ? FontWeight.w700 : FontWeight.w600))),
+                          if (c.channel == kChannelLan) ...[const SizedBox(width: 6), const LanBadge()],
+                        ],
+                      ),
                       subtitle: Text(
                         ms.typing.contains(c.key) ? 'typing...' : '${c.last.outgoing ? 'You: ' : ''}${c.last.body}',
                         maxLines: 1,
@@ -110,7 +134,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                           setState(() => _selected = c.key);
                           ref.read(_draftPeerProvider.notifier).set(null);
                         } else {
-                          context.push('/thread?acc=${c.accountId}&peer=${Uri.encodeQueryComponent(c.peer)}');
+                          context.push('/thread?acc=${c.accountId}&peer=${Uri.encodeQueryComponent(c.peer)}&ch=${c.channel}');
                         }
                       },
                     );
@@ -134,6 +158,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
               ? const EmptyState(icon: Icons.forum_outlined, title: 'Select a conversation')
               : ThreadView(
                   key: ValueKey(_selected),
+                  channel: sel?.channel ?? _selected!.split('|').first,
                   accountId: sel?.accountId ?? draft?.$1 ?? '',
                   peer: sel?.peer ?? draft?.$2 ?? '',
                   embedded: true,
@@ -153,18 +178,22 @@ class _DraftPeer extends Notifier<(String, String)?> {
 final _draftPeerProvider = NotifierProvider<_DraftPeer, (String, String)?>(_DraftPeer.new);
 
 class ThreadPage extends StatelessWidget {
-  const ThreadPage({super.key, required this.accountId, required this.peer});
+  const ThreadPage({super.key, required this.accountId, required this.peer, this.channel = kChannelSip});
   final String accountId;
   final String peer;
+  final String channel;
   @override
-  Widget build(BuildContext context) => ThreadView(accountId: accountId, peer: peer);
+  Widget build(BuildContext context) => ThreadView(accountId: accountId, peer: peer, channel: channel);
 }
 
 class ThreadView extends ConsumerStatefulWidget {
-  const ThreadView({super.key, required this.accountId, required this.peer, this.embedded = false});
+  const ThreadView({super.key, required this.accountId, required this.peer, this.embedded = false, this.channel = kChannelSip});
   final String accountId;
   final String peer;
   final bool embedded;
+
+  /// [kChannelSip] or [kChannelLan] (then both ids are the LAN device id).
+  final String channel;
   @override
   ConsumerState<ThreadView> createState() => _ThreadViewState();
 }
@@ -174,16 +203,34 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
   final _scroll = ScrollController();
   bool _typingSent = false;
 
-  String get _key => '$kChannelSip|${widget.accountId}|${ChatMessage.peerKey(widget.peer)}';
+  bool get _lan => widget.channel == kChannelLan;
+  String get _key => '${widget.channel}|${widget.accountId}|${ChatMessage.peerKey(widget.peer)}';
+  late final LanOpenThread _openThread = ref.read(lanOpenThreadProvider.notifier);
+
+  void _markRead() {
+    if (_lan) {
+      unawaited(ref.read(lanControllerProvider.notifier).readThread(widget.peer));
+    } else {
+      ref.read(messagesProvider.notifier).markRead(_key);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(messagesProvider.notifier).markRead(_key));
+    _openThread; // resolve while the element is alive
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_lan) _openThread.set(widget.peer);
+      _markRead();
+    });
   }
 
   @override
   void dispose() {
+    if (_lan) {
+      final peer = widget.peer;
+      Future.microtask(() => _openThread.clearIf(peer));
+    }
     _ctl.dispose();
     _scroll.dispose();
     super.dispose();
@@ -194,6 +241,10 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
     if (text.trim().isEmpty) return;
     _ctl.clear();
     _typingSent = false;
+    if (_lan) {
+      await ref.read(lanControllerProvider.notifier).sendChat(widget.peer, text);
+      return;
+    }
     await ref.read(messagesProvider.notifier).send(widget.accountId, widget.peer, text);
   }
 
@@ -205,11 +256,14 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
     final typing = ms.typing.contains(_key);
     final t = Theme.of(context);
     final acc = ref.watch(accountsProvider);
-    final title = findContact(contacts, widget.peer)?.displayName ??
-        (thread.where((m) => m.peerDisplay.isNotEmpty).lastOrNull?.peerDisplay) ??
-        userPart(widget.peer);
+    final lanPeer = _lan ? ref.watch(lanControllerProvider).peer(widget.peer) : null;
+    final title = _lan
+        ? (lanPeer?.name ?? thread.where((m) => m.peerDisplay.isNotEmpty).lastOrNull?.peerDisplay ?? widget.peer)
+        : (findContact(contacts, widget.peer)?.displayName ??
+            (thread.where((m) => m.peerDisplay.isNotEmpty).lastOrNull?.peerDisplay) ??
+            userPart(widget.peer));
     ref.listen(messagesProvider, (prev, next) {
-      if (next.unreadTotal > 0) ref.read(messagesProvider.notifier).markRead(_key);
+      if (next.unreadTotal > 0) _markRead();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 180), curve: Curves.easeOutCubic);
       });
@@ -224,9 +278,18 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Row(
+                children: [
+                  Flexible(child: Text(title, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  if (_lan) ...[const SizedBox(width: 6), const LanBadge()],
+                ],
+              ),
               Text(
-                typing ? 'typing...' : '${userPart(widget.peer)} · ${acc.byId(widget.accountId)?.name ?? ''}',
+                typing
+                    ? 'typing...'
+                    : _lan
+                        ? ((lanPeer?.online ?? false) ? 'Online on your network' : 'Offline. Messages are sent when it is back.')
+                        : '${userPart(widget.peer)} · ${acc.byId(widget.accountId)?.name ?? ''}',
                 style: t.textTheme.bodySmall?.copyWith(color: typing ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -234,9 +297,18 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
             ],
           ),
         ),
+        if (_lan)
+          IconButton(
+            key: const Key('lan-thread-file'),
+            tooltip: 'Send a file to $title',
+            onPressed: () => pickAndSendLanFile(context, ref, widget.peer),
+            icon: const Icon(Icons.attach_file_rounded),
+          ),
         IconButton(
           tooltip: 'Call $title',
-          onPressed: () => ref.read(callsProvider.notifier).dial(widget.peer, accountId: widget.accountId.isEmpty ? null : widget.accountId),
+          onPressed: () => _lan
+              ? ref.read(lanControllerProvider.notifier).callPeer(widget.peer)
+              : ref.read(callsProvider.notifier).dial(widget.peer, accountId: widget.accountId.isEmpty ? null : widget.accountId),
           icon: Icon(Icons.call_rounded, color: context.colors.callGreen),
         ),
         PopupMenuButton<String>(
@@ -256,7 +328,11 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
       children: [
         Expanded(
           child: thread.isEmpty
-              ? const EmptyState(icon: Icons.waving_hand_outlined, title: 'Say hello', subtitle: 'Messages are sent with SIP MESSAGE through your account.')
+              ? EmptyState(
+                  icon: Icons.waving_hand_outlined,
+                  title: 'Say hello',
+                  subtitle: _lan ? 'Messages go straight to this device over your network, end-to-end encrypted.' : 'Messages are sent with SIP MESSAGE through your account.',
+                )
               : ListView.builder(
                   controller: _scroll,
                   reverse: true,
@@ -273,7 +349,10 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             child: Text(dayLabel(m.time), style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                           ),
-                        _Bubble(message: m, onRetry: () => ref.read(messagesProvider.notifier).retry(m)),
+                        _Bubble(
+                          message: m,
+                          onRetry: () => _lan ? ref.read(lanControllerProvider.notifier).retryChat(m) : ref.read(messagesProvider.notifier).retry(m),
+                        ),
                       ],
                     );
                   },
@@ -297,7 +376,11 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
                       final typingNow = v.isNotEmpty;
                       if (typingNow != _typingSent) {
                         _typingSent = typingNow;
-                        ref.read(messagesProvider.notifier).sendTyping(widget.accountId, widget.peer, typingNow);
+                        if (_lan) {
+                          ref.read(lanControllerProvider.notifier).sendTyping(widget.peer, typingNow);
+                        } else {
+                          ref.read(messagesProvider.notifier).sendTyping(widget.accountId, widget.peer, typingNow);
+                        }
                       }
                     },
                     onSubmitted: (_) => _send(),
@@ -373,6 +456,7 @@ class _Bubble extends StatelessWidget {
                       MessageStatus.sending => 'Sending',
                       MessageStatus.sent => 'Sent',
                       MessageStatus.delivered => 'Delivered',
+                      MessageStatus.read => 'Read',
                       MessageStatus.failed => 'Failed',
                       _ => '',
                     },
@@ -381,11 +465,16 @@ class _Bubble extends StatelessWidget {
                         MessageStatus.sending => Icons.schedule_rounded,
                         MessageStatus.sent => Icons.check_rounded,
                         MessageStatus.delivered => Icons.done_all_rounded,
+                        MessageStatus.read => Icons.done_all_rounded,
                         MessageStatus.failed => Icons.error_outline_rounded,
                         MessageStatus.received => Icons.check_rounded,
                       },
                       size: 14,
-                      color: failed ? const Color(0xFFFFB4AB) : fg.withValues(alpha: 0.8),
+                      color: failed
+                          ? const Color(0xFFFFB4AB)
+                          : message.status == MessageStatus.read
+                              ? const Color(0xFF7DD3FC)
+                              : fg.withValues(alpha: 0.8),
                     ),
                   ),
                 ],
