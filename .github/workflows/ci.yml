@@ -430,6 +430,10 @@ jobs:
         run: |
           flutter build ios --simulator --debug --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
           lipo -archs build/ios/iphonesimulator/Runner.app/Runner
+      - name: Install Rosetta (the simulator app is x86_64)
+        run: |
+          softwareupdate --install-rosetta --agree-to-license || true
+          arch -x86_64 /usr/bin/true && echo 'Rosetta works'
       - name: Smoke - boot simulator, install, launch, screenshot
         run: tests/smoke/ios_sim_smoke.sh app/build/ios/iphonesimulator/Runner.app smoke-logs/ios
       - uses: actions/upload-artifact@v4
