@@ -31,6 +31,7 @@ import '../../audio/device_labels.dart';
 import '../../audio/voice_isolation.dart' show strengthLabel;
 import 'audio_call_settings.dart';
 import '../pages/audio/voice_isolation_page.dart';
+import 'native_licenses.dart';
 import 'speed_dial_page.dart';
 import '../widgets/settings_tiles.dart';
 
@@ -962,14 +963,7 @@ class AboutSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    const notices = [
-      ('PJSIP', 'GPLv2 or later. SIP/media stack.'),
-      ('OpenSSL', 'Apache License 2.0. TLS and SRTP.'),
-      ('Opus', 'BSD 3-clause. Audio codec.'),
-      ('bcg729', 'GPLv3. G.729 codec.'),
-      ('Inter', 'SIL Open Font License 1.1. App typeface.'),
-      ('Flutter and packages', 'BSD 3-clause and MIT. See licence page.'),
-    ];
+    registerNativeLicenses();
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -993,7 +987,11 @@ class AboutSection extends StatelessWidget {
         ),
         SettingsGroup(
           title: 'Third-party notices',
-          children: [for (final n in notices) ListTile(title: Text(n.$1), subtitle: Text(n.$2))],
+          children: [
+            for (final n in kNativeNotices)
+              ListTile(title: Text(n.name), subtitle: Text('${n.license}. ${n.purpose}.${n.version.isEmpty ? '' : ' Version ${n.version}.'}')),
+            const ListTile(title: Text('Flutter and Dart packages'), subtitle: Text('BSD 3-clause, MIT and Apache 2.0. See the licence page.')),
+          ],
         ),
       ],
     );

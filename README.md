@@ -4,7 +4,7 @@
 
 # SoftphonePro
 
-**A free, open-source softphone for Windows, macOS, Android and iOS, with the features of paid apps like Zoiper Premium and Bria.**
+**A free, open-source softphone for Windows, macOS, Android and iOS, with many of the features of paid apps like Zoiper Premium and Bria.**
 
 Run as many SIP/IAX2 accounts as you need at the same time · Encrypted calls · Hand calls to other devices on your network · No ads, no tracking, no subscription
 
@@ -28,9 +28,9 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 
 | Platform | File | Notes |
 |---|---|---|
-| **Windows** 10/11 (x64) | `SoftphonePro-Setup-<ver>-x64.exe` (installer) or `SoftphonePro-<ver>-windows-x64.zip` (portable) | The installer registers `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links. The build isn't code-signed yet, so if SmartScreen appears choose **More info → Run anyway**. |
+| **Windows** 10/11 (x64) | `SoftphonePro-Setup-<ver>-x64.exe` (installer) or `SoftphonePro-<ver>-windows-x64-portable.zip` | The installer registers `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links. The build isn't code-signed yet, so if SmartScreen appears choose **More info → Run anyway**. |
 | **macOS** 11+ (Apple Silicon and Intel) | `SoftphonePro-<ver>-macOS.dmg` | Drag the app to Applications. The build isn't notarised, so open it the first time with **right-click → Open**, or run `xattr -dr com.apple.quarantine /Applications/SoftphonePro.app`. |
-| **Android** 7+ | `app-release.apk` (universal) or the per-ABI APKs | Allow "Install unknown apps" for your browser or file manager. |
+| **Android** 7+ | `SoftphonePro-<ver>-android-universal.apk` (or a per-ABI `…-android-<abi>.apk`) | Allow "Install unknown apps" for your browser or file manager. |
 | **iOS** 15.5+ | `SoftphonePro-<ver>-unsigned.ipa` | Install it with AltStore or Sideloadly. The App Store doesn't allow GPL apps. |
 | **Browser** (Chrome, Edge, Brave, Firefox) | `SoftphonePro-ClickToDial-*.zip` | Click any phone number on a web page to call it with SoftphonePro. See [extensions/browser](extensions/browser/README.md). |
 
@@ -39,19 +39,25 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 **Accounts**
 * Up to **64 accounts registered at once**.
 * SIP over **UDP, TCP, TLS 1.2/1.3 and WebSocket (WS/WSS)**, plus **IAX2**.
-* Each account has its own codecs, transport, NAT options, DTMF mode, caller ID and ringtone.
-* Ready-made templates for Asterisk/FreePBX, 3CX, FreeSWITCH, Kamailio, Twilio, Telnyx, VoIP.ms, WebRTC gateways and IAX2.
+* **Automatic transport:** pick *Automatic (DNS SRV)* and the app chooses TLS, TCP or UDP from the server's DNS records, and shows the server it resolved.
+* **Mutual TLS:** a client certificate and key per account, for servers that require one.
+* Each account has its own codecs, transport, NAT options, DTMF mode, caller ID, ringtone and hold music.
+* Ready-made templates for Asterisk/FreePBX, 3CX, FreeSWITCH, Kamailio, Twilio, Telnyx, VoIP.ms, Vonage, WebRTC gateways and IAX2.
 * Automatic failover to a backup server.
 * Retries back off sensibly. Registration stops after a wrong password, so your provider won't lock you out.
 * Set accounts up from a link (`softphonepro://provision?url=…`), a QR code or a file, or by entering details manually.
 
 **Calls**
 * HD audio: Opus, G.722, G.711, G.729, GSM, iLBC, Speex, G.722.1 and L16.
-* Echo cancellation (WebRTC AEC3 or the platform's own), noise suppression and a jitter buffer you can tune.
+* **Voice isolation:** AI noise cancellation (RNNoise) that runs on your device. It cleans up your microphone and, separately, the incoming audio from noisy callers, with adjustable strength and a live speech meter.
+* Echo cancellation (WebRTC AEC3 where available, otherwise Speex), noise suppression and a jitter buffer you can tune.
 * Hold, mute, call waiting and swap.
+* **Hold music** from a built-in track or your own file, and **announcements**: a message played when a call connects, a notice before recording starts, and a notice played to the caller before a transfer.
+* An **audio library** for those files: import WAV or MP3, or record your own.
 * **Blind and attended transfer**, and a **local N-way conference** with per-person volume.
+* **Caller identity:** the name and number the network asserts (`P-Asserted-Identity`, `Remote-Party-ID`), plus "Forwarded from" and "Transferred by".
 * DTMF as RFC 2833, SIP INFO or in-band.
-* Call recording, automatic or per account, with an optional beep.
+* **Call recording** as WAV, stereo WAV (you left, caller right) or compressed Ogg Opus. Record automatically by rule (all, incoming, outgoing, per account, per contact), keep recording through transfers, and manage everything in a **Recordings page** with search, playback, export and auto-delete.
 * Auto-answer and intercom (`Call-Info`, `Alert-Info` and `Answer-Mode` headers).
 * Do-not-disturb and call forwarding: always, when busy, or when unanswered. These can also be synced to the PBX through feature codes.
 * Call park and retrieve, and group/directed pickup, including BLF pickup with Replaces.
@@ -62,8 +68,9 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * TLS with certificate verification, using a bundled Mozilla CA list. You can trust a server's certificate by pinning it, with no extra setup.
 * **SRTP** (SDES, AES-CM/GCM) and **DTLS-SRTP**.
 * A padlock on every call shows whether the call is encrypted.
-* Passwords live in the OS keystore.
+* Passwords live in the OS keystore, with an encrypted-file fallback.
 * App lock with a PIN or biometrics. Incoming calls still ring while the app is locked.
+* No analytics or telemetry.
 
 **Messaging, presence and BLF**
 * SIP instant messages with delivery receipts and typing indicators.
@@ -83,6 +90,11 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * A **network diagnostics wizard**: NAT type, DNS/SRV lookups, SIP OPTIONS ping, TLS certificate check and SIP-ALG detection.
 * Audio tests, a log viewer, and a support bundle you can export.
 
+**Integrations**
+* **Local automation API** (Windows/macOS, off by default): place and control calls, receive call events and send messages from a CRM, helpdesk or script, over HTTP on `127.0.0.1` with a token. It's the free counterpart of Bria's paid Desktop API. See [docs/AUTOMATION_API.md](docs/AUTOMATION_API.md).
+* **Browser extension** for Chrome, Edge, Brave and Firefox: click any phone number on a web page to call it with SoftphonePro. See [extensions/browser](extensions/browser/README.md).
+* `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links, and `--dial` / `--provision` on the desktop command line.
+
 **Platform integration**
 * **Windows/macOS:**
   * a tray or menu-bar icon;
@@ -90,8 +102,7 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
   * global hotkeys;
   * start at login;
   * one running instance;
-  * the option to make SoftphonePro your default app for `sip:`/`tel:` links;
-  * a **local automation API** for CRM and helpdesk integrations (similar to Bria's paid Desktop API).
+  * the option to make SoftphonePro your default app for `sip:`/`tel:` links.
 * **Android:**
   * a foreground service keeps your accounts registered;
   * full-screen incoming calls;
@@ -100,12 +111,11 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
   * proximity sensor.
 * **iOS:** CallKit integration.
 * **Every platform:**
-  * import contacts from the device;
   * T9 search in the dialer;
-  * QR scanning;
   * light and dark themes with an adaptive layout for phones, tablets and desktops.
+* **Phones and Mac:** import contacts from the device, and scan QR codes with the camera (other platforms can paste the code).
 
-The full list of about 90 features, each with its status, is in [docs/FEATURES.md](docs/FEATURES.md).
+The full list of about 110 features, each with its status and the test that backs it, is in [docs/FEATURES.md](docs/FEATURES.md). Some features are only partly tested (marked ◐ there); read [Known limitations](#known-limitations) before you rely on them.
 
 ## Screenshots
 
@@ -123,7 +133,8 @@ The full list of about 90 features, each with its status, is in [docs/FEATURES.m
 3. **Make a call** from the keypad, recent calls, contacts, or any `sip:`/`tel:` link.
 
 **More guides:**
-* [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording and troubleshooting.
+* [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
+* [Release notes for v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built
@@ -147,21 +158,25 @@ tests/sipserver         Asterisk test PBX (Docker) used by the integration tests
 ## Quality and testing
 
 Every push goes through CI on GitHub Actions:
-* builds for Windows, macOS, iOS, Android and Linux;
-* the engine test suite against a real Asterisk PBX (SIP, IAX2, WS/WSS, SRTP, transfers, conferences, BLF, MWI, recording and more), also run under ASan/UBSan;
-* Dart integration tests of the engine;
-* the LAN Link protocol tests, including fuzzing and stress tests;
-* about 250 Flutter unit and widget tests;
-* the browser extension tests.
+* builds for Windows, macOS, iOS and Android, and Linux for the engine tests;
+* the engine test suite (over 200 tests) against a real Asterisk PBX: SIP, IAX2, WS/WSS, SRTP, transfers, conferences, BLF, MWI, recording, voice isolation, mutual TLS and more;
+* Dart tests of the engine API (over 60) and of the LAN Link protocol (over 50, including fuzzing and stress tests);
+* over 360 Flutter unit and widget tests, including golden-image tests;
+* over 60 tests of the browser extension.
 
-Release builds are also tested end to end on devices: the macOS app (with [docs/QA_MACOS.md](docs/QA_MACOS.md)) and the Android emulator (with [docs/QA_ANDROID.md](docs/QA_ANDROID.md)). Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
+The engine suite has also been run locally under ASan/UBSan (see [docs/reviews](docs/reviews)); that run is not part of CI.
+
+Device testing is narrower than the automated tests: the macOS app was driven end to end through its automation API ([docs/QA_MACOS.md](docs/QA_MACOS.md)) and the Android app was exercised on an emulator ([docs/QA_ANDROID.md](docs/QA_ANDROID.md)). **Windows and iOS builds are produced by CI and covered by the shared tests, but have not been run on a device or simulator yet.** Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
 
 ## Known limitations
 
 * **iOS background calls:** iOS only gets incoming calls while the app is running. Background calls would need VoIP push notifications (PushKit) plus a push server, and the PBX has to support it. Android keeps accounts registered in the background with a foreground service instead.
 * **Not yet supported:** video calls and ZRTP. These are planned for a later version.
-* **Unsigned builds:** builds aren't code-signed or notarised yet, so expect a one-time security prompt on Windows and macOS.
+* **Unsigned builds:** builds aren't code-signed or notarised yet, so expect a one-time security prompt on Windows and macOS, and sideloading on iOS.
 * **English only:** the interface is in English for now. Localisation support is planned.
+* **Hold music through Asterisk:** when the PBX answers a hold request itself, the caller hears the PBX's own music, not yours. Your music plays on direct calls and on PBXs that relay the held party's audio.
+* **Ogg Opus recordings** play inside the app on Android and Linux only. On iPhone, Mac and Windows use *Open with…* or export the file.
+* **Partly tested areas:** see the ◐ rows in [docs/FEATURES.md](docs/FEATURES.md), for example STUN/TURN against real servers, IPv6, session timers, 100rel, SIP Outbound, camera QR scanning, device contacts, CallKit and the Android Telecom integration.
 
 ## Contributing
 
@@ -174,17 +189,19 @@ Bug reports and pull requests are welcome.
 
 SoftphonePro is free software under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE).
 
-It's built on these open-source components:
+It's built on these open-source components. The complete list, with versions and source links, is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 | Component | License |
 |---|---|
-| PJSIP | GPLv2+ |
-| OpenSSL | Apache-2.0 |
-| Opus | BSD |
-| bcg729 | GPLv3 |
-| Flutter | BSD |
-| Inter font | OFL |
+| PJSIP 2.17 (with the libraries it bundles) | GPLv2+ and permissive licences |
+| OpenSSL 3.5 | Apache-2.0 |
+| Opus 1.6 | BSD-3-Clause |
+| bcg729 (G.729) | GPLv3 |
+| RNNoise 0.1.1 (voice isolation) | BSD-3-Clause |
+| minimp3 (MP3 decoding) | CC0 |
+| cJSON | MIT |
+| Flutter and Dart packages | BSD-3-Clause, MIT, Apache-2.0 |
+| Inter font | OFL-1.1 |
 | Mozilla CA bundle | MPL-2.0 |
-| Other Dart packages | Their own licenses |
 
-The in-app **Settings → About** page lists every license.
+The in-app **Settings → About** page lists these notices, and its licence page lists the Flutter and Dart packages.

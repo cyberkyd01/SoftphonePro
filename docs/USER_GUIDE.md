@@ -21,10 +21,10 @@ When you first start the app, choose **Get started → Add account**.
 
 You can add an account in any of these ways:
 
-* **Provider template.** Asterisk/FreePBX, 3CX, FreeSWITCH, Kamailio, Twilio,
-  Telnyx, VoIP.ms, Vonage, WebRTC gateway (WSS) and IAX2 (Asterisk). The
-  template fills in the transport, ports and NAT options. Enter your username,
-  password and server.
+* **Provider template.** Asterisk / FreePBX, 3CX, FreeSWITCH, Kamailio /
+  OpenSIPS, Twilio SIP Registration, Telnyx, VoIP.ms, Vonage Business,
+  WebRTC gateway (WSS) and IAX2 (Asterisk). The template fills in the
+  transport, ports and NAT options. Enter your username, password and server.
 * **Generic SIP.** Enter the username, password and SIP domain, plus any
   of these:
   * auth username;
@@ -51,11 +51,15 @@ is 64).
 
 | Section | What you can set |
 |---|---|
-| Server & transport | Registrar, proxies, backup registrar (automatic failover), local port, WebSocket path |
+| Basic | Name, colour, username, password, domain, display name |
+| Registration | Registration expiry and retry timing |
+| Server and transport | Transport, registrar, proxies, backup registrar (automatic failover), local port, WebSocket path, client certificate |
 | NAT | STUN, ICE, TURN, keep-alive, contact rewrite |
-| Security | SRTP off, optional or mandatory; SDES or DTLS keying |
+| Advanced media | RTCP options needed by WebRTC gateways |
+| Security | Media encryption (SRTP) off, optional or mandatory; SDES or DTLS key exchange |
 | Codecs | A codec order for this account only |
-| Features | Voicemail number, DND, forwarding, auto-answer, auto-record, ringtone, feature codes (park, pickup, DND, forwarding) |
+| Features | Voicemail number, voicemail indicator (MWI), presence, DND, forwarding, auto-answer, ringtone, recording, hold music, opening announcement |
+| Feature codes | Star codes the PBX uses for park, pickup, DND and forwarding |
 | Advanced | Session timers, 100rel, SIP outbound, DTMF mode, DSCP, IPv6 |
 
 **Automatic transport (DNS SRV).** Choose *Automatic (DNS SRV)* as the
@@ -126,15 +130,18 @@ These are replaced on the device when the file is imported:
 * **Link.** Use `softphonepro://provision?url=https://example.com/softphone.json`.
   The app shows what will be imported and asks the user to confirm.
 * **QR code.** The code can contain the JSON itself or a provisioning link.
-  Users scan it in **Add account → Scan QR** or
-  **Settings → Provisioning**.
-* **File or clipboard.** Use **Settings → Provisioning → Import**.
+  Users scan it in **Add account → Scan QR** or in
+  **Settings → Provisioning → Import → Scan QR code**. Devices without a
+  camera (such as Windows PCs) can paste the code's text instead.
+* **URL, file or clipboard.** Use **Settings → Provisioning → Import**
+  (*From URL or pasted JSON*, *From file*, *From clipboard*).
 * **Desktop command line.** Run
   `SoftphonePro --provision <file-or-url>`. This imports without a prompt,
   so it suits deployment scripts.
 
-**Settings → Provisioning → Export** writes the current configuration as
-JSON or as a QR code, with or without passwords.
+**Settings → Provisioning → Export** copies the current configuration as
+JSON (*Copy configuration (JSON)*) or shows it as a QR code (*QR code →
+Account*), with or without passwords (*Include passwords*).
 
 ## 3. Making and handling calls
 
@@ -142,22 +149,27 @@ JSON or as a QR code, with or without passwords.
 
 * Dial from the keypad. Typing digits searches your contacts and history
   (T9).
-* Long-press `0` for `+`, and long-press `1` for voicemail.
-* **Speed dial:** long-press `2`–`9` with an empty number field. Set slots
-  up in **Settings → Calls → Speed dial**.
+* Long-press `0` for `+`.
+* **Speed dial:** with an empty number field, long-press `1`–`9`. A slot
+  that is empty opens a dialog to assign it. Slot `1` calls voicemail until
+  you assign it. You can also set slots up in
+  **Settings → Calls → Speed dial**.
 * **Links:** `sip:`, `tel:` and `callto:` links open the keypad with the
   number filled in. Turn on **Settings → Calls → Call links immediately**
   to call straight away instead.
-* To make SoftphonePro the default app for these links, use
-  **Settings → Calls → System → Make default** on macOS or Windows.
+* To make SoftphonePro the default app for these links on macOS or Windows,
+  use **Settings → Calls → System** ("Make SoftphonePro the default app for
+  sip:, tel: and callto: links"). Windows opens its Default apps page.
 * **Dial plan** (**Settings → Calls → Dial plan**) rewrites numbers before
   dialling, using regex rules, prefix stripping, `+` replacement and a
-  country prefix. The **Test** box shows how a number will be rewritten.
+  country prefix. The **Live test** box shows how a number will be rewritten.
 
 **During a call**
 
-* Controls: mute, keypad (DTMF), hold, audio route, add call, transfer,
-  record, merge, and More (park, call info, quality, SIP trace).
+* Controls: Mute, Keypad (DTMF), Speaker or audio route, Hold, Add call,
+  Transfer, Record, Merge (Split in a conference) and More. **More** has
+  Audio output (Audio devices on desktop), Park call, Retrieve parked call,
+  Send DTMF digits, Noise cancellation, Call info, Call quality and SIP trace.
 * The bars and number next to the timer show the live call quality (MOS).
 * The padlock shows whether the call is encrypted:
   * signalling over TLS/WSS;
@@ -181,18 +193,21 @@ JSON or as a QR code, with or without passwords.
 
 ## 4. Transfers, conferences, park and pickup
 
-* **Blind transfer:** choose *Transfer* → enter the number → *Transfer
-  now*. If the server does not confirm within 10 seconds, the call shows
-  "Transfer not confirmed by the server" with **Keep call** and **Retry**.
+* **Blind transfer:** choose *Transfer* → *Blind* → enter the number →
+  *Transfer now*. If the server does not confirm within 10 seconds, the call
+  shows "Transfer not confirmed by the server" with **Keep call** and
+  **Retry**.
 * **Attended transfer:**
-  1. Choose *Transfer* → *Consult first*.
-  2. Talk to the other party.
-  3. Choose *Complete transfer*.
-* **Conference:** start a second call, then choose *Merge*. Each party has
-  its own volume and mic sliders. *Split* separates the calls again.
+  1. Choose *Transfer* → *Attended* → enter the number → *Call and consult*.
+  2. Talk to the other party. The original caller is on hold.
+  3. Choose *Complete transfer*, or *Cancel* to go back to the caller.
+* **Conference:** start a second call, then choose *Merge*. The
+  *Conference levels* panel gives each party a volume slider. *Split*
+  separates the calls again.
 * **Park and pickup:**
-  * Park a call with *More → Park*.
-  * Get it back with *Retrieve parked call*.
+  * Park a call with *More → Park call*.
+  * Get it back with *More → Retrieve parked call* (on a phone it is also
+    in the *More* tab) and enter the park slot.
   * Pick up calls with the group or directed pickup codes set in the
     account's feature codes.
 * **BLF pickup:** on the **Presence** board, long-press a ringing colleague
@@ -201,26 +216,32 @@ JSON or as a QR code, with or without passwords.
 
 ## 5. Do Not Disturb, forwarding, auto-answer
 
-* **DND:** turn it on for everyone (status menu) or per account. Calls are
-  rejected with the code you choose.
-* **Forwarding:** always, when busy, or when unanswered after N seconds.
+* **DND:** turn on *Do not disturb* in **Settings → Calls → Incoming**, in
+  your status menu, or per account (account editor → *Features*). Calls are
+  rejected with the code you choose under *Reject with*.
+* **Forwarding:** per account, in the account editor under *Features* →
+  *Call forwarding*: always, when busy, or when unanswered after N seconds.
   SoftphonePro redirects the call itself. To store DND and forwarding on
-  the PBX too, turn on **Sync DND/forwarding via feature codes**.
-* **Auto-answer:** turn it on for everyone or per account, or only when
-  the PBX asks for intercom. SoftphonePro recognises these headers:
+  the PBX too, turn on **Sync DND / forwarding to PBX via feature codes**
+  in **Settings → Calls → Incoming**.
+* **Auto-answer:** **Settings → Calls → Auto-answer** has *Auto-answer all
+  calls*, *Answer after* and *Honour intercom headers*. Each account can
+  also turn it on, optionally only for intercom calls (account editor →
+  *Features*). SoftphonePro recognises these headers:
   * `Call-Info: answer-after`;
   * `Alert-Info: auto-answer`;
   * `Answer-Mode: Auto`.
-* **Blocklist and anonymous rejection** are in **Settings → Calls**. A
-  number can also be blocked from its entry in the history.
+* **Blocked numbers** and *Reject anonymous calls* are in
+  **Settings → Calls**. A number can also be blocked from its entry in the
+  history.
 
 ## 6. LAN Link
 
 LAN Link connects the SoftphonePro devices on your network: desktops,
 laptops and phones. No server or account is involved.
 
-1. **Turn it on:** go to **LAN** (on mobile, **More → LAN**) and enable
-   LAN Link.
+1. **Turn it on:** go to **LAN** (on a phone, **More → LAN Link**) and
+   enable LAN Link. More options are in **Settings → LAN Link**.
    * Devices on the same network appear automatically.
    * On guest Wi-Fi or other networks that isolate clients, use
      **Connect by address**, or scan the other device's QR code.
@@ -235,42 +256,47 @@ laptops and phones. No server or account is involved.
    * **Call or intercom** the device directly. Intercom calls are
      auto-answered only if the other person allows it, and you can set the
      app to ask first.
-   * **Transfer a call to it:** during any call, choose **Transfer → LAN
-     device**.
+   * **Transfer a call to it:** during any call, choose **Transfer → LAN**
+     and tap the device.
      * If the other device is registered on the same PBX, SoftphonePro
        transfers the call normally.
      * Otherwise your device keeps the call and relays the audio. Your
        screen shows *Relayed to …*, with **Take back** and **End**.
-     * Choose *Consult first* to talk to the other person before handing
-       the call over.
+     * Tap *Talk first* next to the device to talk to the other person
+       before handing the call over.
    * **Pull a call:** on the LAN page you can see a paired device's
      active calls. **Pull** moves one of them to your device. The other
-     device must allow pulls in its LAN settings.
+     device must turn on *Let paired devices pull my calls* in its
+     **Settings → LAN Link**.
 
 ## 7. Messages, presence and BLF
 
 * **Messages:** SIP instant messages, with delivery ticks and typing
   indicators.
-* **Presence and BLF:** turn on *BLF/presence* for a contact. You can
-  choose which account watches them.
+* **Presence and BLF:** turn on *Show on BLF board* in a contact. You can
+  choose which account watches them under *Presence via account*.
   * The **Presence** board shows each person's state: idle (green),
     ringing (amber) or busy (red).
   * Tap a person to call them, or long-press to pick up their call or
     transfer to them.
-* **Voicemail:** the badge in the top bar shows how many new voicemail
-  messages you have. Tap it to call your voicemail.
+* **Voicemail:** the voicemail button in the top bar shows how many new
+  messages you have (turn on *Voicemail indicator (MWI)* in the account
+  editor). Tap it to call your voicemail.
 
 ## 8. Security
 
 * **TLS:** server certificates are checked against the bundled Mozilla CA
-  list. You can add your own CA file in **Settings → Network → TLS**.
+  list. You can add your own CA file in **Settings → Network → Transports**
+  (*Custom CA file*).
   * For a PBX with a self-signed certificate, open
-    **Diagnostics → Network wizard → Trust this certificate**. This pins
-    that exact certificate.
+    **Settings → Diagnostics → Network** and choose **Trust this
+    certificate**. This pins that exact certificate.
 * **SRTP / DTLS-SRTP:** choose *optional* or *mandatory* per account.
-* **App lock:** go to **Settings → Privacy & Security** and set a PIN.
-  * You can also allow fingerprint or face unlock.
-  * Choose how long the app can stay in the background before it locks.
+* **App lock:** go to **Settings → Privacy and security** and turn on
+  *Require PIN to open the app* to set a PIN (4 to 8 digits).
+  * You can also turn on *Unlock with biometrics* where the device has it.
+  * Choose *Lock after*, the time the app can stay in the background before
+    it locks, or use *Lock now*.
   * Incoming calls still show and can be answered while the app is
     locked.
 * **Passwords** are stored in the operating system's keystore. They're
@@ -283,10 +309,11 @@ laptops and phones. No server or account is involved.
 | Tool | What it does |
 |---|---|
 | SIP trace | Records SIP messages and shows them as a ladder diagram or raw text. Export as `.log` or `.pcap`, with passwords removed by default. |
-| Network wizard | Checks your network interfaces, DNS/SRV for each account, NAT type (STUN), SIP OPTIONS reachability and TLS certificates, and looks for signs of SIP ALG. Every check comes with advice. |
-| Call quality | Charts MOS, jitter, packet loss and RTT live. Each call's summary is saved in the history. |
-| Audio | Mic level meter, echo test and test tones. |
+| Network | The network wizard: checks your network interfaces, DNS/SRV for each account, NAT type (STUN), SIP OPTIONS reachability and TLS certificates, and looks for signs of SIP ALG. Every check comes with advice. |
+| Quality | Charts MOS, jitter, packet loss and RTT live. Each call's summary is saved in the history. |
+| Audio test | Mic level meter, echo test and test tones. |
 | Logs | Engine log viewer. The rotating log file (`logs/engine.log`) is included in the support bundle. |
+| System | Version and system information. |
 
 **Common problems**
 
@@ -295,8 +322,8 @@ laptops and phones. No server or account is involved.
 | **403 / Wrong password** | Check the auth username. Some providers need it to differ from the username. |
 | **408 / Timeout** | Check the server address and port. Try TCP or TLS. The network wizard shows if UDP is blocked. |
 | **One-way or no audio** | Turn on STUN, or ICE plus TURN. Turn off SIP ALG on your router. Try TCP or TLS signalling. |
-| **Echo** | Try a different echo canceller in **Settings → Audio**: *platform* or *AEC3*. |
-| **Missed calls on Android** | Open **Settings → Notifications → Background reliability**. Allow the app to run in the background and turn off battery optimisation for it. |
+| **Echo** | Try a different *Echo cancellation* setting under **Settings → Audio → Processing**: *WebRTC AEC3*, *Speex* or *Platform*. |
+| **Missed calls on Android** | Open **Settings → Notifications and ringtones → Background reliability**. Allow the app to run in the background and turn off battery optimisation for it. |
 
 ## Recordings
 
@@ -307,7 +334,7 @@ it automatically. A red **REC** marker shows while recording.
 
 * **Format**
   * *Standard (WAV)*: mono, about 2 MB a minute, plays everywhere.
-  * *Stereo (WAV)*: you on the left channel and the caller on the right,
+  * *Stereo, you and the caller on separate channels (WAV)*: you on the left channel and the caller on the right,
     about 4 MB a minute. Useful for transcription and review.
   * *Compressed (Opus)*: about 0.2 MB a minute (Ogg Opus). Android and Linux
     play it in the app; on iPhone, Mac and Windows use **Open with...** or
@@ -361,8 +388,9 @@ it automatically. A red **REC** marker shows while recording.
 * **Windows**
   * The installer registers `sip:`, `sips:`, `tel:`, `callto:` and
     `softphonepro:` links.
-  * Closing the window keeps SoftphonePro running in the tray. Choose
-    **Quit** in the tray menu to exit.
+  * With **Close to tray** on (**Settings → Advanced → Desktop**), closing
+    the window keeps SoftphonePro running in the tray so calls can still
+    ring. Choose **Quit** in the tray menu to exit.
   * Global hotkeys are set in **Settings → Shortcuts**.
 * **macOS**
   * The first time you open the app, right-click it and choose **Open**
