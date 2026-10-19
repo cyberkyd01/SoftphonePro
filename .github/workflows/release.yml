@@ -40,9 +40,37 @@ jobs:
           pattern: '{windows-artifacts,macos-dmg,android-apks,ios-ipa,browser-extension}'
       - name: List release files
         run: ls -la dist
+      - name: Release notes body
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Use docs/RELEASE_NOTES_<tag>.md when present; rewrite its relative links to
+          # absolute GitHub URLs pinned to the tag so they work on the release page.
+          src="docs/RELEASE_NOTES_${TAG}.md"
+          if [ -f "$src" ]; then
+            python3 - "$src" "$TAG" "$REPO" > release_body.md <<'PY'
+          import re, sys
+          src, tag, repo = sys.argv[1:4]
+          base = f"https://github.com/{repo}/blob/{tag}/"
+          def fix(m):
+              text, url = m.group(1), m.group(2)
+              if re.match(r"^(https?:|mailto:|#)", url):
+                  return m.group(0)
+              path = url[3:] if url.startswith("../") else "docs/" + url
+              return f"[{text}]({base}{path})"
+          body = open(src, encoding="utf-8").read()
+          print(re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", fix, body))
+          PY
+          else
+            echo "See the [changelog](https://github.com/${REPO}/blob/${TAG}/CHANGELOG.md)." > release_body.md
+          fi
+          head -20 release_body.md
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
+          name: SoftphonePro ${{ inputs.tag || github.ref_name }}
+          body_path: release_body.md
           files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
