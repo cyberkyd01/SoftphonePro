@@ -1,3 +1,4 @@
+import AVFoundation
 import Cocoa
 import Contacts
 import CoreServices
@@ -98,6 +99,13 @@ class MainFlutterWindow: NSWindow {
         self.requestContactsAccess { result($0) }
       case "readContacts":
         self.readContacts { result($0) }
+      case "showMicrophoneModes":
+        if #available(macOS 12.0, *) {
+          AVCaptureDevice.showSystemUserInterface(.microphoneModes)
+          result(true)
+        } else {
+          result(false)
+        }
       case "defaultHandlers":
         result(self.defaultHandlers())
       case "setDefaultHandler":

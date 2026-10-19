@@ -39,6 +39,7 @@ const _wide = [
   _Dest('/messages', 'Messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
   _Dest('/presence', 'Presence', Icons.grid_view_rounded, Icons.grid_view_rounded),
   _Dest('/lan', 'LAN', Icons.lan_outlined, Icons.lan_rounded),
+  _Dest('/recordings', 'Recordings', Icons.graphic_eq_rounded, Icons.graphic_eq_rounded),
   _Dest('/settings', 'Settings', Icons.settings_outlined, Icons.settings_rounded),
 ];
 
@@ -76,6 +77,7 @@ class AppShell extends ConsumerWidget {
     final isTab = _compact.any((d) => location.startsWith(d.path)) ||
         location.startsWith('/presence') ||
         location.startsWith('/lan') ||
+        location.startsWith('/recordings') ||
         location.startsWith('/settings');
     // The keypad has its own account selector; no duplicate chip strip.
     final showStrip = location.startsWith('/recents') || location.startsWith('/contacts');

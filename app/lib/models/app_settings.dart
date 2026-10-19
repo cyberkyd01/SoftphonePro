@@ -159,6 +159,23 @@ class AppSettings {
   /// Play ringback, busy and congestion tones locally.
   bool get progressTones => _b('progressTones', true);
 
+  // ---- recording (UX2)
+  /// `wav` | `wavStereo` | `opus` (engine RecordFormat wire names).
+  String get recordFormat => _s('recordFormat', 'wav');
+
+  /// Auto-record rule: `off` | `all` | `incoming` | `outgoing`. Falls back
+  /// to the legacy [autoRecord] switch when unset.
+  String get recordRule => _s('recordRule', autoRecord ? 'all' : 'off');
+
+  /// Play a "this call is being recorded" notice when recording starts.
+  bool get recordNotice => _b('recordNotice', false);
+
+  /// Delete recordings older than this many days (0 = keep forever).
+  int get recordAutoDeleteDays => _i('recordAutoDeleteDays', 0);
+
+  /// Also record the consultation call of an attended transfer.
+  bool get recordContinueTransfers => _b('recordContinueTransfers', true);
+
   // ---- local automation API (lib/automation; off by default)
   bool get automationEnabled => _b('automationEnabled', false);
 
@@ -170,6 +187,32 @@ class AppSettings {
 
   /// Browser origins (`https://crm.example.com`) allowed to call the API.
   List<String> get automationOrigins => _l('automationOrigins');
+
+  // ---- audio library, voice isolation, hold music, announcements (UX1)
+  /// Voice isolation (AI noise cancellation): own microphone / other party.
+  bool get viMicOn => _b('viMicOn', false);
+  double get viMicStrength => _d('viMicStrength', 0.7);
+  bool get viInOn => _b('viInOn', false);
+  double get viInStrength => _d('viInStrength', 0.5);
+
+  /// Hold music: `pbx` (plain hold) or an audio ref (`builtin:<id>`, `lib:<file>`).
+  String get holdMusic => _s('holdMusic', 'pbx');
+  double get holdMusicVolume => _d('holdMusicVolume', 0.6);
+
+  /// Opening announcement played when a call connects.
+  bool get announceOpening => _b('announceOpening', false);
+  String get announceOpeningFile => _s('announceOpeningFile', '');
+
+  /// `incoming`, `outgoing` or `both`.
+  String get announceDirection => _s('announceDirection', 'both');
+  bool get announceMuteMic => _b('announceMuteMic', true);
+  bool get announceMonitor => _b('announceMonitor', false);
+
+  /// Audio ref played before call recording starts (empty = none).
+  String get recordingNoticeFile => _s('recordingNoticeFile', '');
+
+  /// Audio ref played to a caller before transferring them (empty = none).
+  String get transferNoticeFile => _s('transferNoticeFile', '');
 
   /// Speed dial slots 1-9: `{number, label, accountId?}`.
   Map<int, SpeedDialEntry> get speedDial {

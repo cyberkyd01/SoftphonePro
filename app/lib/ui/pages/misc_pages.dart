@@ -31,6 +31,7 @@ class MorePage extends ConsumerWidget {
             NavTile(icon: Icons.grid_view_rounded, title: 'Presence', subtitle: 'Busy lamp field', onTap: () => context.go('/presence')),
             NavTile(key: const Key('more-retrieve-parked'), icon: Icons.local_parking_rounded, title: 'Retrieve parked call', subtitle: 'Dial a park slot', onTap: () => promptRetrieveParked(context, ref)),
             NavTile(icon: Icons.lan_rounded, title: 'LAN Link', subtitle: 'Nearby devices, chat and file drop', onTap: () => context.go('/lan')),
+            NavTile(key: const Key('more-recordings'), icon: Icons.graphic_eq_rounded, title: 'Recordings', subtitle: 'Listen to, share and manage call recordings', onTap: () => context.go('/recordings')),
             NavTile(
               icon: Icons.voicemail_rounded,
               title: 'Voicemail',

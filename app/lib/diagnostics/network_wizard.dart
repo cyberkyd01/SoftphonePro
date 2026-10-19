@@ -318,7 +318,8 @@ class NetworkWizard extends Notifier<WizardState> {
       );
     }
     final i = ev.info;
-    final d = <String>[if (i.description.isNotEmpty) i.description, if (i.stun.isNotEmpty) 'STUN server: ${i.stun}'];
+    final desc = friendlyNatDescription(i.description);
+    final d = <String>[if (desc.isNotEmpty) desc, if (i.stun.isNotEmpty) 'STUN server: ${i.stun}'];
     switch (i.natType) {
       case NatType.open:
         return _R(StepStatus.pass, 'No NAT: this device has a public address', details: d);
@@ -600,3 +601,15 @@ class NetworkWizard extends Notifier<WizardState> {
 }
 
 final networkWizardProvider = NotifierProvider<NetworkWizard, WizardState>(NetworkWizard.new);
+
+/// Plain-language version of the raw NAT detection text from the engine
+/// (for example `ErrUnknown` when the STUN server did not answer).
+String friendlyNatDescription(String raw) {
+  final t = raw.trim();
+  if (t.isEmpty) return '';
+  if (RegExp(r'^err', caseSensitive: false).hasMatch(t)) {
+    return 'The STUN server did not answer, so the NAT type could not be determined.';
+  }
+  if (t.toLowerCase() == 'unknown') return 'The NAT type could not be determined.';
+  return t;
+}

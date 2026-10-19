@@ -29,7 +29,7 @@ You can add an account in any of these ways:
   of these:
   * auth username;
   * outbound proxy;
-  * transport: UDP, TCP, TLS, WS or WSS.
+  * transport: UDP, TCP, TLS, WS, WSS or **Automatic (DNS SRV)**.
 * **IAX2.** Choose IAX2 at the top of the form. Then enter the host, port
   (4569 by default), username, password and an optional context.
 * **Scan QR** or **Import from URL.** Use the code or link your
@@ -57,6 +57,22 @@ is 64).
 | Codecs | A codec order for this account only |
 | Features | Voicemail number, DND, forwarding, auto-answer, auto-record, ringtone, feature codes (park, pickup, DND, forwarding) |
 | Advanced | Session timers, 100rel, SIP outbound, DTMF mode, DSCP, IPv6 |
+
+**Automatic transport (DNS SRV).** Choose *Automatic (DNS SRV)* as the
+transport and SoftphonePro asks DNS which transport the server offers. It
+tries the `_sips._tcp` records (TLS), then `_sip._tcp` (TCP), then
+`_sip._udp` (UDP), in order of preference, and falls back to UDP on port
+5060. Tap the account chip to see the result under **Transport** and
+**Resolved server**.
+
+**Client certificate (mutual TLS).** Some servers want the app to identify
+itself with a certificate. With a TLS, WSS or automatic transport, the
+account editor shows **Client certificate (mutual TLS)**: choose the
+certificate file and the private key file (PEM), and enter the key password
+if the key is encrypted. Both files are needed; until both are set nothing
+is sent. On iPhone and Android the files are copied into the app when you
+pick them. The key password is kept in the device's secure storage, not in
+the account database.
 
 If the server rejects your password (401/403), SoftphonePro **stops
 retrying**, so the provider doesn't lock you out. Correct the password or
@@ -150,6 +166,14 @@ JSON or as a QR code, with or without passwords.
 **Incoming calls**
 
 * Answer, decline, or reply with a message.
+* **Who is calling.** When the network states the caller's identity
+  (`P-Asserted-Identity` or `Remote-Party-ID`), SoftphonePro shows that name
+  and number in preference to the "From" name, and adds "From 1002" when the
+  "From" number differs. Your own contact name always wins. A call that was
+  forwarded to you says "Forwarded from 2001 (no-answer)" (from `Diversion`
+  or `History-Info`), and a call that arrives through a transfer says
+  "Transferred by 1005". This appears on the incoming screen and banner, the
+  in-call screen, the desktop call card and in the call's history details.
 * Send the call to voicemail by redirecting it.
 * Transfer it to another of your devices with LAN Link.
 * When a second call arrives, you hear a call-waiting tone. Answering it
@@ -158,7 +182,8 @@ JSON or as a QR code, with or without passwords.
 ## 4. Transfers, conferences, park and pickup
 
 * **Blind transfer:** choose *Transfer* → enter the number → *Transfer
-  now*.
+  now*. If the server does not confirm within 10 seconds, the call shows
+  "Transfer not confirmed by the server" with **Keep call** and **Retry**.
 * **Attended transfer:**
   1. Choose *Transfer* → *Consult first*.
   2. Talk to the other party.
@@ -272,6 +297,64 @@ laptops and phones. No server or account is involved.
 | **One-way or no audio** | Turn on STUN, or ICE plus TURN. Turn off SIP ALG on your router. Try TCP or TLS signalling. |
 | **Echo** | Try a different echo canceller in **Settings → Audio**: *platform* or *AEC3*. |
 | **Missed calls on Android** | Open **Settings → Notifications → Background reliability**. Allow the app to run in the background and turn off battery optimisation for it. |
+
+## Recordings
+
+**Recording a call.** Tap **Record** during a call, or let SoftphonePro do
+it automatically. A red **REC** marker shows while recording.
+
+**Settings → Recording**
+
+* **Format**
+  * *Standard (WAV)*: mono, about 2 MB a minute, plays everywhere.
+  * *Stereo (WAV)*: you on the left channel and the caller on the right,
+    about 4 MB a minute. Useful for transcription and review.
+  * *Compressed (Opus)*: about 0.2 MB a minute (Ogg Opus). Android and Linux
+    play it in the app; on iPhone, Mac and Windows use **Open with...** or
+    export it, because the system players there cannot decode Ogg Opus.
+* **Automatic recording:** off, all calls, incoming only or outgoing only.
+  Each account can override this (use the global setting, record all,
+  incoming only, outgoing only, or never). A contact with **Always record
+  calls with this contact** is recorded whatever the rules say.
+* **Play a notice before recording** plays your recording announcement to
+  the other party before recording starts (set the file in *Settings →
+  Calls → Announcements*). **Recording beep** warns periodically.
+* **Continue recording through transfers.** When you record a call and start
+  an attended transfer, the consultation call is recorded too. A call handed
+  to you by a transfer or relay keeps being recorded. The recordings are
+  linked: the history details and the Recordings page show "Related" links.
+* **Storage:** the recordings folder, **Delete old recordings** (never, 7,
+  30, 90 days or 1 year; checked at startup and once a day) and, on
+  desktop, **Open recordings folder**.
+
+**The Recordings page** (desktop: *Recordings* in the left rail; phone:
+*More → Recordings*)
+
+* Recordings are grouped by day with the contact name, number, direction,
+  account, duration, size and a format badge. A summary line shows the
+  number of recordings and the space they use.
+* Search by name or number; filter by incoming or outgoing, by account and
+  by date range.
+* Tap a recording to play it (play, pause, seek). **Rename** it, **Delete**
+  it (with confirmation), or select several (long-press or the checklist
+  button) to delete them together.
+* **Export:** on desktop, **Save as...** and **Show in Finder / folder**; on
+  iPhone and Android, **Share**.
+* **View call** opens the call in the history; the call's details link back
+  with **Open in Recordings**.
+* Check your local laws before recording calls.
+
+## Audio: devices, noise cancellation, hold music and announcements
+
+**Devices.** *Settings → Audio → Devices* picks the microphone, speaker and (desktop) ringer. "System default" shows which device the OS is using now. *Test speaker* plays a short tone; the mic meter and *Echo test* show your level. During a call, **More → Audio devices** (desktop) or the speaker button (phone) switches devices; on a phone you can choose Phone, Speaker, Bluetooth or a wired headset.
+
+**Voice isolation (AI noise cancellation).** *Settings → Audio → Voice isolation* removes keyboard noise, fans and background voices using an on-device neural network. Turn it on for *My microphone* (what the other person hears) and/or *Other participants* (noisy callers), and set the strength from Low to Max. The speech meter and *Test with echo* let you hear the effect (use headphones). In a call, **More → Noise cancellation** toggles it and a "Noise cancellation on" chip shows on the call. macOS 12+ and iOS 15+ also offer *System microphone mode (Voice Isolation)*; on Android the page shows whether the phone's own noise suppressor and echo canceller exist. If the call engine lacks the feature, the controls are disabled.
+
+**Audio files.** *Settings → Audio → Audio files* holds your hold music and announcements. Import a WAV or MP3, or record your own with the microphone (timer, level meter, preview). Rename or delete files; two hold tracks and a chime are built in.
+
+**Music on hold.** *Settings → Calls → Hold → Hold music*: "PBX default" holds plainly (your phone system may play its own music); otherwise the chosen track is played to the held caller at the chosen volume. Each account can override this in its editor.
+
+**Announcements.** *Settings → Calls → Announcements*: play a file when a call connects (incoming, outgoing or both, optionally muting your microphone and letting you hear it; a *Skip* button appears in the call), a notice before recording starts, and a notice before a caller is transferred (blind, attended or LAN hand-off; it is played to the caller, then the transfer happens, after at most 15 seconds).
 
 ## 10. Platform notes
 

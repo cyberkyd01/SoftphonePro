@@ -307,12 +307,13 @@ class ContactDetailView extends ConsumerWidget {
                 ),
             ],
           ),
-        if (c.email.isNotEmpty || c.notes.isNotEmpty || c.blf)
+        if (c.email.isNotEmpty || c.notes.isNotEmpty || c.blf || c.autoRecord)
           SettingsGroup(
             title: 'Details',
             children: [
               if (c.email.isNotEmpty) ListTile(leading: const Icon(Icons.email_outlined), title: Text(c.email)),
               if (c.blf) const ListTile(leading: Icon(Icons.grid_view_rounded), title: Text('Shown on the BLF board')),
+              if (c.autoRecord) const ListTile(leading: Icon(Icons.fiber_manual_record_rounded), title: Text('Calls are always recorded')),
               if (c.notes.isNotEmpty) ListTile(leading: const Icon(Icons.notes_rounded), title: Text(c.notes)),
             ],
           ),
@@ -402,6 +403,7 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
   late List<TextEditingController> _sips;
   bool _fav = false;
   bool _blf = false;
+  bool _autoRecord = false;
   String _ring = 'default';
   String? _presenceUri;
   String _presenceAcc = '';
@@ -425,6 +427,7 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
     _sips = [for (final s in existing?.sipUris ?? <String>[]) TextEditingController(text: s)];
     _fav = existing?.favorite ?? false;
     _blf = existing?.blf ?? false;
+    _autoRecord = existing?.autoRecord ?? false;
     _ring = existing?.ringtone ?? 'default';
     _presenceUri = existing?.presenceUri;
     _presenceAcc = existing?.presenceAccountId ?? '';
@@ -465,6 +468,7 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
         avatarColor: hashColor(name),
         presenceUri: _presenceUri,
         presenceAccountId: _presenceAcc.isEmpty ? null : _presenceAcc,
+        autoRecord: _autoRecord,
       ),
     );
     if (mounted) context.pop();
@@ -545,6 +549,15 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                       subtitle: const Text('Watch this extension\'s presence and busy lamp'),
                       value: _blf,
                       onChanged: (v) => setState(() => _blf = v),
+                    ),
+                    const Divider(height: 1),
+                    SwitchListTile(
+                      key: const Key('contact-auto-record'),
+                      secondary: const Icon(Icons.fiber_manual_record_rounded),
+                      title: const Text('Always record calls with this contact'),
+                      subtitle: const Text('Overrides the automatic recording rules'),
+                      value: _autoRecord,
+                      onChanged: (v) => setState(() => _autoRecord = v),
                     ),
                     const Divider(height: 1),
                     ListTile(

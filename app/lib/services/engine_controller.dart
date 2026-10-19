@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../models/app_settings.dart';
+import '../audio/voice_isolation.dart';
 import '../platform/android/android_platform_services.dart';
 import 'engine_files.dart';
 import 'providers.dart';
@@ -138,6 +139,7 @@ CoreConfig buildCoreConfig(AppSettings s, {EngineFiles files = EngineFiles.none}
       rtpPort: s.rtpPort,
       rtpPortRange: s.rtpPortRange,
       sndMode: (!kIsWeb && Platform.isIOS) ? SndMode.manual : SndMode.auto,
+      voiceIsolation: voiceIsolationConfigOf(s),
     ),
   );
 }
@@ -423,6 +425,12 @@ class EngineController extends Notifier<EngineState> {
           ),
         ),
       );
+    }
+    if (!initial && any(['viMicOn', 'viMicStrength', 'viInOn', 'viInStrength'])) {
+      // Initial values travel in core.start; an engine without voice
+      // isolation answers UNSUPPORTED, which is ignored.
+      final vi = voiceIsolationConfigOf(s);
+      await guard(() => e.setVoiceIsolation(mic: vi.mic, incoming: vi.incoming));
     }
     if (changed('micLevel')) await guard(() => e.setMicLevel(s.micLevel));
     if (changed('speakerLevel')) {

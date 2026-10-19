@@ -193,7 +193,7 @@ void main() {
     await settle(tester, env.engine);
     await tester.tap(find.text('Transfer'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('LAN device'));
+    await tester.tap(find.text('LAN'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Turn on LAN Link'), findsOneWidget);
   });

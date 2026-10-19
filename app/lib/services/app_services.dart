@@ -8,7 +8,9 @@ import '../diagnostics/sip_trace_controller.dart';
 import '../lan/lan_controller.dart';
 import '../lan/lan_handoff_impl.dart';
 import '../ui/pages/lan/lan_dialogs.dart';
+import '../recordings/recordings_controller.dart';
 import 'accounts_controller.dart';
+import 'call_journal.dart';
 import 'calls_controller.dart';
 import 'contacts_controller.dart';
 import 'engine_controller.dart';
@@ -64,6 +66,11 @@ final appServicesProvider = Provider<void>((ref) {
   ref.read(lanControllerProvider);
   ref.read(lanHandoffImplProvider);
   ref.read(lanUiCoordinatorProvider);
+
+  // Calls cut off by a crash / force-stop become "interrupted" history rows.
+  Future.microtask(() => recoverInterruptedCalls(ref));
+  // Recordings library: loads the store and applies auto-delete.
+  ref.read(recordingsProvider);
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
 

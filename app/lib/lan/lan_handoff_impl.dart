@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lan_link/lan_link.dart' as ll;
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../audio/announcement_service.dart';
 import '../platform/lan_handoff.dart';
 import '../services/accounts_controller.dart';
 import '../services/calls_controller.dart';
@@ -207,6 +208,12 @@ class LanHandoffImpl implements LanCallPolicy {
       }
       if (_calls.rawCall(cid)?.isEnded ?? true) {
         throw const LanHandoffException('The call ended before it could be handed off');
+      }
+      if (!ringing && !attended) {
+        await _ref.read(announcementServiceProvider).playTransferNotice(cid);
+        if (_calls.rawCall(cid)?.isEnded ?? true) {
+          throw const LanHandoffException('The call ended before it could be handed off');
+        }
       }
       if (mode == ll.HandoffMode.refer) {
         final done = await _doRefer(session, target!, attended: attended, ringing: ringing);

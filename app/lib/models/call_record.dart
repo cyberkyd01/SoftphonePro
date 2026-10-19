@@ -8,7 +8,8 @@ enum CallResult {
   busy,
   forwarded,
   transferred,
-  handedOff;
+  handedOff,
+  interrupted;
 
   String get label => switch (this) {
     answered => 'Answered',
@@ -19,6 +20,7 @@ enum CallResult {
     forwarded => 'Forwarded',
     transferred => 'Transferred',
     handedOff => 'Handed off',
+    interrupted => 'Interrupted',
   };
 }
 
@@ -112,6 +114,13 @@ class CallRecord {
     this.recordingPath,
     this.quality = const QualitySummary(),
     this.callId = '',
+    this.recordingId,
+    this.relatedRecordingIds = const [],
+    this.assertedName = '',
+    this.assertedNumber = '',
+    this.divertedFrom = '',
+    this.divertReason = '',
+    this.referredBy = '',
   });
 
   /// SIP Call-ID (to find the call in the SIP trace); empty for old records.
@@ -131,10 +140,33 @@ class CallRecord {
   final String? recordingPath;
   final QualitySummary quality;
 
+  /// Id of the primary [RecordingMeta] of this call.
+  final String? recordingId;
+
+  /// Recording ids of related calls (transfer consult legs, relays).
+  final List<String> relatedRecordingIds;
+
+  /// Caller identity from P-Asserted-Identity / Remote-Party-ID.
+  final String assertedName;
+  final String assertedNumber;
+
+  /// First diversion hop (user) and its reason, when the call was forwarded.
+  final String divertedFrom;
+  final String divertReason;
+
+  /// `Referred-By` user/URI for calls that result from a transfer.
+  final String referredBy;
+
   bool get isMissed =>
       direction == CallDirection.incoming && result == CallResult.missed;
 
-  CallRecord copyWith({String? recordingPath, QualitySummary? quality}) =>
+  CallRecord copyWith({
+    String? recordingPath,
+    QualitySummary? quality,
+    String? recordingId,
+    List<String>? relatedRecordingIds,
+    bool clearRecording = false,
+  }) =>
       CallRecord(
         id: id,
         accountId: accountId,
@@ -148,9 +180,16 @@ class CallRecord {
         result: result,
         sipCode: sipCode,
         reason: reason,
-        recordingPath: recordingPath ?? this.recordingPath,
+        recordingPath: clearRecording ? null : (recordingPath ?? this.recordingPath),
         quality: quality ?? this.quality,
         callId: callId,
+        recordingId: clearRecording ? null : (recordingId ?? this.recordingId),
+        relatedRecordingIds: relatedRecordingIds ?? this.relatedRecordingIds,
+        assertedName: assertedName,
+        assertedNumber: assertedNumber,
+        divertedFrom: divertedFrom,
+        divertReason: divertReason,
+        referredBy: referredBy,
       );
 
   factory CallRecord.fromJson(Map<String, dynamic> j) => CallRecord(
@@ -179,6 +218,13 @@ class CallRecord {
       Map<String, dynamic>.from((j['quality'] as Map?) ?? const {}),
     ),
     callId: j['callId'] as String? ?? '',
+    recordingId: j['recordingId'] as String?,
+    relatedRecordingIds: [for (final e in (j['relatedRecordingIds'] as List? ?? const [])) '$e'],
+    assertedName: j['assertedName'] as String? ?? '',
+    assertedNumber: j['assertedNumber'] as String? ?? '',
+    divertedFrom: j['divertedFrom'] as String? ?? '',
+    divertReason: j['divertReason'] as String? ?? '',
+    referredBy: j['referredBy'] as String? ?? '',
   );
 
   Map<String, dynamic> toJson() => {
@@ -197,5 +243,12 @@ class CallRecord {
     'recordingPath': recordingPath,
     'quality': quality.toJson(),
     if (callId.isNotEmpty) 'callId': callId,
+    if (recordingId != null) 'recordingId': recordingId,
+    if (relatedRecordingIds.isNotEmpty) 'relatedRecordingIds': relatedRecordingIds,
+    if (assertedName.isNotEmpty) 'assertedName': assertedName,
+    if (assertedNumber.isNotEmpty) 'assertedNumber': assertedNumber,
+    if (divertedFrom.isNotEmpty) 'divertedFrom': divertedFrom,
+    if (divertReason.isNotEmpty) 'divertReason': divertReason,
+    if (referredBy.isNotEmpty) 'referredBy': referredBy,
   };
 }

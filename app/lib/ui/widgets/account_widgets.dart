@@ -177,6 +177,10 @@ class AccountSheet extends ConsumerWidget {
               const Divider(),
               _kv(context, 'Server', p.config.domain),
               _kv(context, 'Transport', info.transport.isEmpty ? p.config.transport.wire : info.transport.toUpperCase()),
+              if ((info.resolvedServer ?? '').isNotEmpty)
+                KeyedSubtree(key: const Key('acc-resolved-server'), child: _kv(context, 'Resolved server', info.resolvedServer!)),
+              if (p.config.tlsClientCert != null && p.config.tlsClientCert!.certFile.isNotEmpty)
+                _kv(context, 'Client cert', 'Presented to the server (mutual TLS)'),
               if (info.contact.isNotEmpty) _kv(context, 'Contact', info.contact),
               if (info.expires > 0) _kv(context, 'Expires in', '${info.expires} s'),
               if (acc.mwi[p.id] != null)

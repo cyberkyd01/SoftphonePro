@@ -416,7 +416,7 @@ class AccountsController extends Notifier<AccountsState> {
       // A newer engine generation queued its own full sync: stop using the
       // stale view of _added.
       if (gen != _generation) return;
-      final base = p.config.copyWith(uid: p.id);
+      final base = engineConfigOf(p.config.copyWith(uid: p.id));
       if (p.backupRegistrar.trim().isEmpty && _onBackup.remove(p.id)) {
         _probe.remove(p.id)?.cancel();
         _probing.remove(p.id);
@@ -585,7 +585,7 @@ class AccountsController extends Notifier<AccountsState> {
       _probing.remove(id);
       return;
     }
-    final cfg = p.config.copyWith(uid: id);
+    final cfg = engineConfigOf(p.config.copyWith(uid: id));
     try {
       await _engineCtl.engine.modifyAccount(AccountRef.uid(id), cfg);
       _added[id] = cfg;
@@ -620,3 +620,13 @@ class AccountsController extends Notifier<AccountsState> {
 final accountsProvider = NotifierProvider<AccountsController, AccountsState>(
   AccountsController.new,
 );
+
+/// The config as the engine accepts it: a client certificate is only sent
+/// when both the certificate and the key file are set (otherwise the engine
+/// answers INVALID_PARAM and the account would not register at all).
+AccountConfig engineConfigOf(AccountConfig c) {
+  final cert = c.tlsClientCert;
+  if (cert == null || (cert.certFile.isNotEmpty && cert.keyFile.isNotEmpty)) return c;
+  final j = c.toJson()..remove('tlsClientCert');
+  return AccountConfig.fromJson(j);
+}

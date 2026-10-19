@@ -131,6 +131,13 @@ final class PlatformBridge: NSObject, FlutterStreamHandler {
     case "setKeepScreenOn":
       audio.setKeepScreenOn((a["keepOn"] as? Bool) ?? false)
       result(nil)
+    case "showMicrophoneModes":
+      if #available(iOS 15.0, *) {
+        AVCaptureDevice.showSystemUserInterface(.microphoneModes)
+        result(true)
+      } else {
+        result(false)
+      }
     case "updateBadge":
       setBadge((a["count"] as? Int) ?? 0)
       result(nil)

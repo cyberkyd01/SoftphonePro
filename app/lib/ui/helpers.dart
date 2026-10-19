@@ -2,7 +2,7 @@ import 'package:spcore_dart/spcore_dart.dart' show CallState;
 
 import '../models/contact.dart';
 import '../services/calls_controller.dart';
-import '../services/contacts_controller.dart';
+import '../services/caller_identity.dart';
 
 /// Display name for a live call: contact name, remote display, or number.
 String callTitle(UiCall c, List<Contact> contacts) {
@@ -14,15 +14,16 @@ String callTitle(UiCall c, List<Contact> contacts) {
       if (lan.peerName.isNotEmpty && !(lan.isHandoff && !lan.outgoing)) return lan.peerName;
     }
   }
-  final byContact = findContact(contacts, c.number)?.displayName;
-  if (byContact != null && byContact.isNotEmpty) return byContact;
-  if (c.info.remoteDisplay.isNotEmpty) return c.info.remoteDisplay;
+  final who = CallerIdentity.of(c.info, contacts, fromNumber: c.number);
+  if (who.name.isNotEmpty) return who.name;
+  if (who.number.isNotEmpty) return who.number;
   if (c.number.isNotEmpty) return c.number;
   return 'Unknown caller';
 }
 
 String callStateText(UiCall c) {
   if (c.isEnded) return 'Call ended';
+  if (c.transferStalled) return 'Transfer not confirmed';
   if (c.transferPending) return 'Transferring...';
   if (c.isConference) return 'Conference';
   if (c.isHeld) return 'On hold';

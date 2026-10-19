@@ -76,3 +76,15 @@ To make the PBX-dependent cases (D, F via the PBX, media) fully verifiable, rest
 * While the app is foreground, an incoming call shows both the in-app page and a heads-up notification.
 * Speaker is on by default for calls on the emulator (no earpiece route reported).
 * History labels a DND-rejected call "Declined" (the call model result is `rejected`/declined).
+
+## Follow-up fixes (UX2 polish pass)
+
+Fixed in the app, with tests in `app/test/recordings/qa_leftovers_test.dart`. Not yet re-checked on the emulator.
+
+* Blind transfer with no REFER answer: "Transferring..." is shown, and after 10 s "Transfer not confirmed by the server" offers **Keep call** and **Retry**.
+* In-call keypad: it replaces the action grid while open, so its bottom row is never behind the End button (**Hide keypad** closes it).
+* Transfer sheet: the segment is labelled "LAN" (tooltip "LAN device") and stays on one line.
+* Network wizard: the raw "ErrUnknown" is shown as "The STUN server did not answer, so the NAT type could not be determined."
+* Dial rules page: same large header (with back and add) as the other settings pages.
+* Incoming call in the foreground (Android, app resumed): only the in-app page is shown; the heads-up notification is posted only when the app is in the background or locked.
+* A call interrupted by force-stop: an "active calls journal" is written when a call starts and answers (with a heartbeat), and leftovers of an earlier run become "Interrupted" history entries at the next start.

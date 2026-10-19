@@ -34,6 +34,8 @@ How to read this list:
 | N6 | QoS DSCP marking (SIP CS3, RTP EF) | P1 | C | ☐ |
 | N7 | DNS SRV/NAPTR, custom DNS servers | P1 | C | ☐ |
 | N8 | SIP Outbound (RFC 5626), session timers (RFC 4028), 100rel (RFC 3262) | P1 | C | ☐ |
+| N9 | Mutual TLS: client certificate, key and key password per account (file pickers; key password in secure storage) | P1 | C/D | ✅ |
+| N10 | Automatic transport: DNS SRV (`_sips._tcp`, `_sip._tcp`, `_sip._udp`) with the resolved server shown in the account sheet | P1 | C/D | ✅ |
 
 ## Security
 | ID | Feature | Pri | Layer | Status |
@@ -55,6 +57,8 @@ How to read this list:
 | M5 | Mic/speaker volume, live VU meters, mic test loopback | P1 | C/D | ☐ |
 | M6 | Jitter buffer and VAD/CNG tuning, ptime | P1 | C | ✅ |
 | M7 | Android audio routes (earpiece/speaker/Bluetooth/wired), proximity sensor | P0 | P | ☐ |
+| M9 | Voice isolation: AI noise cancellation (RNNoise) for mic and incoming audio, strength, live speech meter, in-call toggle | P1 | C/D | ✅ |
+| M10 | Audio library: import WAV/MP3, record your own, preview, rename, delete | P1 | D | ✅ |
 | M8 | Video calls (H.264/VP8) | P1 | C/P | ☐ (phase 2) |
 
 ## Call handling
@@ -68,7 +72,7 @@ How to read this list:
 | C6 | Attended transfer (REFER with Replaces) | P0 | C | ☐ |
 | C7 | Handling of incoming REFER and Replaces (be transferred, call pickup) | P0 | C | ☐ |
 | C8 | Local N-way conference (merge calls, split, per-party mute/volume) | P1 | C/D | ◐ |
-| C9 | Call recording (WAV) with auto-record rules and an in-app player | P1 | C/D | ◐ |
+| C9 | Call recording manager: Recordings page (desktop rail, phone More) with list by day, name/number/direction/account/duration/size/format badge, search and account/direction/date filters, in-app player (play, pause, seek), rename, delete with confirmation and bulk delete, export (Save as / Show in folder on desktop, share sheet on phones), storage summary, open recordings folder, auto-delete after N days (startup + daily), two-way links between history and recordings; auto-record rules (off, all, incoming, outgoing; per account; per contact) | P1 | C/D | ✅ |
 | C10 | Auto-answer: global, per account, or by header (Call-Info answer-after, Alert-Info auto-answer, Answer-Mode) — intercom | P1 | C/D | ☐ |
 | C11 | DND (global or per account), with reject code choice | P0 | D | ☐ |
 | C12 | Call forwarding: always, busy, or no answer after N seconds (client-side 302 redirect) | P1 | D | ☐ |
@@ -79,6 +83,11 @@ How to read this list:
 | C17 | Direct IP calls without an account (sip:user@ip) | P1 | C | ✅ |
 | C18 | Anonymous call rejection, blocklist | P1 | D | ☐ |
 | C19 | Per-account and per-contact ringtones | P2 | D | ✅ |
+| C20 | Music on hold: built-in or own file, volume, per-account override; plain hold if the engine refuses | P1 | D | ✅ |
+| C21 | Opening announcement when a call connects (incoming/outgoing/both, mute mic, local monitor, skip) | P2 | D | ✅ |
+| C22 | Transfer announcement: play a notice to the caller before blind, attended and LAN hand-off transfers | P2 | D | ✅ |
+| C23 | Recording formats: Standard WAV, Stereo WAV (you left, caller right) and Compressed Opus (Ogg); Opus playback on Android/Linux, Open with / export elsewhere | P1 | C/D | ✅ |
+| C24 | Recording continuity across transfers: the consultation call of an attended transfer and a REFER/relay-spawned call keep recording and are linked in history and the Recordings page | P2 | D | ✅ |
 
 ## Messaging and presence
 | ID | Feature | Pri | Layer | Status |
@@ -87,6 +96,7 @@ How to read this list:
 | P2 | Presence (SUBSCRIBE/NOTIFY PIDF) and publish of own status | P1 | C | ☐ |
 | P3 | BLF (dialog-info, RFC 4235) busy lamp field with one-tap call, pickup or transfer | P1 | C/D | ◐ |
 | P4 | MWI voicemail indicator (RFC 3842), count badge and one-tap voicemail dial | P0 | C/D | ☐ |
+| P5 | Caller identity: P-Asserted-Identity / Remote-Party-ID name and number, "Forwarded from" (Diversion / History-Info) and "Transferred by" (Referred-By) on incoming, in-call, desktop card and history | P1 | C/D | ✅ |
 
 ## Contacts and history
 | ID | Feature | Pri | Layer | Status |

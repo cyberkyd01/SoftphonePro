@@ -15,6 +15,10 @@ import '../../services/history_controller.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../widgets/basic_widgets.dart';
+import '../../recordings/recording_filter.dart';
+import '../../recordings/recording_formats.dart';
+import '../../recordings/recordings_controller.dart';
+import '../widgets/caller_identity_block.dart';
 import '../widgets/recording_player.dart';
 import '../widgets/settings_tiles.dart';
 
@@ -25,7 +29,7 @@ IconData directionIcon(CallRecord r) {
 }
 
 String durationLabel(CallRecord r) {
-  if (r.result == CallResult.answered || r.result == CallResult.transferred || r.result == CallResult.handedOff) {
+  if (r.result == CallResult.answered || r.result == CallResult.transferred || r.result == CallResult.handedOff || (r.result == CallResult.interrupted && r.durationMs > 0)) {
     return formatMs(r.durationMs);
   }
   return r.result.label;
@@ -276,6 +280,7 @@ class RecentDetailView extends ConsumerWidget {
     final name = all.isEmpty ? number : recordTitle(all.first, contacts);
     final q = all.where((r) => !r.quality.isEmpty).toList();
     final rec = all.where((r) => r.recordingPath != null).toList();
+    final recMeta = ref.watch(recordingsProvider);
     final acc = ref.watch(accountsProvider);
 
     final body = ListView(
@@ -354,8 +359,37 @@ class RecentDetailView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${dayLabel(r.start)}, ${timeLabel(r.start)}', style: t.textTheme.labelLarge),
-                    RecordingPlayer(path: r.recordingPath!),
+                    Row(
+                      children: [
+                        Expanded(child: Text('${dayLabel(r.start)}, ${timeLabel(r.start)}', style: t.textTheme.labelLarge)),
+                        if (recordingForCall(recMeta, r) case final m?) ...[
+                          Text(recordFormatBadge(m.format), style: t.textTheme.labelSmall),
+                          TextButton(
+                            key: Key('open-recording-${m.id}'),
+                            onPressed: () => context.go('/recordings?id=${m.id}'),
+                            child: const Text('Open in Recordings'),
+                          ),
+                        ],
+                      ],
+                    ),
+                    RecordingPlayer(path: r.recordingPath!, format: recordingForCall(recMeta, r)?.format ?? 'wav'),
+                    if (r.relatedRecordingIds.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final id in r.relatedRecordingIds)
+                              if (recMeta.where((m) => m.id == id).firstOrNull case final rel?)
+                                ActionChip(
+                                  key: Key('related-recording-${rel.id}'),
+                                  avatar: const Icon(Icons.link_rounded, size: 16),
+                                  label: Text('Related call: ${recordingTitle(rel, contacts)}'),
+                                  onPressed: () => context.go('/recordings?id=${rel.id}'),
+                                ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -369,10 +403,16 @@ class RecentDetailView extends ConsumerWidget {
                 ListTile(
                   leading: Icon(directionIcon(all[i]), color: all[i].isMissed ? colors.endRed : null),
                   title: Text('${all[i].direction == CallDirection.incoming ? 'Incoming' : 'Outgoing'}  ·  ${all[i].result.label}'),
-                  subtitle: Text(
-                    '${dayLabel(all[i].start)}, ${timeLabel(all[i].start)}'
-                    '${acc.byId(all[i].accountId) != null ? '  ·  ${acc.byId(all[i].accountId)!.name}' : ''}'
-                    '${all[i].sipCode >= 300 ? '  ·  SIP ${all[i].sipCode}' : ''}',
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${dayLabel(all[i].start)}, ${timeLabel(all[i].start)}'
+                        '${acc.byId(all[i].accountId) != null ? '  ·  ${acc.byId(all[i].accountId)!.name}' : ''}'
+                        '${all[i].sipCode >= 300 ? '  ·  SIP ${all[i].sipCode}' : ''}',
+                      ),
+                      RecordIdentityLines(record: all[i]),
+                    ],
                   ),
                   trailing: Text(formatMs(all[i].durationMs), style: tabular(t.textTheme.bodyMedium)),
                   onTap: all[i].quality.isEmpty && all[i].callId.isEmpty ? null : () => showCallQualitySheet(context, all[i]),

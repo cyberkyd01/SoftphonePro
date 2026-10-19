@@ -3,10 +3,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../audio/announcement_service.dart';
+import '../audio/hold_music.dart';
 import '../core/format.dart';
 import '../models/account_profile.dart';
 import '../models/app_settings.dart';
@@ -17,8 +20,13 @@ import '../lan/lan_handoff_impl.dart';
 import '../lan/lan_models.dart';
 import '../platform/lan_handoff.dart';
 import '../platform/ios/ios_platform_services.dart';
+import '../recordings/recording_formats.dart';
+import '../recordings/recording_rules.dart';
+import '../recordings/recordings_controller.dart';
+import 'call_journal.dart';
 import '../platform/platform_services.dart';
 import 'accounts_controller.dart';
+import 'caller_identity.dart';
 import 'contacts_controller.dart';
 import 'dial_rules.dart';
 import 'engine_controller.dart';
@@ -81,6 +89,30 @@ class UiCall {
   String? recordingFile;
   String dialed = '';
   bool transferPending = false;
+
+  /// Target of the blind transfer in progress and whether the server has not
+  /// confirmed it after [kTransferConfirmTimeout].
+  String transferTarget = '';
+  bool transferStalled = false;
+  Timer? transferTimer;
+
+  /// Id the history record of this call will get (known early so that
+  /// recordings can point at it).
+  final String historyId = newId();
+
+  /// Recording state: ids of this call's recordings (in order), the current
+  /// segment, and recordings of related calls (transfer legs).
+  final List<String> recordingIds = [];
+  String? recordingId;
+  RecordFormat recordingFormat = RecordFormat.wav;
+  DateTime? recordingStartedAt;
+  bool recordingPersisted = true;
+  final Set<String> linkedRecordingIds = {};
+
+  /// `Referred-By` of the REFER that spawned this call (from the parent).
+  String referredByEvent = '';
+  String journalKey = '';
+  DateTime? journalBeatAt;
 
   /// Per-party levels in a conference (1.0 = unity): what we hear from this
   /// party (rx) and what this party hears of our microphone (tx).
@@ -243,6 +275,10 @@ String? ipLiteralHost(String target) {
   final host = t.contains(':') && t.split(':').length == 2 ? t.split(':').first : t;
   return InternetAddress.tryParse(host)?.type == InternetAddressType.IPv4 ? host : null;
 }
+
+/// How long a blind transfer may stay unanswered by the server before the
+/// UI offers to keep the call or retry.
+const Duration kTransferConfirmTimeout = Duration(seconds: 10);
 
 /// Interval of the recording beep while a call is being recorded.
 const Duration kRecordBeepInterval = Duration(seconds: 15);
@@ -576,6 +612,7 @@ class CallsController extends Notifier<CallsState> {
         if (c != null) {
           c.transferredAway = true;
           c.forcedResult = CallResult.transferred;
+          c.referredByEvent = e.referredBy;
         }
       case CallReplacedEvent():
         final old = _calls[e.oldCid];
@@ -662,6 +699,8 @@ class CallsController extends Notifier<CallsState> {
         remoteDisplay: info.remoteDisplay.isEmpty
             ? cur.info.remoteDisplay
             : info.remoteDisplay,
+        // Referred-By inherited from the REFER that spawned this call.
+        referredBy: (info.referredBy ?? '').isEmpty ? cur.info.referredBy : null,
       );
       _emit();
     } catch (_) {}
@@ -720,16 +759,33 @@ class CallsController extends Notifier<CallsState> {
       remoteUser: s.remoteUser.isNotEmpty ? s.remoteUser : null,
       connectMs: s.connectMs,
       totalMs: s.totalMs,
+      assertedIdentity: s.assertedIdentity,
+      diversion: s.diversion.isEmpty ? null : s.diversion,
+      referredBy: (s.referredBy ?? '').isNotEmpty ? s.referredBy : null,
     );
+    _inheritReferredBy(c, s);
+    if (c.direction == CallDirection.outgoing && !c.silent && !c.hidden && c.journalKey.isEmpty) {
+      unawaited(_journalStart(c));
+    }
     if (s.state == CallState.confirmed && prevState != CallState.confirmed) {
       c.answered = true;
       c.connectedAt ??= DateTime.now();
       c.noAnswerTimer?.cancel();
+      if (!c.silent) unawaited(_journalStart(c, answered: true));
       _focused = c.cid;
       unawaited(_guard(() => _platform.reportCallConnected('${c!.cid}')));
       unawaited(_refresh(c.cid));
       if (!c.silent && !c.recording && _shouldAutoRecord(c)) {
-        unawaited(startRecording(c.cid));
+        unawaited(startRecording(c.cid, continued: _recordingParentOf(c) != null && !_ruleWantsRecording(c)));
+      }
+      if (!c.silent) {
+        unawaited(
+          ref.read(announcementServiceProvider).onCallConfirmed(
+            cid: c.cid,
+            incoming: c.direction == CallDirection.incoming,
+            accountId: c.accountId,
+          ),
+        );
       }
     }
     if (s.state == CallState.disconnected) {
@@ -749,6 +805,8 @@ class CallsController extends Notifier<CallsState> {
     final c = _calls[e.cid];
     if (c == null || !e.isFinal) return;
     c.transferPending = false;
+    c.transferStalled = false;
+    c.transferTimer?.cancel();
     if (e.code >= 200 && e.code < 300) {
       c.transferredAway = true;
       c.forcedResult = CallResult.transferred;
@@ -774,6 +832,9 @@ class CallsController extends Notifier<CallsState> {
   }
 
   Future<void> _pollStats() async {
+    for (final c in _calls.values) {
+      if (c.isConfirmed && !c.silent && !c.hidden) _journalBeat(c);
+    }
     if (!_ctl.hasEngine) return;
     final f = state.focused;
     if (f == null || !f.isConfirmed) return;
@@ -942,16 +1003,21 @@ class CallsController extends Notifier<CallsState> {
         ),
       ),
     );
-    unawaited(
-      _guard(
-        () => _platform.showIncomingCallNotification(
-          callKey: '${ev.cid}',
-          title: name,
-          body: 'Incoming call${profile != null ? ' on ${profile.name}' : ''}',
-          accountName: profile?.name,
+    // Android in the foreground: the in-app incoming page is the UI; the
+    // heads-up notification would only duplicate it. Backgrounded or locked
+    // the notification (with its full-screen intent) is what rings.
+    if (!ref.read(incomingUiVisibleProvider)()) {
+      unawaited(
+        _guard(
+          () => _platform.showIncomingCallNotification(
+            callKey: '${ev.cid}',
+            title: name,
+            body: 'Incoming call${profile != null ? ' on ${profile.name}' : ''}',
+            accountName: profile?.name,
+          ),
         ),
-      ),
-    );
+      );
+    }
     unawaited(_guard(() => _platform.bringToFront()));
     _notified.add('${ev.cid}');
     _emit();
@@ -962,7 +1028,12 @@ class CallsController extends Notifier<CallsState> {
   void _finalize(UiCall c, {bool forceEnded = false}) {
     c.noAnswerTimer?.cancel();
     c.autoAnswerTimer?.cancel();
+    c.transferTimer?.cancel();
     _beepTimers.remove(c.cid)?.cancel();
+    if (c.journalKey.isNotEmpty) {
+      final key = c.journalKey;
+      unawaited(ref.read(callJournalProvider).remove(key));
+    }
     if (_notified.remove('${c.cid}')) {
       unawaited(_guard(() => _platform.cancelIncomingCallNotification('${c.cid}')));
     }
@@ -989,12 +1060,18 @@ class CallsController extends Notifier<CallsState> {
     }
     final contacts = ref.read(contactsProvider);
     final number = c.number.isNotEmpty ? c.number : c.dialed;
-    final display = c.info.remoteDisplay.isNotEmpty
+    final display = (c.info.assertedIdentity?.display ?? '').isNotEmpty
+        ? c.info.assertedIdentity!.display
+        : c.info.remoteDisplay.isNotEmpty
         ? c.info.remoteDisplay
         : nameForNumber(contacts, number, '');
     final end = DateTime.now();
+    // A call that ended while recording: keep the file in the library.
+    unawaited(_persistRecording(c));
+    final who = CallerIdentity.of(c.info, contacts, fromNumber: number);
+    final pai = c.info.assertedIdentity;
     final rec = CallRecord(
-      id: newId(),
+      id: c.historyId,
       accountId: c.accountId,
       direction: c.direction,
       remoteUri: c.info.remoteUri,
@@ -1013,6 +1090,13 @@ class CallsController extends Notifier<CallsState> {
       recordingPath: c.recordingFile,
       quality: c.quality,
       callId: c.info.callId,
+      recordingId: c.recordingIds.isEmpty ? null : c.recordingIds.first,
+      relatedRecordingIds: [...c.recordingIds.skip(1), ...c.linkedRecordingIds],
+      assertedName: pai?.display ?? '',
+      assertedNumber: pai?.user ?? '',
+      divertedFrom: who.forwardedFrom,
+      divertReason: who.forwardReason,
+      referredBy: who.transferredBy,
     );
     unawaited(ref.read(historyProvider.notifier).add(rec));
 
@@ -1149,7 +1233,7 @@ class CallsController extends Notifier<CallsState> {
     for (final c in _calls.values.toList()) {
       if (c.cid == except) continue;
       if (c.isConfirmed && !c.isHeld && !c.isConference) {
-        await _guard(() => _engine.hold(c.cid));
+        await _holdCall(c.cid);
       }
     }
     // Refresh infos so UI shows "on hold".
@@ -1233,8 +1317,13 @@ class CallsController extends Notifier<CallsState> {
     await _guard(() => _engine.hangupAll());
   }
 
+  /// Holds a call, with the configured music on hold (plain hold when the
+  /// engine cannot play it).
+  Future<void> _holdCall(int cid) =>
+      _guard(() => ref.read(holdMusicServiceProvider).hold(cid, _calls[cid]?.accountId));
+
   Future<void> hold(int cid) async {
-    await _guard(() => _engine.hold(cid));
+    await _holdCall(cid);
     await _refresh(cid);
   }
 
@@ -1261,7 +1350,7 @@ class CallsController extends Notifier<CallsState> {
     if (list.length < 2) return;
     final active = state.focused ?? list.first;
     final other = list.firstWhere((c) => c.cid != active.cid);
-    await _guard(() => _engine.hold(active.cid));
+    await _holdCall(active.cid);
     await _guard(() => _engine.unhold(other.cid));
     _focused = other.cid;
     await _refresh(active.cid);
@@ -1312,7 +1401,19 @@ class CallsController extends Notifier<CallsState> {
     if (res.target.isEmpty) return false;
     try {
       c.transferPending = true;
+      await ref.read(announcementServiceProvider).playTransferNotice(cid);
+      if (_calls[cid] == null) return false;
       await _engine.transfer(cid, res.target);
+      c.transferTarget = res.target;
+      c.transferStalled = false;
+      c.transferTimer?.cancel();
+      // No NOTIFY / final status from the server: offer keep / retry.
+      c.transferTimer = Timer(kTransferConfirmTimeout, () {
+        final cur = _calls[cid];
+        if (cur == null || cur.isEnded || !cur.transferPending) return;
+        cur.transferStalled = true;
+        _emit();
+      });
       _emit();
       return true;
     } on EngineException catch (e) {
@@ -1322,11 +1423,34 @@ class CallsController extends Notifier<CallsState> {
     }
   }
 
+  /// After "Transfer not confirmed": stay on the call.
+  Future<void> keepCallAfterStalledTransfer(int cid) async {
+    final c = _calls[cid];
+    if (c == null) return;
+    c.transferTimer?.cancel();
+    c.transferPending = false;
+    c.transferStalled = false;
+    _emit();
+    await _guard(() => _engine.unhold(cid));
+    await _refresh(cid);
+  }
+
+  /// After "Transfer not confirmed": send the REFER again.
+  Future<bool> retryStalledTransfer(int cid) async {
+    final c = _calls[cid];
+    if (c == null || c.transferTarget.isEmpty) return false;
+    final target = c.transferTarget;
+    c.transferTimer?.cancel();
+    c.transferStalled = false;
+    c.transferPending = false;
+    return transferBlind(cid, target);
+  }
+
   /// Starts an attended transfer: holds [origCid] and calls [target].
   Future<int?> startConsult(int origCid, String target) async {
     final orig = _calls[origCid];
     if (orig == null) return null;
-    await _guard(() => _engine.hold(origCid));
+    await _holdCall(origCid);
     final cid = await dial(
       target,
       accountId: orig.accountId.isEmpty ? null : orig.accountId,
@@ -1349,6 +1473,8 @@ class CallsController extends Notifier<CallsState> {
     if (consult == null || orig == null) return false;
     try {
       orig.transferPending = true;
+      await ref.read(announcementServiceProvider).playTransferNotice(orig.cid);
+      if (_calls[orig.cid] == null || _calls[consultCid] == null) return false;
       await _engine.transferAttended(orig.cid, consultCid);
       consult.transferredAway = true;
       consult.forcedResult = CallResult.transferred;
@@ -1404,7 +1530,7 @@ class CallsController extends Notifier<CallsState> {
     final f = state.focused ?? _calls[cids.first];
     if (f != null) {
       for (final id in cids.where((i) => i != f.cid)) {
-        await _guard(() => _engine.hold(id));
+        await _holdCall(id);
         await _refresh(id);
       }
     }
@@ -1419,16 +1545,79 @@ class CallsController extends Notifier<CallsState> {
     return ref.read(recordingsDirProvider)();
   }
 
-  bool _shouldAutoRecord(UiCall c) {
+  /// Auto-record rules (contact, account, global) for [c].
+  bool _ruleWantsRecording(UiCall c) {
     final profile = ref.read(accountsProvider).byId(c.accountId);
-    switch (profile?.autoRecord ?? 'inherit') {
-      case 'always':
-        return true;
-      case 'never':
-        return false;
-      default:
-        return _settings.autoRecord;
+    return shouldAutoRecord(
+      settings: _settings,
+      profile: profile,
+      contact: findContact(ref.read(contactsProvider), c.number),
+      direction: c.direction,
+    );
+  }
+
+  /// The recorded call that [c] continues: the call being transferred (for a
+  /// consultation call) or the one that referred us (a REFER-spawned call).
+  UiCall? _recordingParentOf(UiCall c) {
+    if (!_settings.recordContinueTransfers) return null;
+    final id = c.consultOf ?? c.info.transferFrom;
+    final parent = id == null ? null : _calls[id];
+    if (parent == null || parent.recordingIds.isEmpty) return null;
+    return parent;
+  }
+
+  bool _shouldAutoRecord(UiCall c) => _ruleWantsRecording(c) || _recordingParentOf(c) != null;
+
+  /// Keeps "Referred-By" of the REFER that spawned [c] for display.
+  void _inheritReferredBy(UiCall c, CallInfo s) {
+    final from = s.transferFrom ?? c.info.transferFrom;
+    if (from == null || (c.info.referredBy ?? '').isNotEmpty) return;
+    final by = _calls[from]?.referredByEvent ?? '';
+    if (by.isNotEmpty) c.info = c.info.copyWith(referredBy: by);
+  }
+
+  Future<void> _journalStart(UiCall c, {bool answered = false}) async {
+    try {
+      final j = ref.read(callJournalProvider);
+      if (c.journalKey.isEmpty) c.journalKey = '$kJournalSession-${c.cid}-${c.startedAt.millisecondsSinceEpoch}';
+      final key = c.journalKey;
+      final now = DateTime.now();
+      final cur = j.cached(key);
+      final number = c.number.isNotEmpty ? c.number : c.dialed;
+      final e = (cur ??
+              JournalEntry(
+                key: key,
+                session: kJournalSession,
+                cid: c.cid,
+                accountId: c.accountId,
+                direction: c.direction,
+                remoteUri: c.info.remoteUri,
+                remoteNumber: number,
+                remoteDisplay: c.info.remoteDisplay,
+                start: c.startedAt,
+              ))
+          .copyWith(
+            remoteUri: c.info.remoteUri,
+            remoteNumber: number,
+            remoteDisplay: c.info.remoteDisplay,
+            callId: c.info.callId,
+            answeredAt: answered ? (c.connectedAt ?? now) : null,
+            lastSeen: now,
+            recordingPath: c.recordingFile,
+            recordingId: c.recordingIds.isEmpty ? null : c.recordingIds.first,
+          );
+      await j.put(e);
+    } catch (e) {
+      debugPrint('call journal write failed: $e');
     }
+  }
+
+  void _journalBeat(UiCall c) {
+    final now = DateTime.now();
+    final last = c.journalBeatAt;
+    if (c.journalKey.isEmpty || (last != null && now.difference(last) < const Duration(seconds: 15))) return;
+    c.journalBeatAt = now;
+    unawaited(_journalStart(c, answered: c.answered));
   }
 
   /// While recording with "recording beep" on, plays a short beep into the
@@ -1448,23 +1637,50 @@ class CallsController extends Notifier<CallsState> {
     _beepTimers[cid] = Timer.periodic(kRecordBeepInterval, (_) => unawaited(beep()));
   }
 
-  Future<void> startRecording(int cid) async {
+  final Set<int> _recStarting = {};
+
+  /// Starts recording [cid] in the format chosen in the settings. With
+  /// [continued] the recording follows a transfer: it is linked to the
+  /// recording of the call it continues.
+  Future<void> startRecording(int cid, {bool continued = false}) async {
     final c = _calls[cid];
-    if (c == null) return;
+    if (c == null || c.recording || !_recStarting.add(cid)) return;
     try {
+      if (_settings.recordNotice && !continued) {
+        try {
+          await ref.read(announcementServiceProvider).playRecordingNotice(cid);
+        } catch (e) {
+          debugPrint('recording notice failed: $e');
+        }
+        if (_calls[cid] == null || c.isEnded) return;
+      }
+      final format = recordFormatOf(_settings.recordFormat);
       final dir = await _recordingsDir();
       final t = DateTime.now();
       String two(int n) => n.toString().padLeft(2, '0');
       final safe = c.number.replaceAll(RegExp(r'[^A-Za-z0-9+_-]'), '');
       final name =
-          'rec_${t.year}${two(t.month)}${two(t.day)}_${two(t.hour)}${two(t.minute)}${two(t.second)}_$safe.wav';
-      final file = await _engine.recordStart(cid, p.join(dir, name));
+          'rec_${t.year}${two(t.month)}${two(t.day)}_${two(t.hour)}${two(t.minute)}${two(t.second)}_$safe.${recordFormatExtension(format)}';
+      final file = await _engine.recordStart(cid, p.join(dir, name), format: format);
       c.recordingFile = file;
+      c.recordingId = newId();
+      c.recordingIds.add(c.recordingId!);
+      c.recordingFormat = format;
+      c.recordingStartedAt = DateTime.now();
+      c.recordingPersisted = false;
+      final parent = _recordingParentOf(c);
+      if (parent != null && parent.recordingId != null) {
+        c.linkedRecordingIds.add(parent.recordingId!);
+        parent.linkedRecordingIds.add(c.recordingId!);
+      }
       c.info = c.info.copyWith(recording: true);
       _startBeeps(cid);
+      unawaited(_journalStart(c, answered: c.answered));
       _emit();
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error('Could not start recording', details: '$e');
+    } finally {
+      _recStarting.remove(cid);
     }
   }
 
@@ -1476,21 +1692,53 @@ class CallsController extends Notifier<CallsState> {
       final r = await _engine.recordStop(cid);
       c.recordingFile = r.file.isNotEmpty ? r.file : c.recordingFile;
       c.info = c.info.copyWith(recording: false);
-      if (c.recordingFile != null) {
-        await ref.read(recordingsRepoProvider).put(
-          RecordingMeta(
-            id: newId(),
-            path: c.recordingFile!,
-            remote: c.number,
-            time: DateTime.now(),
-            durationMs: r.durationMs,
-            accountId: c.accountId,
-          ),
-        );
-      }
+      unawaited(_persistRecording(c, result: r));
       _emit();
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error('Could not stop recording', details: '$e');
+    }
+  }
+
+  /// Saves the recording of [c] in the recordings library (once).
+  Future<void> _persistRecording(UiCall c, {RecordingResult? result}) async {
+    final file = c.recordingFile;
+    final id = c.recordingId;
+    if (file == null || id == null || c.recordingPersisted) return;
+    c.recordingPersisted = true;
+    var bytes = result?.bytes ?? 0;
+    if (bytes <= 0) {
+      try {
+        bytes = File(file).lengthSync();
+      } catch (_) {}
+    }
+    final started = c.recordingStartedAt;
+    final duration = result != null && result.durationMs > 0
+        ? result.durationMs
+        : (started == null ? 0 : DateTime.now().difference(started).inMilliseconds);
+    final contacts = ref.read(contactsProvider);
+    final number = c.number.isNotEmpty ? c.number : c.dialed;
+    final name = findContact(contacts, number)?.displayName ?? c.info.remoteDisplay;
+    final ctl = ref.read(recordingsProvider.notifier);
+    await ctl.add(
+      RecordingMeta(
+        id: id,
+        path: file,
+        remote: number,
+        time: DateTime.now(),
+        durationMs: duration,
+        accountId: c.accountId,
+        format: (result?.format ?? c.recordingFormat).wire,
+        bytes: bytes,
+        callRecordId: c.historyId,
+        outgoing: c.direction == CallDirection.outgoing,
+        remoteName: name,
+        relatedIds: c.linkedRecordingIds.toList(),
+        callStart: c.startedAt,
+      ),
+    );
+    // The partner recordings may be saved already: link both ways.
+    for (final other in c.linkedRecordingIds) {
+      await ctl.link(id, other);
     }
   }
 
@@ -1713,6 +1961,19 @@ class CallsController extends Notifier<CallsState> {
     }
   }
 }
+
+/// Whether the in-app incoming-call UI is on screen right now (Android with
+/// the app resumed). Overridable in tests.
+final incomingUiVisibleProvider = Provider<bool Function()>(
+  (ref) => () {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      return WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    } catch (_) {
+      return false; // no binding (pure Dart tests)
+    }
+  },
+);
 
 final callsProvider = NotifierProvider<CallsController, CallsState>(
   CallsController.new,

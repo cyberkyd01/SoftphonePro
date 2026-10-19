@@ -169,6 +169,8 @@ class AccountProfile {
     this.providerTemplateId = 'generic',
     this.backupRegistrar = '',
     this.autoRecord = 'inherit',
+    this.holdMusic = 'inherit',
+    this.openingAnnouncement = 'inherit',
   });
 
   final String id;
@@ -191,6 +193,13 @@ class AccountProfile {
 
   /// Per-account auto-record: `inherit` (global setting), `always`, `never`.
   final String autoRecord;
+
+  /// Music on hold override: `inherit`, `pbx` (plain hold) or an audio ref
+  /// (`builtin:<id>` / `lib:<file>`, see lib/audio/audio_library.dart).
+  final String holdMusic;
+
+  /// Opening announcement override: `inherit`, `off` or an audio ref.
+  final String openingAnnouncement;
 
   /// Name shown in chips and selectors.
   String get name {
@@ -225,6 +234,8 @@ class AccountProfile {
     String? providerTemplateId,
     String? backupRegistrar,
     String? autoRecord,
+    String? holdMusic,
+    String? openingAnnouncement,
   }) => AccountProfile(
     id: id,
     config: (config ?? this.config).copyWith(uid: id),
@@ -242,6 +253,8 @@ class AccountProfile {
     providerTemplateId: providerTemplateId ?? this.providerTemplateId,
     backupRegistrar: backupRegistrar ?? this.backupRegistrar,
     autoRecord: autoRecord ?? this.autoRecord,
+    holdMusic: holdMusic ?? this.holdMusic,
+    openingAnnouncement: openingAnnouncement ?? this.openingAnnouncement,
   );
 
   /// JSON for persistence. The password is never included unless
@@ -265,6 +278,8 @@ class AccountProfile {
       'providerTemplateId': providerTemplateId,
       'backupRegistrar': backupRegistrar,
       'autoRecord': autoRecord,
+      'holdMusic': holdMusic,
+      'openingAnnouncement': openingAnnouncement,
       'sip': sip,
     };
   }
@@ -294,6 +309,8 @@ class AccountProfile {
       providerTemplateId: j['providerTemplateId'] as String? ?? 'generic',
       backupRegistrar: j['backupRegistrar'] as String? ?? '',
       autoRecord: j['autoRecord'] as String? ?? 'inherit',
+      holdMusic: j['holdMusic'] as String? ?? 'inherit',
+      openingAnnouncement: j['openingAnnouncement'] as String? ?? 'inherit',
     );
   }
 }

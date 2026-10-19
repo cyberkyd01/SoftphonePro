@@ -124,6 +124,14 @@ class RecordingMeta {
     required this.time,
     this.durationMs = 0,
     this.accountId = '',
+    this.format = 'wav',
+    this.bytes = 0,
+    this.title = '',
+    this.callRecordId,
+    this.outgoing = false,
+    this.remoteName = '',
+    this.relatedIds = const [],
+    this.callStart,
   });
 
   final String id;
@@ -133,6 +141,49 @@ class RecordingMeta {
   final int durationMs;
   final String accountId;
 
+  /// `wav` | `wavStereo` | `opus`.
+  final String format;
+  final int bytes;
+
+  /// User-chosen name (empty = derive from contact/number).
+  final String title;
+
+  /// History record this recording belongs to.
+  final String? callRecordId;
+  final bool outgoing;
+
+  /// Contact / display name at recording time.
+  final String remoteName;
+
+  /// Recording ids of related calls (consult leg, relay).
+  final List<String> relatedIds;
+  final DateTime? callStart;
+
+  RecordingMeta copyWith({
+    String? path,
+    String? title,
+    String? callRecordId,
+    int? bytes,
+    int? durationMs,
+    String? format,
+    List<String>? relatedIds,
+  }) => RecordingMeta(
+    id: id,
+    path: path ?? this.path,
+    remote: remote,
+    time: time,
+    durationMs: durationMs ?? this.durationMs,
+    accountId: accountId,
+    format: format ?? this.format,
+    bytes: bytes ?? this.bytes,
+    title: title ?? this.title,
+    callRecordId: callRecordId ?? this.callRecordId,
+    outgoing: outgoing,
+    remoteName: remoteName,
+    relatedIds: relatedIds ?? this.relatedIds,
+    callStart: callStart,
+  );
+
   factory RecordingMeta.fromJson(Map<String, dynamic> j) => RecordingMeta(
     id: j['id'] as String,
     path: j['path'] as String? ?? '',
@@ -140,6 +191,14 @@ class RecordingMeta {
     time: DateTime.fromMillisecondsSinceEpoch((j['time'] as num?)?.toInt() ?? 0),
     durationMs: (j['durationMs'] as num?)?.toInt() ?? 0,
     accountId: j['accountId'] as String? ?? '',
+    format: j['format'] as String? ?? 'wav',
+    bytes: (j['bytes'] as num?)?.toInt() ?? 0,
+    title: j['title'] as String? ?? '',
+    callRecordId: j['callRecordId'] as String?,
+    outgoing: j['outgoing'] == true,
+    remoteName: j['remoteName'] as String? ?? '',
+    relatedIds: [for (final e in (j['relatedIds'] as List? ?? const [])) '$e'],
+    callStart: j['callStart'] is num ? DateTime.fromMillisecondsSinceEpoch((j['callStart'] as num).toInt()) : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -149,5 +208,13 @@ class RecordingMeta {
     'time': time.millisecondsSinceEpoch,
     'durationMs': durationMs,
     'accountId': accountId,
+    'format': format,
+    'bytes': bytes,
+    if (title.isNotEmpty) 'title': title,
+    if (callRecordId != null) 'callRecordId': callRecordId,
+    'outgoing': outgoing,
+    if (remoteName.isNotEmpty) 'remoteName': remoteName,
+    if (relatedIds.isNotEmpty) 'relatedIds': relatedIds,
+    if (callStart != null) 'callStart': callStart!.millisecondsSinceEpoch,
   };
 }

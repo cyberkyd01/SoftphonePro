@@ -279,6 +279,10 @@ object PlatformBridge : MethodChannel.MethodCallHandler {
             "openAutostartSettings" -> result.success(startSettings(*autostartIntents().toTypedArray()))
             "hasAutostartSettings" -> result.success(autostartIntents().isNotEmpty())
             "getDnsServers" -> result.success(dnsServers())
+            "audioEffectsAvailable" -> result.success(mapOf(
+                "noiseSuppressor" to android.media.audiofx.NoiseSuppressor.isAvailable(),
+                "echoCanceler" to android.media.audiofx.AcousticEchoCanceler.isAvailable()
+            ))
 
             "showIncoming" -> {
                 NotificationHelper.showIncomingCall(ctx, s("callKey"), s("title"), s("body"), call.argument<String>("account"))

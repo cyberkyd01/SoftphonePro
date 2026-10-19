@@ -68,6 +68,7 @@ class AccountsRepository {
   final SecretsStore _secrets;
 
   static String _pwKey(String id) => 'account.$id.password';
+  static String _tlsKeyPwKey(String id) => 'account.$id.tlsKeyPassword';
 
   /// Persists the profile list in order (order = list index).
   Future<void> saveAll(List<AccountProfile> profiles) async {
@@ -76,12 +77,25 @@ class AccountsRepository {
     for (var i = 0; i < profiles.length; i++) {
       final p = profiles[i];
       keep.add(p.id);
-      await _store.put(p.id, {...p.toJson(), 'order': i});
+      final json = <String, dynamic>{...p.toJson(), 'order': i};
+      // The private-key password of a client certificate lives in the secrets store.
+      final cert = p.config.tlsClientCert;
+      final sipJson = json['sip'];
+      if (sipJson is Map && sipJson['tlsClientCert'] is Map) {
+        (sipJson['tlsClientCert'] as Map).remove('password');
+      }
+      await _store.put(p.id, json);
       await _secrets.write(_pwKey(p.id), p.config.password);
+      if (cert?.password != null && cert!.password!.isNotEmpty) {
+        await _secrets.write(_tlsKeyPwKey(p.id), cert.password!);
+      } else {
+        await _secrets.delete(_tlsKeyPwKey(p.id));
+      }
     }
     for (final id in existing.difference(keep)) {
       await _store.delete(id);
       await _secrets.delete(_pwKey(id));
+      await _secrets.delete(_tlsKeyPwKey(id));
     }
   }
 
@@ -94,7 +108,13 @@ class AccountsRepository {
     for (final j in recs) {
       final base = AccountProfile.fromJson(j);
       final pw = await _secrets.read(_pwKey(base.id)) ?? '';
-      out.add(base.copyWith(config: base.config.copyWith(password: pw)));
+      var cfg = base.config.copyWith(password: pw);
+      final cert = cfg.tlsClientCert;
+      if (cert != null) {
+        final kp = await _secrets.read(_tlsKeyPwKey(base.id));
+        if (kp != null && kp.isNotEmpty) cfg = cfg.copyWith(tlsClientCert: cert.copyWith(password: kp));
+      }
+      out.add(base.copyWith(config: cfg));
     }
     return out;
   }

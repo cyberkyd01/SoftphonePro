@@ -12,8 +12,11 @@ import '../../services/messages_controller.dart';
 import '../../services/providers.dart';
 import '../helpers.dart';
 import 'lan/lan_call_widgets.dart';
+import 'audio/audio_call_widgets.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
+import '../widgets/caller_identity_block.dart';
+import '../widgets/transfer_stalled_banner.dart';
 import '../widgets/dial_pad.dart';
 
 /// Full-screen in-call page (compact layouts).
@@ -92,8 +95,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             overflow: TextOverflow.ellipsis,
                             style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          if (title != c.number && c.number.isNotEmpty)
-                            Text(c.number, style: tabular(t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                          CallerIdentityBlock(call: c, title: title),
                           const SizedBox(height: 6),
                           if (c.isConfirmed && !c.isHeld)
                             CallTimer(call: c, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))
@@ -115,6 +117,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                               children: [
                                 QualityIndicator(mos: c.stats?.mos ?? 0, onTap: () => showStatsSheet(context, c.cid)),
                                 SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
+                                const NoiseCancellationChip(),
                                 if (c.recording)
                                   Row(mainAxisSize: MainAxisSize.min, children: [
                                     Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
@@ -124,7 +127,9 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             ),
                           LanCallLabel(call: c),
                           RelayedBanner(call: c),
+                          AnnouncementChip(cid: c.cid, center: true),
                           if (consult) _ConsultBanner(call: c),
+                          TransferStalledBanner(call: c),
                           if (others.isNotEmpty) ...[
                             const SizedBox(height: 12),
                             for (final o in others)
@@ -141,6 +146,16 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             Avatar(name: title, size: small ? 84 : 120),
                           ],
                           const SizedBox(height: 16),
+                          if (_keypad && c.isConfirmed)
+                            // The keypad takes the place of the action grid so its
+                            // bottom row is never pushed behind the End button.
+                            TextButton.icon(
+                              key: const Key('keypad-hide'),
+                              onPressed: () => setState(() => _keypad = false),
+                              icon: const Icon(Icons.keyboard_hide_rounded),
+                              label: const Text('Hide keypad'),
+                            )
+                          else
                           _ActionGrid(
                             children: [
                               CallActionButton(
@@ -443,8 +458,7 @@ class IncomingCallPage extends ConsumerWidget {
                     style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (title != c.number && c.number.isNotEmpty)
-                  Text(c.number, style: tabular(t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                CallerIdentityBlock(call: c, title: title, numberStyle: tabular(t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
                 Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: LanCallLabel(call: c)),
                 const Spacer(),
                 Row(

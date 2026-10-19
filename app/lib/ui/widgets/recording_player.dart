@@ -1,36 +1,60 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../recordings/recording_exporter.dart';
+import '../../recordings/recording_formats.dart';
+import '../../recordings/recording_playback.dart';
 
-/// Minimal play/pause + seek bar for a WAV recording.
-class RecordingPlayer extends StatefulWidget {
-  const RecordingPlayer({super.key, required this.path});
+/// Play / pause + seek bar for a recording. Formats the platform cannot play
+/// (Ogg Opus on iOS, macOS, Windows) show "Open with..." instead.
+class RecordingPlayer extends ConsumerStatefulWidget {
+  const RecordingPlayer({super.key, required this.path, this.format = 'wav', this.knownDuration = Duration.zero});
   final String path;
+
+  /// `wav`, `wavStereo` or `opus`.
+  final String format;
+
+  /// Duration from the metadata, shown until the player reports its own.
+  final Duration knownDuration;
   @override
-  State<RecordingPlayer> createState() => _RecordingPlayerState();
+  ConsumerState<RecordingPlayer> createState() => _RecordingPlayerState();
 }
 
-class _RecordingPlayerState extends State<RecordingPlayer> {
-  AudioPlayer? _p;
-  PlayerState _state = PlayerState.stopped;
+class _RecordingPlayerState extends ConsumerState<RecordingPlayer> {
+  RecordingPlayback? _p;
+  bool _playing = false;
+  bool _started = false;
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
+  double? _drag;
+  Duration? _pendingSeek;
   final _subs = <StreamSubscription<dynamic>>[];
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _dur = widget.knownDuration;
+  }
 
   Future<void> _ensure() async {
     if (_p != null) return;
     try {
-      final p = AudioPlayer();
+      final p = ref.read(recordingPlaybackFactoryProvider)();
       _p = p;
       _subs.addAll([
-        p.onPlayerStateChanged.listen((s) => mounted ? setState(() => _state = s) : null),
-        p.onPositionChanged.listen((d) => mounted ? setState(() => _pos = d) : null),
-        p.onDurationChanged.listen((d) => mounted ? setState(() => _dur = d) : null),
+        p.playing.listen((v) => mounted ? setState(() => _playing = v) : null),
+        p.position.listen((d) => mounted ? setState(() => _pos = d) : null),
+        p.duration.listen((d) => mounted && d > Duration.zero ? setState(() => _dur = d) : null),
+        p.completed.listen((_) => mounted ? setState(() {
+              _playing = false;
+              _started = false;
+              _pos = Duration.zero;
+            }) : null),
       ]);
     } catch (e) {
       _error = '$e';
@@ -39,22 +63,32 @@ class _RecordingPlayerState extends State<RecordingPlayer> {
 
   Future<void> _toggle() async {
     if (!File(widget.path).existsSync()) {
-      setState(() => _error = 'File not found');
+      setState(() => _error = 'The recording file was not found');
       return;
     }
     await _ensure();
     final p = _p;
-    if (p == null) return;
+    if (p == null) {
+      setState(() {});
+      return;
+    }
     try {
-      if (_state == PlayerState.playing) {
+      if (_playing) {
         await p.pause();
-      } else if (_state == PlayerState.paused) {
+        if (mounted) setState(() => _playing = false);
+      } else if (_started) {
         await p.resume();
+        if (mounted) setState(() => _playing = true);
       } else {
-        await p.play(DeviceFileSource(widget.path));
+        _started = true;
+        await p.play(widget.path);
+        final seek = _pendingSeek;
+        _pendingSeek = null;
+        if (seek != null) await p.seek(seek);
+        if (mounted) setState(() => _playing = true);
       }
     } catch (e) {
-      setState(() => _error = 'Cannot play: $e');
+      if (mounted) setState(() => _error = 'Cannot play this recording: $e');
     }
   }
 
@@ -69,24 +103,65 @@ class _RecordingPlayerState extends State<RecordingPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final playing = _state == PlayerState.playing;
-    if (_error != null) {
-      return Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error));
+    final t = Theme.of(context);
+    if (!canPlayInApp(widget.format)) {
+      return Row(
+        children: [
+          Icon(Icons.info_outline_rounded, size: 18, color: t.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This device cannot play Opus recordings here.',
+              key: const Key('player-unsupported'),
+              style: t.textTheme.bodySmall,
+            ),
+          ),
+          TextButton.icon(
+            key: const Key('player-open-with'),
+            onPressed: () => ref.read(recordingExporterProvider).openExternal(widget.path),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('Open with...'),
+          ),
+        ],
+      );
     }
+    if (_error != null) {
+      return Text(_error!, key: const Key('player-error'), style: TextStyle(color: t.colorScheme.error));
+    }
+    final total = _dur.inMilliseconds;
+    final value = _drag ?? (total == 0 ? 0.0 : (_pos.inMilliseconds / total).clamp(0.0, 1.0));
     return Row(
       children: [
         IconButton.filledTonal(
-          tooltip: playing ? 'Pause recording' : 'Play recording',
+          key: const Key('player-toggle'),
+          tooltip: _playing ? 'Pause recording' : 'Play recording',
           onPressed: _toggle,
-          icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+          icon: Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
         ),
         Expanded(
           child: Slider(
-            value: _dur.inMilliseconds == 0 ? 0 : (_pos.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0),
-            onChanged: (v) => _p?.seek(Duration(milliseconds: (v * _dur.inMilliseconds).round())),
+            key: const Key('player-seek'),
+            value: value,
+            onChanged: total == 0 ? null : (v) => setState(() => _drag = v),
+            onChangeEnd: (v) async {
+              setState(() {
+                _drag = null;
+                _pos = Duration(milliseconds: (v * total).round());
+              });
+              final to = Duration(milliseconds: (v * total).round());
+              if (_started) {
+                await _p?.seek(to);
+              } else {
+                _pendingSeek = to;
+              }
+            },
           ),
         ),
-        Text(formatDuration(_pos), style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
+        Text(
+          '${formatDuration(_pos)} / ${formatDuration(_dur)}',
+          key: const Key('player-time'),
+          style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+        ),
       ],
     );
   }

@@ -27,6 +27,7 @@ class Contact {
     this.blf = false,
     this.presenceUri,
     this.presenceAccountId,
+    this.autoRecord = false,
   });
 
   final String id;
@@ -45,6 +46,9 @@ class Contact {
   /// Account used to subscribe to this contact's presence/BLF (null =
   /// default account).
   final String? presenceAccountId;
+
+  /// Always record calls with this contact.
+  final bool autoRecord;
 
   /// All dialable addresses (numbers then SIP URIs).
   List<String> get addresses => [
@@ -76,6 +80,7 @@ class Contact {
     bool? blf,
     String? presenceUri,
     Object? presenceAccountId = _keep,
+    bool? autoRecord,
   }) => Contact(
     id: id,
     name: name ?? this.name,
@@ -92,6 +97,7 @@ class Contact {
     presenceAccountId: identical(presenceAccountId, _keep)
         ? this.presenceAccountId
         : presenceAccountId as String?,
+    autoRecord: autoRecord ?? this.autoRecord,
   );
 
   factory Contact.fromJson(Map<String, dynamic> j) => Contact(
@@ -111,6 +117,7 @@ class Contact {
     blf: j['blf'] == true,
     presenceUri: j['presenceUri'] as String?,
     presenceAccountId: j['presenceAccountId'] as String?,
+    autoRecord: j['autoRecord'] == true,
   );
 
   Map<String, dynamic> toJson() => {
@@ -127,5 +134,6 @@ class Contact {
     'blf': blf,
     'presenceUri': presenceUri,
     'presenceAccountId': presenceAccountId,
+    if (autoRecord) 'autoRecord': true,
   };
 }

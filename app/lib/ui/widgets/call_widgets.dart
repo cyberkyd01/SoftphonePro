@@ -18,8 +18,12 @@ import '../../services/engine_controller.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../helpers.dart';
+import '../../audio/device_labels.dart';
+import '../pages/audio/audio_call_widgets.dart';
 import '../pages/lan/lan_call_widgets.dart';
 import 'basic_widgets.dart';
+import 'caller_identity_block.dart';
+import 'transfer_stalled_banner.dart';
 import 'dial_pad.dart';
 import 'settings_tiles.dart';
 
@@ -256,7 +260,7 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
               segments: const [
                 ButtonSegment(value: 0, label: Text('Blind'), icon: Icon(Icons.call_made_rounded)),
                 ButtonSegment(value: 1, label: Text('Attended'), icon: Icon(Icons.support_agent_rounded)),
-                ButtonSegment(value: 2, label: Text('LAN device'), icon: Icon(Icons.devices_rounded)),
+                ButtonSegment(value: 2, label: Text('LAN', maxLines: 1, softWrap: false), icon: Icon(Icons.devices_rounded), tooltip: 'LAN device'),
               ],
               selected: {_mode},
               showSelectedIcon: false,
@@ -378,6 +382,17 @@ Future<void> showMoreSheet(BuildContext context, int cid) {
         final c = ref.watch(callsProvider).byCid(cid);
         final calls = ref.read(callsProvider.notifier);
         final pad = <Widget>[
+          ListTile(
+            key: const Key('more-audio-devices'),
+            leading: const Icon(Icons.headset_mic_rounded),
+            title: Text(isMobilePlatform ? 'Audio output' : 'Audio devices'),
+            subtitle: Text(isMobilePlatform ? 'Phone, speaker, Bluetooth, headset' : 'Choose microphone and speaker'),
+            onTap: () {
+              Navigator.pop(ctx);
+              showAudioSheet(context);
+            },
+          ),
+          const NoiseCancellationTile(),
           if (c != null)
             ListTile(
               leading: const Icon(Icons.local_parking_rounded),
@@ -438,7 +453,7 @@ Future<void> showMoreSheet(BuildContext context, int cid) {
             },
           ),
         ];
-        return SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: pad));
+        return SafeArea(child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: pad)));
       },
     ),
   );
@@ -530,33 +545,36 @@ class _AudioSheet extends ConsumerWidget {
         error: (e, _) => Padding(padding: const EdgeInsets.all(24), child: Text('$e')),
         data: (d) {
           final outs = d?.playback ?? const <AudioDevice>[];
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Speaker', style: Theme.of(context).textTheme.titleMedium)),
-              ),
-              ListTile(
-                leading: const Icon(Icons.speaker_rounded),
-                title: const Text('System default'),
-                trailing: s.playbackDev == 'default' ? const Icon(Icons.check_rounded) : null,
-                onTap: () {
-                  ref.read(settingsProvider.notifier).update({'playbackDev': 'default'});
-                  Navigator.pop(context);
-                },
-              ),
-              for (final o in outs)
-                ListTile(
-                  leading: const Icon(Icons.speaker_rounded),
-                  title: Text(o.name),
-                  trailing: s.playbackDev == o.devId ? const Icon(Icons.check_rounded) : null,
-                  onTap: () {
-                    ref.read(settingsProvider.notifier).update({'playbackDev': o.devId});
-                    Navigator.pop(context);
-                  },
-                ),
-            ],
+          final ins = d?.capture ?? const <AudioDevice>[];
+          String defName(List<AudioDevice> l) => systemDefaultLabel(l);
+
+          Widget header(String t) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+            child: Align(alignment: Alignment.centerLeft, child: Text(t, style: Theme.of(context).textTheme.titleMedium)),
+          );
+          Widget row(IconData icon, String name, bool on, String key, String id, String field) => ListTile(
+            key: Key(key),
+            leading: Icon(icon),
+            title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: on ? const Icon(Icons.check_rounded) : null,
+            onTap: () {
+              ref.read(settingsProvider.notifier).update({field: id});
+              Navigator.pop(context);
+            },
+          );
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                header('Microphone'),
+                row(Icons.mic_rounded, defName(ins), s.captureDev == 'default', 'in-dev-default', 'default', 'captureDev'),
+                for (final o in ins.where((d) => d.devId != 'default')) row(Icons.mic_rounded, o.name, s.captureDev == o.devId, 'in-dev-${o.devId}', o.devId, 'captureDev'),
+                header('Speaker'),
+                row(Icons.speaker_rounded, defName(outs), s.playbackDev == 'default', 'out-dev-default', 'default', 'playbackDev'),
+                for (final o in outs.where((d) => d.devId != 'default')) row(Icons.speaker_rounded, o.name, s.playbackDev == o.devId, 'out-dev-${o.devId}', o.devId, 'playbackDev'),
+                const SizedBox(height: 8),
+              ],
+            ),
           );
         },
       ),
@@ -667,6 +685,7 @@ class _CallCardState extends ConsumerState<CallCard> {
                           overflow: TextOverflow.ellipsis,
                           style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                         ),
+                        CallerIdentityBlock(call: c, title: title, center: false, dense: true, showNumber: false),
                         const SizedBox(height: 2),
                         Row(
                           children: [
@@ -698,20 +717,29 @@ class _CallCardState extends ConsumerState<CallCard> {
             ),
             if (c.isConfirmed) ...[
               const SizedBox(height: 6),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
-                  if (c.recording) ...[
-                    const SizedBox(width: 8),
-                    Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
-                    const SizedBox(width: 2),
-                    Text('REC', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
-                  ],
+                  const NoiseCancellationChip(),
+                  if (c.recording)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
+                        const SizedBox(width: 2),
+                        Text('REC', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                 ],
               ),
             ],
             LanCallLabel(call: c, center: false),
             RelayedBanner(call: c),
+            TransferStalledBanner(call: c, margin: const EdgeInsets.only(top: 10)),
+            AnnouncementChip(cid: c.cid),
             if (_stats && c.isConfirmed) ...[const SizedBox(height: 10), CallStatsPanel(call: c)],
             if (consult) ...[
               const SizedBox(height: 10),
@@ -914,6 +942,7 @@ class IncomingBanners extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      CallerIdentityBlock(call: c, title: callTitle(c, contacts), center: false, dense: true, showNumber: false),
                       LanCallLabel(call: c, center: false),
                       const SizedBox(height: 12),
                       Row(

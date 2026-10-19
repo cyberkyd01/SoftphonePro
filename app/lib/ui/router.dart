@@ -11,6 +11,7 @@ import 'pages/lan/lan_page.dart';
 import 'pages/messages_page.dart';
 import 'pages/misc_pages.dart';
 import 'pages/presence_page.dart';
+import 'pages/recordings/recordings_page.dart';
 import 'pages/recents_page.dart';
 import 'settings/account_editor.dart';
 import 'settings/settings_page.dart';
@@ -81,6 +82,7 @@ GoRouter buildRouter({required bool onboarded, CallRouteObserver? observer}) {
           GoRoute(path: '/messages', pageBuilder: (c, s) => _tab(const MessagesPage(), s)),
           GoRoute(path: '/presence', pageBuilder: (c, s) => _tab(const PresencePage(), s)),
           GoRoute(path: '/lan', pageBuilder: (c, s) => _tab(const LanPage(), s)),
+          GoRoute(path: '/recordings', pageBuilder: (c, s) => _tab(RecordingsPage(focusId: s.uri.queryParameters['id']), s)),
           GoRoute(path: '/more', pageBuilder: (c, s) => _tab(const MorePage(), s)),
           GoRoute(path: '/settings', pageBuilder: (c, s) => _tab(const SettingsPage(), s)),
           GoRoute(path: '/settings/:section', pageBuilder: (c, s) => _tab(SettingsPage(section: s.pathParameters['section']), s)),

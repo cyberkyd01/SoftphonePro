@@ -10,7 +10,6 @@ import 'package:spcore_dart/spcore_dart.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../security/app_lock_settings.dart';
-import '../../models/chat.dart';
 import '../../platform/android/android_reliability_group.dart';
 import '../../automation/automation_section.dart';
 import '../../platform/desktop/default_handler.dart';
@@ -26,8 +25,12 @@ import '../../services/settings_controller.dart';
 import '../../storage/repositories.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
-import '../widgets/recording_player.dart';
+import '../pages/recordings/recording_settings.dart';
 import '../../services/ringtones.dart';
+import '../../audio/device_labels.dart';
+import '../../audio/voice_isolation.dart' show strengthLabel;
+import 'audio_call_settings.dart';
+import '../pages/audio/voice_isolation_page.dart';
 import 'speed_dial_page.dart';
 import '../widgets/settings_tiles.dart';
 
@@ -147,10 +150,12 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
   Timer? _t;
   MediaLevels _levels = const MediaLevels();
   bool _loop = false;
+  late final EngineController _engCtl;
 
   @override
   void initState() {
     super.initState();
+    _engCtl = ref.read(engineProvider.notifier);
     Future.microtask(() {
       if (mounted) ref.read(engineProvider.notifier).startDevicePolling();
     });
@@ -167,11 +172,8 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
   @override
   void dispose() {
     _t?.cancel();
-    ref.read(engineProvider.notifier).stopDevicePolling();
-    if (_loop) {
-      final ctl = ref.read(engineProvider.notifier);
-      if (ctl.hasEngine) ctl.engine.loopback(false);
-    }
+    _engCtl.stopDevicePolling();
+    if (_loop && _engCtl.hasEngine) _engCtl.engine.loopback(false);
     super.dispose();
   }
 
@@ -191,7 +193,14 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
     final s = ref.watch(settingsProvider);
     final dev = ref.watch(audioDevicesProvider).value;
     final desktop = !isMobilePlatform;
-    Map<String, String> opts(List<AudioDevice>? l) => {'default': 'System default', for (final d in l ?? <AudioDevice>[]) d.devId: d.name};
+    Map<String, String> opts(List<AudioDevice>? l) {
+      return {
+        'default': systemDefaultLabel(l),
+        for (final d in l ?? <AudioDevice>[])
+          if (d.devId != 'default') d.devId: d.name,
+      };
+    }
+
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -219,7 +228,43 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
             _Vu(label: 'Mic level', value: _levels.mic / 255),
             SliderTile(icon: Icons.volume_up_rounded, title: 'Speaker volume', value: s.speakerLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'speakerLevel': v})),
             _Vu(label: 'Speaker level', value: _levels.speaker / 255),
+            ListTile(
+              key: const Key('test-speaker'),
+              leading: const Icon(Icons.volume_up_rounded),
+              title: const Text('Test speaker'),
+              subtitle: const Text('Plays a short tone through the selected speaker'),
+              onTap: () async {
+                final ctl = ref.read(engineProvider.notifier);
+                if (!ctl.hasEngine) return;
+                try {
+                  await ctl.engine.playTone(ToneKind.dtmf, digits: '1357');
+                } on EngineException catch (e) {
+                  ref.read(noticeProvider.notifier).error('Could not play the test tone', details: '$e');
+                }
+              },
+            ),
             SwitchTile(icon: Icons.hearing_rounded, title: 'Echo test', subtitle: 'Plays your microphone back through the speaker. Use headphones to avoid feedback.', value: _loop, onChanged: _toggleLoop),
+          ],
+        ),
+        SettingsGroup(
+          title: 'Voice and files',
+          children: [
+            NavTile(
+              key: const Key('voice-isolation-entry'),
+              icon: Icons.noise_control_off_rounded,
+              title: 'Voice isolation (AI noise cancellation)',
+              subtitle: s.viMicOn || s.viInOn
+                  ? [if (s.viMicOn) 'Microphone ${strengthLabel(s.viMicStrength)}', if (s.viInOn) 'Others ${strengthLabel(s.viInStrength)}'].join('  ·  ')
+                  : 'Off',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceIsolationPage())),
+            ),
+            NavTile(
+              key: const Key('audio-files-entry'),
+              icon: Icons.library_music_rounded,
+              title: 'Audio files',
+              subtitle: 'Hold music and announcements',
+              onTap: () => openAudioFiles(context),
+            ),
           ],
         ),
         SettingsGroup(
@@ -389,6 +434,8 @@ class CallsSection extends ConsumerWidget {
             title: 'System',
             children: [DefaultHandlerTile()],
           ),
+        const HoldMusicGroup(),
+        const AnnouncementsGroup(),
         SettingsGroup(
           title: 'Auto-answer',
           footer: 'Call forwarding and per-account auto-answer are set in each account.',
@@ -513,8 +560,17 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
     final result = DialRules(rules: rules, emergencyNumbers: s.emergencyNumbers).apply(_test.text);
     final accounts = ref.watch(accountsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Dial rules'), actions: [IconButton(tooltip: 'Add rule', onPressed: () => _edit(null), icon: const Icon(Icons.add_rounded))]),
-      body: Center(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Same header as the other settings pages.
+            PageHeader(
+              title: 'Dial rules',
+              leading: IconButton(tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back_rounded)),
+              actions: [IconButton(tooltip: 'Add rule', onPressed: () => _edit(null), icon: const Icon(Icons.add_rounded))],
+            ),
+            Expanded(
+              child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680),
           child: ListView(
@@ -578,6 +634,10 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
           ),
         ),
       ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -638,42 +698,7 @@ class NetworkSection extends ConsumerWidget {
 class RecordingSection extends ConsumerWidget {
   const RecordingSection({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(settingsProvider);
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
-      children: [
-        SettingsGroup(
-          title: 'Recording',
-          footer: 'Check your local laws before recording calls. Recordings are WAV files stored on this device.',
-          children: [
-            SwitchTile(icon: Icons.fiber_manual_record_rounded, title: 'Record all calls automatically', value: s.autoRecord, onChanged: (v) => _s(ref).update({'autoRecord': v})),
-            TextTile(icon: Icons.folder_rounded, title: 'Folder', subtitle: 'Where recordings are saved', hint: 'App documents / Recordings', value: s.recordingFolder, onChanged: (v) => _s(ref).update({'recordingFolder': v})),
-            SwitchTile(title: 'Recording beep', subtitle: 'Warn the other party periodically', value: s.recordBeep, onChanged: (v) => _s(ref).update({'recordBeep': v})),
-          ],
-        ),
-        FutureBuilder(
-          future: ref.read(recordingsRepoProvider).loadAll(),
-          builder: (context, snap) {
-            final list = snap.data ?? const <RecordingMeta>[];
-            if (list.isEmpty) return const SizedBox.shrink();
-            return SettingsGroup(
-              title: 'Saved recordings',
-              children: [
-                for (final r in list)
-                  ExpansionTile(
-                    leading: const Icon(Icons.graphic_eq_rounded),
-                    title: Text(r.remote.isEmpty ? 'Recording' : r.remote),
-                    subtitle: Text('${dayLabel(r.time)}, ${timeLabel(r.time)}  ·  ${formatMs(r.durationMs)}'),
-                    children: [Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: RecordingPlayer(path: r.path))],
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) => const RecordingSettingsView();
 }
 
 // ---------------------------------------------------------------------------

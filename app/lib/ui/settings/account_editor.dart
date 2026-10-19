@@ -5,9 +5,12 @@ import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
 import '../../models/account_profile.dart';
+import '../../recordings/recording_rules.dart';
 import '../../services/accounts_controller.dart';
+import '../pages/audio/audio_ref_tile.dart';
 import '../widgets/settings_tiles.dart';
 import 'sections.dart';
+import 'tls_client_cert_group.dart';
 
 class AccountEditorPage extends ConsumerStatefulWidget {
   const AccountEditorPage({super.key, required this.accountId});
@@ -172,7 +175,14 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   _tx('Registrar override', c.registrar ?? '', (v) => _cfg((x) => AccountConfigX.withRegistrar(x, v)), hint: 'sip:server:5060'),
                   _tx('Backup registrar', _p.backupRegistrar, (v) => _upd((p) => p.copyWith(backupRegistrar: v.trim())), hint: 'None', sub: 'Used after 3 failed attempts; the primary is retried every 5 minutes'),
                   _tx('Outbound proxies', c.proxies.join(', '), (v) => _cfg((x) => x.copyWith(proxies: v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList())), hint: 'None'),
-                  SelectTile<AccTransport>(title: 'Transport', value: c.transport, options: {for (final t in AccTransport.values) t: t.wire.toUpperCase()}, onChanged: (v) => _cfg((x) => x.copyWith(transport: v))),
+                  SelectTile<AccTransport>(
+                    key: const Key('acc-transport'),
+                    title: 'Transport',
+                    subtitle: c.transport == AccTransport.auto ? 'Looks up the server\'s DNS SRV records and picks TLS, TCP or UDP' : null,
+                    value: c.transport,
+                    options: {for (final t in AccTransport.values) t: t == AccTransport.auto ? 'Automatic (DNS SRV)' : t.wire.toUpperCase()},
+                    onChanged: (v) => _cfg((x) => x.copyWith(transport: v)),
+                  ),
                   if (ws) _tx('WebSocket path', c.wsPath, (v) => _cfg((x) => x.copyWith(wsPath: v)), hint: '/ws', sub: 'HTTP path of the WebSocket upgrade, e.g. /ws. Must start with "/"', validator: validateWsPath),
                   _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: '300 to 3600 is typical. Range 10 to 86400'),
                   if (!ws) _num('Keep-alive (s)', c.keepAliveSec, (v) => _cfg((x) => x.copyWith(keepAliveSec: v)), min: 0, max: 3600, sub: 'UDP keep-alive interval. 0 turns it off. Range 0 to 3600'),
@@ -180,6 +190,8 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   _sw('Register', c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: 'Turn off for trunks without registration'),
                   if (!ws) _sw('SIP Outbound (RFC 5626)', c.sipOutbound, (v) => _cfg((x) => x.copyWith(sipOutbound: v)), sub: 'Keeps a persistent flow through NAT. Needs server support'),
                 ]),
+                if (c.transport == AccTransport.tls || c.transport == AccTransport.wss || c.transport == AccTransport.auto)
+                  TlsClientCertGroup(config: c, onChanged: (cfg) => _upd((p) => p.copyWith(config: cfg))),
                 SettingsGroup(title: 'NAT', children: [
                   _sw('Use STUN', c.useStun, (v) => _cfg((x) => x.copyWith(useStun: v))),
                   _sw('ICE', c.ice, (v) => _cfg((x) => x.copyWith(ice: v))),
@@ -265,7 +277,9 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     _sw('Only for intercom calls', _p.autoAnswer.onlyIntercomHeaders, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(onlyIntercomHeaders: v))), sub: 'Needs an auto-answer header from the PBX'),
                   ],
                   SelectTile<String>(title: 'Ringtone', value: _p.ringtone, options: const {'default': 'Default', 'classic': 'Classic', 'soft': 'Soft', 'digital': 'Digital'}, onChanged: (v) => _upd((p) => p.copyWith(ringtone: v))),
-                  SelectTile<String>(key: const Key('acc-auto-record'), title: 'Record calls', value: _p.autoRecord, options: const {'inherit': 'Use global setting', 'always': 'Always', 'never': 'Never'}, onChanged: (v) => _upd((p) => p.copyWith(autoRecord: v))),
+                  SelectTile<String>(key: const Key('acc-auto-record'), title: 'Record calls', value: _p.autoRecord, options: kAccountRecordOptions, onChanged: (v) => _upd((p) => p.copyWith(autoRecord: v))),
+                  AudioRefTile(key: const Key('acc-hold-music'), title: 'Hold music', value: _p.holdMusic, holdMusicOnly: true, leading: const {'inherit': 'Use global setting', 'pbx': 'PBX default'}, onChanged: (v) => _upd((p) => p.copyWith(holdMusic: v))),
+                  AudioRefTile(key: const Key('acc-opening-announcement'), title: 'Opening announcement', value: _p.openingAnnouncement, leading: const {'inherit': 'Use global setting', 'off': 'Off'}, onChanged: (v) => _upd((p) => p.copyWith(openingAnnouncement: v))),
                 ]),
                 SettingsGroup(title: 'Feature codes', footer: 'Dialled for park, pickup, DND and forwarding on your PBX.', children: [
                   _tx('Park', _p.featureCodes.park, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(park: v)))),
