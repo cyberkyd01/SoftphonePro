@@ -4,7 +4,7 @@
 #   tests/smoke/ios_sim_smoke.sh <Runner.app> <outdir>
 set -euo pipefail
 APP="${1:?Runner.app}"; OUT="${2:?outdir}"
-mkdir -p "$OUT"
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
 echo "bundle id: $BUNDLE_ID"
 
