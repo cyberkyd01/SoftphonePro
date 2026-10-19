@@ -86,6 +86,19 @@ final appServicesProvider = Provider<void>((ref) {
     }),
   );
 
+  // iOS (sndMode manual): CallKit owns the audio session; open the engine's
+  // sound devices only while it is active (ENGINE_API section 5).
+  final sessionSub = platform.audioSessionActive.listen((active) async {
+    try {
+      final name = active ? 'default' : 'none';
+      await ref
+          .read(engineProvider.notifier)
+          .engine
+          .setAudioDevices(capture: name, playback: name);
+    } catch (_) {}
+  });
+  ref.onDispose(sessionSub.cancel);
+
   // Badge / tray reflect missed calls and unread messages.
   ref.listen<int>(unreadMessagesProvider, (_, n) {
     unawaited(platform.updateBadge(n + ref.read(missedCountProvider)));

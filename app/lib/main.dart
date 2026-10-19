@@ -11,6 +11,7 @@ import 'app.dart';
 import 'platform/android/android_background.dart';
 import 'platform/android/android_platform_services.dart';
 import 'platform/desktop_platform_services.dart';
+import 'platform/ios/ios_platform_services.dart';
 import 'platform/platform_services.dart';
 import 'services/app_services.dart';
 import 'services/providers.dart';
@@ -50,8 +51,10 @@ Future<void> main(List<String> args) async {
   final PlatformServices platform = desktop
       ? DesktopPlatformServices()
       : (!kIsWeb && Platform.isAndroid)
-      ? AndroidPlatformServices()
-      : NoopPlatformServices(mobile: true);
+          ? AndroidPlatformServices()
+          : (!kIsWeb && Platform.isIOS)
+              ? IosPlatformServices()
+              : NoopPlatformServices(mobile: true);
   await platform.init();
 
   final container = ProviderContainer(
