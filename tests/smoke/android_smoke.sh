@@ -12,7 +12,7 @@ sleep 25
 PID="$(adb shell pidof "$PKG" | tr -d '\r')"
 echo "pid: ${PID:-none}"
 adb exec-out screencap -p > "$OUT/android-emulator.png"
-adb logcat -d > "$OUT/logcat.txt"
+adb logcat -d -b all > "$OUT/logcat.txt"
 FAIL=0
 [ -n "$PID" ] || { echo "FAIL: app process not running"; FAIL=1; }
 if grep -E "FATAL EXCEPTION|Fatal signal|>>> $PKG <<<" "$OUT/logcat.txt" | grep -v "^$" | head -5 | grep .; then

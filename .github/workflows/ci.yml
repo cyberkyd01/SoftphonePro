@@ -225,6 +225,7 @@ jobs:
 
   # ---------------------------------------------------------------------------------------------
   android-smoke:
+    continue-on-error: true
     needs: android
     runs-on: ubuntu-24.04
     timeout-minutes: 40

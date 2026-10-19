@@ -51,6 +51,5 @@ FAIL=0
 if ls ~/Library/Logs/DiagnosticReports/Runner* >/dev/null 2>&1; then echo "FAIL: crash report found"; cp ~/Library/Logs/DiagnosticReports/Runner* "$OUT/"; FAIL=1; fi
 [ -s "$OUT/ios-simulator.png" ] || { echo "FAIL: no screenshot"; FAIL=1; }
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
-timeout 60 xcrun simctl shutdown "$UDID" || true
 [ "$FAIL" = 0 ] && echo "IOS SMOKE OK"
 exit "$FAIL"
