@@ -424,18 +424,20 @@ jobs:
         run: |
           flutter pub get
           flutter build ios --release --no-codesign --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
-      - name: Build Flutter iOS app for the simulator (debug)
-        # x86_64 only: mobile_scanner (Google ML Kit) ships no arm64 simulator slice.
+      - name: Build Flutter iOS app for the simulator (debug, arm64)
+        # `flutter build ios --simulator` produces x86_64 (the pods exclude arm64 for the simulator), and an
+        # x86_64 app does not launch in the simulator on the arm64 runners. Configure with flutter, then build
+        # arm64 with xcodebuild, overriding the pods' EXCLUDED_ARCHS.
         working-directory: app
         run: |
-          flutter build ios --simulator --debug --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
-          lipo -archs build/ios/iphonesimulator/Runner.app/Runner
-      - name: Install Rosetta (the simulator app is x86_64)
-        run: |
-          softwareupdate --install-rosetta --agree-to-license || true
-          arch -x86_64 /usr/bin/true && echo 'Rosetta works'
+          flutter build ios --simulator --debug --config-only --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO EXCLUDED_ARCHS=i386 \
+            CODE_SIGNING_ALLOWED=NO -derivedDataPath build/ios/sim-dd build 2>&1 | tail -n 40
+          test -d build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app
+          lipo -archs build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app/Runner
       - name: Smoke - boot simulator, install, launch, screenshot
-        run: tests/smoke/ios_sim_smoke.sh app/build/ios/iphonesimulator/Runner.app smoke-logs/ios
+        run: tests/smoke/ios_sim_smoke.sh app/build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app smoke-logs/ios
       - uses: actions/upload-artifact@v4
         if: always()
         with:
