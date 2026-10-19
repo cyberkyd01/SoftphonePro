@@ -1,0 +1,49 @@
+name: Release
+
+# Push a tag vX.Y.Z (e.g. v1.0.0, v1.1.0-beta.1) to build every platform and publish a GitHub Release.
+# Run manually (workflow_dispatch) to build everything; give a tag to also publish a release for it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish a release for (empty = build only, artifacts stay in the run)'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: '{windows-artifacts,macos-dmg,android-apks,ios-ipa}'
+      - name: List release files
+        run: ls -la dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}

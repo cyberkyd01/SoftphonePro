@@ -1,0 +1,380 @@
+name: CI
+
+# Builds + tests everything. Also reusable: release.yml calls this workflow (workflow_call) and
+# attaches the produced artifacts to a GitHub Release.
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.32.1'
+  NDK_VERSION: '27.0.12077973'
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  meta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      build_name: ${{ steps.v.outputs.build_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          base="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' app/pubspec.yaml | head -1)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            build_name="${version%%-*}"
+          else
+            version="${base}-dev.${GITHUB_RUN_NUMBER}"
+            build_name="$base"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_name=$build_name" >> "$GITHUB_OUTPUT"
+          echo "Version: $version (flutter build-name $build_name)"
+
+  # ---------------------------------------------------------------------------------------------
+  native-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config perl python3 libasound2-dev uuid-dev
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/linux-x86_64
+            native/deps/src
+          key: deps-linux-x86_64-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_linux.sh --no-docker
+      - name: Build spcore + spcore_cli
+        run: native/scripts/build_spcore.sh linux
+      - name: Start test PBX (Asterisk)
+        run: tests/sipserver/scripts/up.sh
+      - name: Engine tests (C)
+        if: hashFiles('native/tests/run_tests.py') != ''
+        env:
+          SPCORE_LIB: ${{ github.workspace }}/native/build/linux/libspcore.so
+          SPCORE_CLI: ${{ github.workspace }}/native/build/linux/spcore_cli
+          PBX_HOST: 127.0.0.1
+        run: python3 native/tests/run_tests.py 2>&1 | tee native-tests.log
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: spcore_dart tests (unit + integration against the PBX)
+        working-directory: packages/spcore_dart
+        env:
+          SPCORE_LIB: ${{ github.workspace }}/native/build/linux/libspcore.so
+          PBX_HOST: 127.0.0.1
+        run: |
+          dart pub get
+          dart test 2>&1 | tee ../../spcore_dart-tests.log
+      - name: lan_link tests
+        working-directory: packages/lan_link
+        run: |
+          dart pub get
+          dart test 2>&1 | tee ../../lan_link-tests.log
+      - name: Collect PBX logs
+        if: always()
+        run: |
+          mkdir -p logs
+          docker logs softphonepro-pbx > logs/pbx.log 2>&1 || true
+          mv -f ./*.log logs/ 2>/dev/null || true
+          cp -r native/build/linux/Testing logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-test-logs
+          path: logs/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spcore-linux
+          path: |
+            native/build/linux/libspcore.so
+            native/build/linux/spcore_cli
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------------------------
+  flutter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Pub get (path dependencies included)
+        working-directory: app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+      - name: Test
+        working-directory: app
+        run: flutter test
+      - name: Analyze + test spcore_dart / lan_link
+        run: |
+          for p in packages/spcore_dart packages/lan_link; do
+            (cd "$p" && dart pub get && dart analyze && dart test --exclude-tags integration)
+          done
+
+  # ---------------------------------------------------------------------------------------------
+  android:
+    needs: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build perl
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/android-arm64-v8a
+            native/out/android-armeabi-v7a
+            native/out/android-x86_64
+            native/deps/src
+          key: deps-android-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_android.sh all
+      - name: Build spcore (3 ABIs)
+        run: native/scripts/build_spcore.sh android
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Release signing (optional)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            {
+              echo "storePassword=$KS_PASS"
+              echo "keyPassword=$KEY_PASS"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "storeFile=$RUNNER_TEMP/release.jks"
+            } > app/android/key.properties
+            echo "Using release keystore."
+          else
+            echo "No keystore secrets: APKs are signed with the debug key."
+          fi
+      - name: Build APKs
+        working-directory: app
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          BUILD_NAME: ${{ needs.meta.outputs.build_name }}
+        run: |
+          flutter pub get
+          flutter build apk --release --split-per-abi --build-name "$BUILD_NAME" --build-number "$GITHUB_RUN_NUMBER"
+          flutter build apk --release --build-name "$BUILD_NAME" --build-number "$GITHUB_RUN_NUMBER"
+          mkdir -p ../dist
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-$abi-release.apk" "../dist/SoftphonePro-$VERSION-android-$abi.apk"
+          done
+          cp build/app/outputs/flutter-apk/app-release.apk "../dist/SoftphonePro-$VERSION-android-universal.apk"
+      - name: Verify native lib packaging and 16 KB alignment
+        run: |
+          zipalign="$(find "$ANDROID_HOME/build-tools" -name zipalign | sort | tail -1)"
+          for f in dist/*-universal.apk; do
+            unzip -l "$f" | grep libspcore.so
+            "$zipalign" -c -P 16 -v 4 "$f" | grep -E 'libspcore|Verification'
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: dist/*.apk
+
+  # ---------------------------------------------------------------------------------------------
+  windows:
+    needs: meta
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/windows-x64
+            native/deps/src
+          key: deps-windows-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./native/scripts/build_deps_windows.ps1
+      - name: Build spcore.dll
+        shell: pwsh
+        run: ./native/scripts/build_spcore_windows.ps1
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build Flutter Windows app
+        working-directory: app
+        shell: pwsh
+        run: |
+          flutter pub get
+          flutter build windows --release --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$env:GITHUB_RUN_NUMBER"
+          if (-not (Test-Path build\windows\x64\runner\Release\spcore.dll)) { throw 'spcore.dll missing from the bundle' }
+      - name: Installer (Inno Setup) + portable ZIP
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          $iscc = if (Get-Command iscc -ErrorAction SilentlyContinue) { 'iscc' } else { "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $out = (Resolve-Path dist).Path
+          & $iscc "/DAppVersion=$env:VERSION" "/DOutputDir=$out" app\windows\installer\softphonepro.iss
+          if ($LASTEXITCODE -ne 0) { throw 'iscc failed' }
+          Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath "dist\SoftphonePro-$env:VERSION-windows-x64-portable.zip"
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist/*
+
+  # ---------------------------------------------------------------------------------------------
+  macos:
+    needs: meta
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install build tools
+        run: brew install ninja cmake || true
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/macos-arm64
+            native/out/macos-x86_64
+            native/deps/src
+          key: deps-macos-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies (arm64 + x86_64)
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_macos.sh all
+      - name: Build spcore.xcframework (universal)
+        run: native/scripts/build_spcore.sh macos
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build Flutter macOS app
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build macos --release --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+          test -d build/macos/Build/Products/Release/softphonepro.app/Contents/Frameworks/spcore.framework
+      - name: DMG (ad-hoc signed, or Developer ID + notarized when secrets exist)
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: app/macos/packaging/make_dmg.sh "${{ needs.meta.outputs.version }}" app/build/macos/Build/Products/Release/softphonepro.app dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/*.dmg
+
+  # ---------------------------------------------------------------------------------------------
+  ios:
+    needs: meta
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install build tools
+        run: brew install ninja cmake || true
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/ios-arm64
+            native/out/ios-sim-arm64
+            native/out/ios-sim-x86_64
+            native/deps/src
+          key: deps-ios-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      - name: Build native dependencies (device + simulators)
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: native/scripts/build_deps_ios.sh all
+      - name: Build spcore.xcframework
+        run: native/scripts/build_spcore.sh ios
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build Flutter iOS app (unsigned)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist ipa/Payload
+          cp -R app/build/ios/iphoneos/Runner.app ipa/Payload/
+          (cd ipa && zip -qry "../dist/SoftphonePro-${{ needs.meta.outputs.version }}-unsigned.ipa" Payload)
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/*.ipa

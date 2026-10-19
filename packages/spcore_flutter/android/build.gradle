@@ -1,0 +1,55 @@
+// Packaging-only module: prebuilt libspcore.so files are placed in
+// src/main/jniLibs/<abi>/ by native/scripts/build_spcore.sh android and are
+// merged into the app's APK automatically. There is no externalNativeBuild.
+
+group = "com.softphonepro.spcore_flutter"
+version = "1.0"
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.7.3")
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+
+android {
+    namespace = "com.softphonepro.spcore_flutter"
+    compileSdk = 35
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    defaultConfig {
+        minSdk = 24
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ["src/main/jniLibs"]
+        }
+    }
+}
+
+// Fail early with a helpful message when the prebuilt libraries are missing.
+afterEvaluate {
+    def jni = file("src/main/jniLibs")
+    if (!jni.isDirectory() || jni.list().length == 0) {
+        throw new GradleException(
+            "spcore_flutter: no prebuilt libspcore.so in ${jni}. Run native/scripts/build_spcore.sh android first.")
+    }
+}
