@@ -424,11 +424,19 @@ jobs:
         run: |
           flutter pub get
           flutter build ios --release --no-codesign --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
-      - name: Build Flutter iOS app for the simulator (debug)
+      - name: Build Flutter iOS app for the simulator (debug, arm64)
+        # `flutter build ios --simulator` defaults to x86_64, which the iOS 26 simulator runtime cannot
+        # run on Apple silicon, so only configure with flutter and build arm64 with xcodebuild.
         working-directory: app
-        run: flutter build ios --simulator --debug --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+        run: |
+          flutter build ios --simulator --debug --config-only --build-name "${{ needs.meta.outputs.build_name }}" --build-number "$GITHUB_RUN_NUMBER"
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build/ios/sim-dd build | tail -n 25
+          test -d build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app
+          lipo -archs build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app/Runner
       - name: Smoke - boot simulator, install, launch, screenshot
-        run: tests/smoke/ios_sim_smoke.sh app/build/ios/iphonesimulator/Runner.app smoke-logs/ios
+        run: tests/smoke/ios_sim_smoke.sh app/build/ios/sim-dd/Build/Products/Debug-iphonesimulator/Runner.app smoke-logs/ios
       - uses: actions/upload-artifact@v4
         if: always()
         with:
