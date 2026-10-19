@@ -54,8 +54,26 @@ build_one() {
   )
   SPC_WEBRTC_AEC=0
   SPC_SPEEX_AEC_SHIM=1
+  # Opus: NEON is presumed on iOS arm64 (OPUS_PRESUME_NEON); the "may have" runtime-detection path is
+  # not available there (CMake prints "Runtime cpu capability detection needed for MAY_HAVE_NEON").
+  SPC_OPUS_ARGS=(-DOPUS_MAY_HAVE_NEON=OFF)
+  # CMAKE_SYSTEM_NAME=iOS restricts find_package/find_path/find_library to the SDK sysroot, so our
+  # prefix (OpenSSL!) is invisible unless it is added to CMAKE_FIND_ROOT_PATH and the find modes are
+  # relaxed. OpenSSL is also passed explicitly (hard-fails in common.sh if pjproject still does not use it).
+  SPC_CMAKE_PLATFORM_ARGS+=(
+    "-DCMAKE_FIND_ROOT_PATH=$SPC_OUT"
+    -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
+    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH
+    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH
+    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER
+  )
+  # select() ioqueue (pjproject's own default on iOS): ioqueue_common_abs.c calls replace_udp_sock()
+  # for PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT, which only exists in ioqueue_select.c (kqueue fails to build).
   SPC_PJ_CMAKE_ARGS=(
-    -DPJLIB_WITH_IOQUEUE=kqueue
+    -DPJLIB_WITH_IOQUEUE=select
+    "-DOPENSSL_INCLUDE_DIR=$SPC_OUT/include"
+    "-DOPENSSL_SSL_LIBRARY=$SPC_OUT/lib/libssl.a"
+    "-DOPENSSL_CRYPTO_LIBRARY=$SPC_OUT/lib/libcrypto.a"
     -DCOREAUDIO_LIBRARY_APPKIT="$sdkpath/System/Library/Frameworks/UIKit.framework"
   )
   SPC_SYSTEM_LIBS='"-framework CoreAudio" "-framework AudioToolbox" "-framework CoreFoundation" "-framework Foundation" "-framework Security" "-framework Network" "-framework AVFoundation" "-framework CFNetwork" "-framework UIKit" c++ objc'
