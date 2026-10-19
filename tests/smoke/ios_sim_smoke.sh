@@ -40,9 +40,13 @@ if [ -z "$LAUNCH_OUT" ]; then
   for f in ~/Library/Logs/DiagnosticReports/Runner*; do [ -f "$f" ] && { cp "$f" "$OUT/"; head -c 6000 "$f"; }; done
   xcrun simctl spawn "$UDID" log show --last 5m --style compact --predicate 'eventMessage CONTAINS[c] "softphonepro" OR process == "Runner"' > "$OUT/device.log" 2>&1 || true
   tail -n 60 "$OUT/device.log"
-  vtool -show-build "$APP/Runner" 2>&1 | head -12 || true
-  for fw in "$APP"/Frameworks/*.framework; do echo "$fw"; vtool -show-build "$fw/$(basename "$fw" .framework)" 2>&1 | grep -E "platform|minos|arch" | head -3; done
-  codesign -dv "$APP" 2>&1 | head -5 || true
+  set +e +o pipefail
+  echo "--- run the binary directly to surface dyld errors"
+  xcrun simctl spawn "$UDID" "$APP/Runner" > "$OUT/spawn.log" 2>&1 &
+  SP=$!; sleep 12; kill "$SP" 2>/dev/null; head -c 4000 "$OUT/spawn.log"
+  vtool -show-build "$APP/Runner" 2>&1 | grep -E "platform|minos"
+  for fw in "$APP"/Frameworks/*.framework; do echo "$(basename "$fw"): $(vtool -show-build "$fw/$(basename "$fw" .framework)" 2>&1 | grep -E "platform|minos" | tr -s ' \n' ' ')"; done
+  codesign -dv "$APP" 2>&1 | head -5
   echo "FAIL: could not launch"; exit 1
 fi
 echo "$LAUNCH_OUT"
