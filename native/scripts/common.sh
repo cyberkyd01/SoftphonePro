@@ -256,8 +256,19 @@ spc_build_pjproject() {
     perl -0pi -e 's|(#include <SLES/OpenSLES\.h>\n)|$1pj_status_t opensl_to_pj_error(SLresult code);\n|' "$src/pjmedia/src/pjmedia-audiodev/opensl_dev.c"
     grep -q '^pj_status_t opensl_to_pj_error(SLresult code);' "$src/pjmedia/src/pjmedia-audiodev/opensl_dev.c" || die "OpenSL ES prototype patch failed"
   fi
+  case "$SPC_TARGET" in android-*)
+    # guid_android.c builds GUIDs (Call-ID, tags, Via branch) through JNI java.util.UUID and needs
+    # pj_jni_jvm, which is only set when Java loads the library (JNI_OnLoad). Under dart:ffi it
+    # silently yields EMPTY ids -> malformed SIP (empty Call-ID, NUL-filled branch). Use the portable
+    # generator instead.
+    local pjcm="$src/pjlib/CMakeLists.txt"
+    grep -q 'src/pj/guid_android.c' "$pjcm" || die "pjlib/CMakeLists.txt layout changed; cannot replace guid_android.c"
+    perl -0pi -e 's#src/pj/guid_android\.c#src/pj/guid_simple.c#g' "$pjcm"
+    grep -q 'src/pj/guid_android.c' "$pjcm" && die "guid_android.c patch failed"
+    ;;
+  esac
   local pj_defs=()
-  if [ "${SPC_WEBRTC_AEC:-1}" = 1 ]; then 
+  if [ "${SPC_WEBRTC_AEC:-1}" = 1 ]; then
     # pjmedia's echo_webrtc_aec3.cpp is compiled WITHOUT the WEBRTC_* defines that pjproject's CMake
     # gives only to the webrtc_aec3 library itself -> pass the same set to the whole build.
     pj_defs=(-DPJMEDIA_HAS_WEBRTC_AEC=1 -DPJMEDIA_HAS_WEBRTC_AEC3=1 -DWEBRTC_APM_DEBUG_DUMP=0 -DWEBRTC_POSIX=1
