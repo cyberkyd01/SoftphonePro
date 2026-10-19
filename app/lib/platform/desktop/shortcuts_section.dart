@@ -69,6 +69,28 @@ class ShortcutsSection extends ConsumerWidget {
           ],
         ),
         SettingsGroup(
+          title: 'Headset and media keys',
+          footer: 'The play/pause button of a headset or keyboard is claimed only while a call is ringing or active, so music players keep it the rest of the time.',
+          children: [
+            SwitchTile(
+              key: const Key('media-keys'),
+              icon: Icons.headset_mic_rounded,
+              title: 'Answer and hang up with the headset/media play-pause button',
+              value: s.mediaKeys,
+              onChanged: (v) => ref.read(settingsProvider.notifier).update({'mediaKeys': v}),
+            ),
+            if (s.mediaKeys)
+              SelectTile<String>(
+                key: const Key('media-key-active'),
+                icon: Icons.touch_app_rounded,
+                title: 'During a call the button',
+                value: s.mediaKeyActive == 'mute' ? 'mute' : 'hangup',
+                options: const {'hangup': 'Hangs up', 'mute': 'Mutes / unmutes'},
+                onChanged: (v) => ref.read(settingsProvider.notifier).update({'mediaKeyActive': v}),
+              ),
+          ],
+        ),
+        SettingsGroup(
           title: 'In the app',
           children: [
             for (final e in {

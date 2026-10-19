@@ -9,6 +9,7 @@ import 'services/calls_controller.dart';
 import 'services/engine_controller.dart';
 import 'services/providers.dart';
 import 'services/settings_controller.dart';
+import 'services/update_checker.dart';
 import 'ui/router.dart';
 import 'ui/widgets/account_widgets.dart';
 import 'ui/widgets/engine_failure_gate.dart';
@@ -26,6 +27,10 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Desktop only (no-op elsewhere); never delays startup.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(updateProvider.notifier).startAuto();
+    });
   }
 
   @override

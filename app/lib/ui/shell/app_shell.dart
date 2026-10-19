@@ -15,6 +15,7 @@ import '../shortcuts.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
+import '../widgets/update_banner.dart';
 
 class _Dest {
   const _Dest(this.path, this.label, this.icon, this.selectedIcon);
@@ -63,9 +64,13 @@ class AppShell extends ConsumerWidget {
     if (location.startsWith('/recents')) {
       Future.microtask(() => ref.read(recentsSeenProvider.notifier).markSeen());
     }
-    final demo = engine.demo
-        ? _DemoBanner(note: engine.note)
-        : const SizedBox.shrink();
+    final demo = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const UpdateBanner(),
+        engine.demo ? _DemoBanner(note: engine.note) : const SizedBox.shrink(),
+      ],
+    );
     final body = expanded ? _wideLayout(context, ref, demo) : _compactLayout(context, ref, demo);
     return AppShortcuts(child: body);
   }

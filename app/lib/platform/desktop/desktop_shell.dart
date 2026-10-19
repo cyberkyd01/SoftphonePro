@@ -20,6 +20,7 @@ import '../../services/settings_controller.dart';
 import '../../ui/router.dart';
 import '../desktop_platform_services.dart';
 import 'hotkeys.dart';
+import 'media_keys.dart';
 import 'tray_controller.dart';
 import 'window_state.dart';
 
@@ -93,6 +94,8 @@ class DesktopShell with WindowListener {
   AppLifecycleListener? _lifecycle;
   final List<ProviderSubscription<dynamic>> _subs = [];
   Map<HotkeyAction, HotkeyBinding?> _activeHotkeys = const {};
+  MediaKeyController? _media;
+  HotkeyMediaKeyBackend? _winMediaBackend;
 
   AppSettings get _settings => ref.read(settingsProvider);
 
@@ -125,6 +128,14 @@ class DesktopShell with WindowListener {
     });
 
     await _applyHotkeys();
+    final MediaKeyBackend? mediaBackend = Platform.isMacOS
+        ? ChannelMediaKeyBackend(_platform.channel)
+        : Platform.isWindows
+        ? (_winMediaBackend = HotkeyMediaKeyBackend())
+        : null;
+    if (mediaBackend != null) {
+      _media = MediaKeyController(ref, mediaBackend)..start();
+    }
     unawaited(_platform.setStartAtLogin(_settings.startAtLogin));
 
     // Autostart / login item: stay in the tray.
@@ -143,6 +154,7 @@ class DesktopShell with WindowListener {
     windowManager.removeListener(this);
     _saveBounds?.cancel();
     _lifecycle?.dispose();
+    unawaited(_media?.dispose());
     for (final s in _subs) {
       s.close();
     }
@@ -245,6 +257,9 @@ class DesktopShell with WindowListener {
       }
     }
     _activeHotkeys = wanted;
+    // unregisterAll() also dropped the media-key hotkey (Windows).
+    _winMediaBackend?.forgetRegistration();
+    unawaited(_media?.reclaim());
   }
 
   void _runHotkey(HotkeyAction a) {

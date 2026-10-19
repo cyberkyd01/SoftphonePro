@@ -1,4 +1,6 @@
 import '../pages/diagnostics/diagnostics_page.dart';
+import 'encryption_settings.dart';
+import 'update_settings.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -828,6 +830,7 @@ class PrivacySection extends ConsumerWidget {
           ],
         ),
         const AppLockSettingsGroup(),
+        const EncryptionSettingsGroup(),
         const SettingsGroup(
           title: 'Privacy',
           children: [ListTile(leading: Icon(Icons.visibility_off_rounded), title: Text('No telemetry'), subtitle: Text('SoftphonePro sends no analytics. Network traffic goes only to your SIP servers.'))],
@@ -963,7 +966,6 @@ class AboutSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    registerNativeLicenses();
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -978,6 +980,7 @@ class AboutSection extends StatelessWidget {
             ],
           ),
         ),
+        const UpdatesSettingsGroup(),
         SettingsGroup(
           title: 'Licence',
           footer: 'SoftphonePro is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 or later. It is distributed WITHOUT ANY WARRANTY.',

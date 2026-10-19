@@ -3,6 +3,7 @@ import Cocoa
 import Contacts
 import CoreServices
 import FlutterMacOS
+import MediaPlayer
 import ServiceManagement
 
 /// Receives sip:/tel:/callto:/softphonepro: links (GetURL Apple events) and
@@ -59,6 +60,7 @@ final class LinkBuffer: NSObject {
 class MainFlutterWindow: NSWindow {
   private var channel: FlutterMethodChannel?
   private var launchedAtLogin = false
+  private var mediaKeyTargets: [Any] = []
   private let startTime = Date()
 
   override func awakeFromNib() {
@@ -110,6 +112,9 @@ class MainFlutterWindow: NSWindow {
         result(self.defaultHandlers())
       case "setDefaultHandler":
         self.setDefaultHandler { result($0) }
+      case "setMediaKeys":
+        self.setMediaKeysActive((call.arguments as? Bool) ?? false)
+        result(true)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -142,6 +147,41 @@ class MainFlutterWindow: NSWindow {
       {
         self.makeKeyAndOrderFront(nil)
       }
+    }
+  }
+
+  // MARK: - headset / media keys (MPRemoteCommandCenter)
+
+  /// Claims the play/pause media keys (and headset buttons) only while Dart
+  /// asks for it, i.e. while a call is ringing or active, so music apps keep
+  /// the keys the rest of the time. Presses are forwarded as `onMediaKey`.
+  private func setMediaKeysActive(_ on: Bool) {
+    let center = MPRemoteCommandCenter.shared()
+    let commands: [MPRemoteCommand] = [
+      center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
+    ]
+    if on {
+      if !mediaKeyTargets.isEmpty { return }
+      for command in commands {
+        command.isEnabled = true
+        let token = command.addTarget { [weak self] _ in
+          self?.channel?.invokeMethod("onMediaKey", arguments: nil)
+          return .success
+        }
+        mediaKeyTargets.append(token)
+      }
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+        MPMediaItemPropertyTitle: "SoftphonePro call"
+      ]
+      MPNowPlayingInfoCenter.default().playbackState = .playing
+    } else {
+      for (command, token) in zip(commands, mediaKeyTargets) {
+        command.removeTarget(token)
+        command.isEnabled = false
+      }
+      mediaKeyTargets.removeAll()
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+      MPNowPlayingInfoCenter.default().playbackState = .stopped
     }
   }
 

@@ -227,6 +227,22 @@ class AppSettings {
     }
     return out;
   }
+
+  // ---- encryption / updates / media keys (W3, appended)
+  /// Desktop: check GitHub for a newer release about once a week.
+  bool get updateCheck => _b('updateCheck', true);
+
+  /// Epoch ms of the last answered update check (0 = never).
+  int get updateLastCheck => _i('updateLastCheck', 0);
+
+  /// A release version the user chose to skip (empty = none).
+  String get updateSkipVersion => _s('updateSkipVersion', '');
+
+  /// Desktop: the headset / media play-pause key answers and ends calls.
+  bool get mediaKeys => _b('mediaKeys', true);
+
+  /// What the media key does during a call: `hangup` or `mute`.
+  String get mediaKeyActive => _s('mediaKeyActive', 'hangup');
 }
 
 class SpeedDialEntry {

@@ -4,7 +4,15 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+* Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore. Safe migration both ways with a verified copy, a backup until the next start, and a recovery screen if the key is missing.
+* Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
+* Desktop headset / media play-pause button answers and hangs up (or mutes), claimed only while a call rings or is active (macOS and Windows).
+
+### Changed
+* The recording-notice setting points to Settings > Calls > Announcements, with a button to open it.
+* The welcome text no longer compares the app with premium apps.
+* Native licences are registered once at startup instead of when the About page is built.
 
 ## [1.0.0] - 2026-10-19
 

@@ -88,9 +88,17 @@ class RecordingSettingsView extends ConsumerWidget {
               key: const Key('rec-notice'),
               icon: Icons.record_voice_over_rounded,
               title: 'Play a notice before recording',
-              subtitle: 'Plays the recording announcement (Settings, Audio) to the other party first',
+              subtitle: 'Plays a notice to the other party first. The notice file is chosen in Settings > Calls > Announcements.',
               value: s.recordNotice,
               onChanged: (v) => ctl.update({'recordNotice': v}),
+            ),
+            ListTile(
+              key: const Key('rec-notice-open'),
+              leading: const Icon(Icons.campaign_rounded),
+              title: const Text('Choose the notice file'),
+              subtitle: const Text('Opens Settings > Calls > Announcements'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.go('/settings/calls'),
             ),
             SwitchTile(
               key: const Key('rec-beep'),

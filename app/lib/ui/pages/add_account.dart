@@ -303,7 +303,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         page = _Intro(
           icon: Icons.phone_in_talk_rounded,
           title: 'Welcome to SoftphonePro',
-          text: 'A free, open-source SIP softphone with the features of premium apps. No ads, no tracking.',
+          text: 'Professional calling for every platform - free and open source. No ads, no tracking.',
           button: 'Get started',
           buttonKey: 'onb-get-started',
           onNext: () => setState(() => _step = 1),

@@ -17,19 +17,21 @@ import 'platform/ios/ios_platform_services.dart';
 import 'platform/platform_services.dart';
 import 'services/app_services.dart';
 import 'services/providers.dart';
-import 'storage/app_database.dart';
 import 'storage/secrets_store.dart';
+import 'ui/pages/db_recovery.dart';
+import 'ui/settings/native_licenses.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerNativeLicenses();
 
   final desktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
   // Tray, hotkeys, URL handlers and notifications exist for macOS + Windows.
   final fullDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows);
 
-  final db = await AppDatabase.openDefault();
-  final supportDir = db.directory ?? (await getApplicationSupportDirectory()).path;
+  final supportDir = (await getApplicationSupportDirectory()).path;
   final secrets = KeystoreSecretsStore(EncryptedFileSecretsStore(p.join(supportDir, 'secrets')));
+  final db = await openDatabaseOrRecover(supportDir, secrets);
   final boot = await loadBootData(db, secrets);
 
   final PlatformServices platform = fullDesktop
@@ -91,6 +93,11 @@ Future<void> main(List<String> args) async {
     // the controllers now instead of waiting for the first frame.
     container.read(appServicesProvider);
     container.read(androidBackgroundProvider);
+  }
+
+  final startupNotice = db.startupNotice;
+  if (startupNotice != null) {
+    Future<void>.delayed(const Duration(seconds: 1), () => container.read(noticeProvider.notifier).error(startupNotice));
   }
 
   runApp(UncontrolledProviderScope(container: container, child: const SoftphoneApp()));

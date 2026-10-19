@@ -6,12 +6,12 @@ Status as of v1.0.0 (2026-10-19). Every status below is backed by the evidence i
 
 | Status | Meaning | Rows |
 |---|---|---|
-| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **67** |
-| ◐ | Implemented, but only checked by hand or on a device, or only partly tested (the Evidence column says what is missing) | **33** |
-| ☐ | Not implemented, or deferred | **11** |
+| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **69** |
+| ◐ | Implemented, but only checked by hand or on a device, or only partly tested (the Evidence column says what is missing) | **34** |
+| ☐ | Not implemented, or deferred | **8** |
 | | Total rows | **111** |
 
-Not implemented: video calls (M8), ZRTP (S6) and localisation (U5), plus the items in the last table (push notifications, CardDAV/LDAP, encrypted-at-rest data, visual voicemail, LAN group chat, update checker, a Linux desktop app, headset media-button handling).
+Not implemented: video calls (M8), ZRTP (S6) and localisation (U5), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat, a Linux desktop app).
 
 How to read this list:
 
@@ -64,6 +64,7 @@ How to read this list:
 | S6 | ZRTP with SAS verification | P2 | C | ☐ | Not implemented (no ZRTP code in `native/` or `app/lib`). Deferred. |
 | S7 | Server certificate pinning and "trust this certificate" from the network wizard | P1 | C/D | ✅ | N: `run_tests.py` `test_tls_verification_and_pins`, `test_review_fixes.py` `test_pin_validation`; A: `diagnostics/diagnostics_ui_test.dart` "untrusted TLS certificate can be trusted and pinned". |
 | S8 | Bundled Mozilla CA list used as the TLS trust store (user CA file overrides it) | P0 | D | ✅ | A: `polish_a1_test.dart` "the bundled asset is a real PEM bundle", "CA bundle is copied only when changed", "the engine gets the CA file and log file". |
+| S9 | Encrypted local data (opt-in): call history, contacts, messages and settings encrypted with AES-256-GCM | P2 | D | ✅ | A: `storage/encrypted_db_test.dart` (codec round trip, per-record nonces, tamper and wrong-key detection, plain to encrypted to plain migration with record counts and plaintext absent from the file, failure after copy leaves the original, swap rollback, missing key and wrong key give the recovery path, start fresh). Key: 32 random bytes in the secrets store. Applied at the next start; the old file is kept as a backup until the start after. Recordings and exported files are not encrypted. The recovery screen (`ui/pages/db_recovery.dart`) is not covered by a widget test. |
 
 ## Codecs and audio
 | ID | Feature | Pri | Layer | Status | Evidence |
@@ -159,9 +160,10 @@ How to read this list:
 | X2 | Android ConnectionService (self-managed): system call integration, Bluetooth and car controls | P1 | P | ◐ | Implemented (`SpConnectionService.kt`). Missing: no test and no mention in QA_ANDROID; Bluetooth and car controls were not tested. |
 | X3 | iOS CallKit integration (native call UI and audio session) | P1 | P | ◐ | Implemented (`CallKitManager.swift`). A: `ios_platform_services_test.dart` (method channel encoding), `a2_polish_test.dart` "systemDtmf digits are sent on the matching call". Missing: never run on an iOS device or simulator (CI builds an unsigned IPA only). |
 | X4 | Battery optimisation guidance, Wi-Fi lock and wake locks during calls | P1 | P | ◐ | Implemented ("Background reliability" checklist in Settings, `Locks.kt`). Missing: no test. |
-| X5 | Headset media-button answer/hang-up | P1 | P | ☐ | No dedicated media-button handling in the code (`MEDIA_BUTTON`/`MediaSession` are absent). Android Telecom or iOS CallKit may route headset buttons for system-registered calls; this was not verified. |
+| X5 | Headset / media play-pause button answers and hangs up (desktop) | P1 | P | ◐ | Desktop: A: `media_keys_test.dart` (policy: ringing answers, active hangs up or mutes, keys claimed only while a call rings or is active, repeat-press debounce, channel round trip). Native side is not run in CI: macOS `MPRemoteCommandCenter` in `MainFlutterWindow.swift` (needs a manual check on a Mac), Windows `VK_MEDIA_PLAY_PAUSE` via hotkey_manager (manual check on Windows). Android/iOS: not handled by the app itself; Android Telecom or iOS CallKit may route headset buttons for system-registered calls (not verified). |
 | X6 | Desktop command line: `--dial <target>`, `--provision <file\|url>`, `--minimized`; single running instance | P1 | P | ✅ | A: `polish_a1_test.dart` "--dial places the call even with the setting off", "--provision <file> imports without a prompt", "CLI flags become local intents; links cannot forge them"; `link_dial_test.dart` "--dial at launch waits for the account to register"; `desktop_platform_test.dart` (forwarded command lines); macOS: QA_MACOS 1, 14, 15. The Windows single-instance code (`single_instance.cpp`) is not tested. |
 | X7 | Blocking engine-error screen with Retry / network settings / explicit "Use simulator" (no silent demo fallback) | P0 | D | ✅ | A: `polish_a1_test.dart` "blocking error with Retry / network settings / simulator", "Retry starts the engine again", "a library that cannot load still falls back to the demo engine". |
+| X8 | Update checker (desktop): weekly check of the GitHub latest release, banner with Release notes / Download / Skip this version, opt-out and Check now in Settings > About | P2 | D | ✅ | A: `update_checker_test.dart` (semver and pre-release ordering, rate limit, 404, timeout, junk replies, weekly schedule, opt-out, skip version, banner opens the release page, hidden on mobile) with a mocked HTTP client. Nothing is downloaded or installed. |
 
 ## Automation and integrations
 | ID | Feature | Pri | Layer | Status | Evidence |
@@ -182,10 +184,8 @@ How to read this list:
 |---|---|---|---|---|---|
 | Z1 | Push notifications for incoming calls (needs a push server and PBX support) | P2 | P | ☐ | Not implemented. iOS receives calls only while the app runs; Android uses a foreground service instead. |
 | Z2 | CardDAV / LDAP / Outlook contacts | P1 | D | ☐ | Not implemented (no code in `app/lib`). |
-| Z3 | Encrypted-at-rest call history and recordings | P2 | D | ☐ | Not implemented: history and contacts are in a plain local database; only account passwords go to a secrets store. |
 | Z4 | Visual voicemail | P2 | D | ☐ | Not implemented; only the MWI indicator and voicemail dial exist (P4). |
 | Z5 | Group chat on LAN Link | P2 | D | ☐ | Not implemented; LAN chat is one to one (L3). |
-| Z6 | Update checker | P2 | D | ☐ | Not implemented; download new releases from GitHub. |
 | Z7 | Linux desktop app | P2 | P | ☐ | Not a target: there is no `app/linux` runner. Linux is built only to run the engine tests in CI. |
 
 ## Compared with Zoiper Premium, Bria, Groundwire, MicroSIP and Linphone

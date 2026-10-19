@@ -301,6 +301,27 @@ laptops and phones. No server or account is involved.
     locked.
 * **Passwords** are stored in the operating system's keystore. They're
   never included in exports unless you choose to include them.
+* **Encrypted local data (optional):** in **Settings → Privacy and security**
+  turn on *Encrypt call history, contacts and messages on this device*.
+  * The database is encrypted with AES-256-GCM. The key is created on the
+    device and kept in the operating system's keystore.
+  * The change is applied the next time SoftphonePro starts, so quit it
+    completely (on desktop use *Quit* in the tray or menu bar icon) and open
+    it again. Turning it off later decrypts the data the same way.
+  * The old file is kept as a backup until the start after that, then deleted.
+    If the change fails, nothing is changed and an error is shown.
+  * If the key is no longer in the keystore (for example after a keychain
+    reset), SoftphonePro shows a recovery screen: *Try again*, or *Start
+    fresh* (an empty history, contacts and messages; the old file is kept
+    next to the app data). Without the key the data cannot be read.
+  * Call recordings and exported files are not encrypted.
+* **Updates (Windows, macOS, Linux):** **Settings → About → Updates** has
+  *Check for updates* (on by default) and *Check now*. About once a week
+  SoftphonePro asks `api.github.com` for the latest release and sends nothing
+  but that request. If a newer version exists a banner offers *Release notes*,
+  *Download* (opens the release page in your browser) and *Skip this version*.
+  Nothing is downloaded or installed automatically. Turn the option off to
+  stop all checks. The Android and iOS apps don't check.
 
 ## 9. Diagnostics and troubleshooting
 
@@ -392,9 +413,15 @@ it automatically. A red **REC** marker shows while recording.
     the window keeps SoftphonePro running in the tray so calls can still
     ring. Choose **Quit** in the tray menu to exit.
   * Global hotkeys are set in **Settings → Shortcuts**.
+  * The headset or keyboard play/pause button answers a ringing call and
+    ends (or mutes) the active call. Choose which in **Settings → Shortcuts →
+    Headset and media keys**. SoftphonePro takes the button only while a call
+    is ringing or active, so music players keep it otherwise.
 * **macOS**
   * The first time you open the app, right-click it and choose **Open**
     (the build isn't notarised yet).
+  * The headset or keyboard play/pause button works the same way as on
+    Windows (see above).
   * Allow microphone access when macOS asks. Contacts and local network
     access are needed only for those features.
 * **Android**

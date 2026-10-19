@@ -15,6 +15,7 @@ class DesktopChannel {
   final MethodChannel _channel;
   final _links = StreamController<Uri>.broadcast();
   final _showRequests = StreamController<void>.broadcast();
+  final _mediaKeys = StreamController<void>.broadcast();
   final List<Uri> _initial = [];
   Uri? _lastLink;
   DateTime _lastLinkAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -30,6 +31,9 @@ class DesktopChannel {
 
   /// A second launch asked for the window without carrying a link.
   Stream<void> get showRequests => _showRequests.stream;
+
+  /// macOS: a headset / media play-pause press while media keys are claimed.
+  Stream<void> get mediaKeyPresses => _mediaKeys.stream;
 
   /// The link the process was launched with, if any.
   Uri? get initialLink => _initial.isEmpty ? null : _initial.first;
@@ -61,6 +65,8 @@ class DesktopChannel {
         _emit(parseLink('${call.arguments}'));
       case 'onArgs':
         _handlePayload('${call.arguments}');
+      case 'onMediaKey':
+        _mediaKeys.add(null);
     }
     return null;
   }
@@ -101,9 +107,21 @@ class DesktopChannel {
     }
   }
 
+  /// macOS: claim (or release) the system media keys / headset buttons.
+  Future<bool> setMediaKeysActive(bool active) async {
+    try {
+      return await _channel.invokeMethod<bool>('setMediaKeys', active) ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   Future<void> dispose() async {
     _channel.setMethodCallHandler(null);
     await _links.close();
     await _showRequests.close();
+    await _mediaKeys.close();
   }
 }
