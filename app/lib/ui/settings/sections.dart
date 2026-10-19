@@ -287,17 +287,19 @@ final codecListProvider = FutureProvider.autoDispose<List<String>>((ref) async {
   final ctl = ref.watch(engineProvider.notifier);
   if (ctl.hasEngine) {
     try {
-      return (await ctl.engine.codecs()).map((c) => c.id).toList();
+      return (await ctl.engine.codecs()).map((c) => c.id).toSet().toList();
     } catch (_) {}
   }
   return kFallbackCodecs;
 });
 
 /// Merges known ids with a saved order.
-List<String> orderCodecs(List<String> known, List<String> saved) => [
+/// The engine lists some codecs more than once (e.g. G7221 bitrate variants
+/// share an id); duplicates are dropped so list keys stay unique.
+List<String> orderCodecs(List<String> known, List<String> saved) => {
   ...saved.where(known.contains),
   ...known.where((k) => !saved.contains(k)),
-];
+}.toList();
 
 class CodecsSection extends ConsumerWidget {
   const CodecsSection({super.key});

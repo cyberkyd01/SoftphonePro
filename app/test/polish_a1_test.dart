@@ -23,6 +23,7 @@ import 'package:softphonepro/services/providers.dart';
 import 'package:softphonepro/services/provisioning.dart';
 import 'package:softphonepro/services/provisioning_import.dart';
 import 'package:softphonepro/services/settings_controller.dart';
+import 'package:softphonepro/ui/router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import 'harness.dart';
@@ -64,6 +65,13 @@ class _LinkPlatform extends NoopPlatformServices {
   final links = StreamController<Uri>.broadcast();
   @override
   Stream<Uri> get incomingLinks => links.stream;
+}
+
+class _ColdLinkPlatform extends NoopPlatformServices {
+  _ColdLinkPlatform(this.link);
+  final Uri link;
+  @override
+  Future<Uri?> initialLink() async => link;
 }
 
 class _MemBundle extends CachingAssetBundle {
@@ -298,6 +306,40 @@ void main() {
       expect(c.read(accountsProvider).profiles.single.config.username, 'u1');
       expect(c.read(settingsProvider).onboardingDone, isTrue);
       expect(find.text('Welcome to SoftphonePro'), findsNothing);
+    });
+
+    testWidgets('cold-start provision link during onboarding shows the confirm dialog and finishes onboarding', (tester) async {
+      final env = await TestEnv.create(settings: const AppSettings());
+      final platform = _ColdLinkPlatform(Uri.parse('softphonepro://provision?url=${Uri.encodeComponent('https://prov.test/p.json')}'));
+      final client = MockClient((req) async => http.Response('{"version":1,"accounts":[{"username":"u1","password":"p","domain":"pbx.test"}]}', 200));
+      await _pumpWith(tester, env, [
+        platformServicesProvider.overrideWithValue(platform),
+        provisioningClientProvider.overrideWithValue(client),
+      ]);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('link-import-confirm')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('link-import-yes')));
+      await settle(tester, env.engine);
+      await tester.pumpAndSettle();
+      expect(containerOf(tester).read(accountsProvider).profiles.single.config.username, 'u1');
+      expect(containerOf(tester).read(settingsProvider).onboardingDone, isTrue);
+      expect(find.text('Welcome to SoftphonePro'), findsNothing);
+    });
+
+    testWidgets('tel: link shows the dialer prefilled even from another page', (tester) async {
+      final env = await TestEnv.create();
+      final platform = _LinkPlatform();
+      await _pumpWith(tester, env, [platformServicesProvider.overrideWithValue(platform)]);
+      final c = containerOf(tester);
+      c.read(routerProvider).go('/settings');
+      await tester.pumpAndSettle();
+      expect(c.read(routerProvider).state.uri.path, '/settings');
+      platform.links.add(Uri.parse('tel:600'));
+      await settle(tester, env.engine);
+      await tester.pumpAndSettle();
+      expect(c.read(routerProvider).state.uri.path, '/keypad');
+      expect(c.read(dialInputProvider), '600');
     });
 
     testWidgets('provision link: cancel imports nothing; http (non-local) is refused', (tester) async {

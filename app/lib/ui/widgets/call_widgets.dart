@@ -195,8 +195,10 @@ Future<void> showTransferSheet(BuildContext context, int cid) {
     isScrollControlled: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 560),
-    builder: (_) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+    // The sheet's own context: the call page's Scaffold has already consumed
+    // the keyboard inset for its own context.
+    builder: (sheetContext) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
       child: TransferSheet(cid: cid),
     ),
   );

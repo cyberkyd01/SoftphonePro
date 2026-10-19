@@ -30,6 +30,18 @@ Future<bool> _engineReady(Ref ref) async {
   }
 }
 
+/// Waits until the root navigator is mounted (a cold-start link can be handled
+/// before the first frame, and onboarding may be showing) so dialogs can open.
+Future<BuildContext?> _rootContext() async {
+  final deadline = DateTime.now().add(const Duration(seconds: 20));
+  while (true) {
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx != null && ctx.mounted && rootNavigatorKey.currentState?.overlay != null) return ctx;
+    if (DateTime.now().isAfter(deadline)) return null;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+}
+
 /// Routes an incoming link / CLI intent (see [classifyLink]).
 Future<void> handleIncomingLink(Ref ref, Uri uri) async {
   final notices = ref.read(noticeProvider.notifier);
@@ -72,9 +84,21 @@ void _leaveOnboarding(Ref ref, ProvisioningResult r) {
   } catch (_) {}
 }
 
+/// Brings the dialer forward so a prefilled number is visible (not during onboarding or a call).
+void _showDialer(Ref ref) {
+  try {
+    if (ref.read(callRouteObserverProvider).open.value.isNotEmpty) return;
+    final router = ref.read(routerProvider);
+    final path = router.state.uri.path;
+    if (path == '/onboarding' || path == '/keypad') return;
+    router.go('/keypad');
+  } catch (_) {}
+}
+
 Future<void> _dial(Ref ref, String target, {required bool immediately}) async {
   ref.read(dialInputProvider.notifier).set(target);
   ref.read(dialFocusProvider.notifier).request();
+  _showDialer(ref);
   if (!immediately || target.trim().isEmpty) return;
   if (!await _engineReady(ref)) return;
   await ref.read(callsProvider.notifier).dial(target);
@@ -89,7 +113,7 @@ Future<void> _provisionFromLink(Ref ref, Uri url) async {
     );
     final client = ref.read(provisioningClientProvider);
     final r = await Provisioning.fetch(url, vars: vars, client: client);
-    final ctx = rootNavigatorKey.currentContext;
+    final ctx = await _rootContext();
     if (ctx == null || !ctx.mounted) return;
     final n = r.accounts.length;
     final ok = await showDialog<bool>(
