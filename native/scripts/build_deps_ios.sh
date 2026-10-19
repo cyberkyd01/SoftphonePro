@@ -72,6 +72,8 @@ build_one() {
   # for PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT, which only exists in ioqueue_select.c (kqueue fails to build).
   SPC_PJ_CMAKE_ARGS=(
     -DPJLIB_WITH_IOQUEUE=select
+    # pjproject always builds its pjsua/sample executables; coreaudio_dev.m needs AVFoundation to link them.
+    "-DCMAKE_EXE_LINKER_FLAGS=-framework AVFoundation -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -framework Foundation -framework UIKit"
     "-DOPENSSL_INCLUDE_DIR=$SPC_OUT/include"
     "-DOPENSSL_SSL_LIBRARY=$SPC_OUT/lib/libssl.a"
     "-DOPENSSL_CRYPTO_LIBRARY=$SPC_OUT/lib/libcrypto.a"
