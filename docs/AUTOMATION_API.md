@@ -137,6 +137,17 @@ api -d '{"to":"1015","body":"Your ticket was updated"}' $SPT/v1/messages
 
 Sends a SIP MESSAGE through `accountId` (default account when omitted). `201 {"message": {...}}`.
 
+### POST /v1/ui/show
+
+Brings the window to the front, optionally opening a screen. Handy for "screen pop".
+
+```sh
+api -d '{"route":"/settings/advanced"}' $SPT/v1/ui/show
+```
+
+Allowed routes: `/keypad /recents /contacts /messages /presence /lan /more /settings`
+and `/settings/<section>` (for example `/settings/calls`). Anything else is `400 invalid_route`.
+
 ### GET /v1/events (Server-Sent Events)
 
 ```sh

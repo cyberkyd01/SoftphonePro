@@ -10,11 +10,14 @@ import '../services/dial_ready.dart';
 import '../services/engine_controller.dart';
 import '../services/history_controller.dart';
 import '../services/messages_controller.dart';
+import '../services/providers.dart';
+import '../ui/router.dart';
 import '../services/settings_controller.dart';
 import 'automation_events.dart';
 import 'automation_json.dart';
 import 'automation_server.dart';
 
+final _routeRe = RegExp(r'^/(keypad|recents|contacts|messages|presence|lan|more|settings(/[a-z]+)?)$');
 final _dtmfRe = RegExp(r'^[0-9A-Da-d*#]{1,64}$');
 
 /// Routes `/v1/...` requests to the app's controllers. The same controllers
@@ -65,6 +68,10 @@ class AutomationApi {
           if (m != 'POST') throw notAllowed('POST');
           return _message(r);
       }
+    }
+    if (route.length == 2 && route[0] == 'ui' && route[1] == 'show') {
+      if (m != 'POST') throw notAllowed('POST');
+      return _show(r);
     }
     if (route.isNotEmpty && route[0] == 'calls' && route.length >= 2) {
       final cid = int.tryParse(route[1]);
@@ -254,6 +261,24 @@ class AutomationApi {
       if (result is Map) ...result.cast<String, Object?>(),
       'call': callToJson(now),
     });
+  }
+
+  /// Brings the window forward and optionally opens a screen:
+  /// `{"route": "/settings/advanced"}`. Only the app's main screens.
+  Future<ApiResponse> _show(ApiRequest r) async {
+    final route = r.json['route'];
+    if (route != null) {
+      if (route is! String || !_routeRe.hasMatch(route)) {
+        throw ApiException(
+          400,
+          'invalid_route',
+          'route must be one of /keypad /recents /contacts /messages /presence /lan /more /settings[/section]',
+        );
+      }
+      ref.read(routerProvider).go(route);
+    }
+    await ref.read(platformServicesProvider).bringToFront();
+    return ApiResponse(200, {'ok': true, 'route': route});
   }
 
   Future<ApiResponse> _dnd(ApiRequest r) async {

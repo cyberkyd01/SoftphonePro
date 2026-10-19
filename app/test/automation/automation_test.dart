@@ -519,6 +519,17 @@ void main() {
       await e.pump();
     });
 
+    test('ui/show validates the route and brings the window forward', () async {
+      final e = await _Env.start();
+      expect((await e.post('/v1/ui/show', {'route': '/etc/passwd'})).errorCode, 'invalid_route');
+      expect((await e.post('/v1/ui/show', {'route': 7})).status, 400);
+      final r = await e.post('/v1/ui/show', {'route': '/settings/advanced'});
+      expect(r.status, 200);
+      expect(r.json['route'], '/settings/advanced');
+      expect((await e.post('/v1/ui/show')).status, 200);
+      expect((await e.get('/v1/ui/show')).status, 405);
+    });
+
     test('unknown action is 404', () async {
       final e = await _Env.start();
       final cid = (await e.post('/v1/calls', {'to': '600'})).json['cid'];
