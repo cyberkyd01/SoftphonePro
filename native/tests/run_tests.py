@@ -366,7 +366,7 @@ class TestCore(Base):
         self.assertFalse(r["ok"])
         self.assertEqual(r["error"]["code"], "NOT_STARTED")
         r = c.raw("no.such.method")
-        self.assertEqual(r["error"]["code"], "INVALID_PARAM")
+        self.assertEqual(r["error"]["code"], "UNSUPPORTED")
         c.req("core.ping")
         res = c.start_core()
         self.assertTrue(res["transports"])
@@ -642,7 +642,12 @@ class TestCalls(Base):
         a.req("call.mute", {"cid": cid_a, "mute": False})
         self.assertFalse(a.req("call.info", {"cid": cid_a})["muted"])
         a.req("call.setLevels", {"cid": cid_a, "rx": 1.0, "tx": 0.8})
-        a.req("call.update", {"cid": cid_a})
+        for _ in range(20):      # the previous unhold re-INVITE may still be completing
+            r = a.raw("call.update", {"cid": cid_a})
+            if r["ok"] or r["error"]["code"] != "BUSY":
+                break
+            time.sleep(0.25)
+        self.assertTrue(r["ok"], r)
         a.req("call.sendRequest", {"cid": cid_a, "method": "INFO", "headers": {"X-Test": "1"}, "body": "hello", "contentType": "text/plain"})
         a.req("call.stopFile", {"cid": cid_a})
         # hangup: terminal state event precedes the response

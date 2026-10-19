@@ -56,14 +56,16 @@ void spc_call_wait_gone(uint64_t cid, int ms)
     while (spc_call_alive(cid) && spc_mono_ms() - t0 < ms) spc_sleep_ms(5);
 }
 
-static spc_call* slot_lookup(int slot)
+/* Copies the identity of the call in a pjsua slot under the registry lock. The spc_call* itself must never be
+ * dereferenced outside the lock: the terminal call.state callback frees it. Returns the cid (0 if none). */
+static uint64_t slot_snapshot(int slot, int* acc)
 {
-    spc_call* c = NULL;
-    if (slot < 0 || slot >= PJSUA_MAX_CALLS) return NULL;
+    uint64_t cid = 0;
+    if (slot < 0 || slot >= PJSUA_MAX_CALLS) return 0;
     spc_registry_lock();
-    c = g_slot[slot];
+    if (g_slot[slot]) { cid = g_slot[slot]->cid; if (acc) *acc = g_slot[slot]->acc; }
     spc_registry_unlock();
-    return c;
+    return cid;
 }
 
 void spc_call_get_tags(int slot, char* l, size_t ln, char* r, size_t rn)
@@ -101,8 +103,10 @@ static spc_call* call_create(int slot, const pjsua_call_info* ci, int* created, 
     spc_acc* ma;
     *created = 0;
     if (slot < 0 || slot >= PJSUA_MAX_CALLS) return NULL;
-    c = slot_lookup(slot);
-    if (c) return c;
+    spc_registry_lock();
+    c = g_slot[slot];
+    spc_registry_unlock();
+    if (c) return c;      /* only called from callbacks that own the call's dialog lock: the entry cannot be freed concurrently */
     if (!force && ci->state == PJSIP_INV_STATE_DISCONNECTED) return NULL;
     ud = pjsua_call_get_user_data(slot);
     if (ud && ci->role == PJSIP_ROLE_UAC) parent = (uint64_t)(uintptr_t)ud;
@@ -127,9 +131,32 @@ static spc_call* call_create(int slot, const pjsua_call_info* ci, int* created, 
     g_slot[slot] = c;
     spc_registry_unlock();
     pjsua_call_set_user_data(slot, (void*)(uintptr_t)c->cid);
-    spc_call_get_tags(slot, c->local_tag, sizeof(c->local_tag), c->remote_tag, sizeof(c->remote_tag));
+    {
+        char lt[64], rt[64];
+        spc_call_get_tags(slot, lt, sizeof(lt), rt, sizeof(rt));
+        spc_registry_lock();
+        spc_strlcpy(c->local_tag, lt, sizeof(c->local_tag));
+        spc_strlcpy(c->remote_tag, rt, sizeof(c->remote_tag));
+        spc_registry_unlock();
+    }
     *created = 1;
     return c;
+}
+
+/* Registry entry for a pjsua slot that was just created by pjsua_call_make_call(). With asynchronous media
+ * initialisation (ICE/TURN) pjsua returns before on_call_state(CALLING) has fired, so create it here
+ * (race-safe: call_create re-checks the slot under the lock). Returns 0 if the call is already gone. */
+uint64_t spc_call_ensure_slot(int slot)
+{
+    pjsua_call_info ci;
+    uint64_t cid = slot_snapshot(slot, NULL);
+    int created;
+    spc_call* c;
+    if (cid) return cid;
+    if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS || ci.state == PJSIP_INV_STATE_DISCONNECTED) return 0;
+    c = call_create(slot, &ci, &created, 0);
+    (void)c;
+    return slot_snapshot(slot, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -448,7 +475,7 @@ void spc_call_apply_topology(void)
             int rp = pjsua_recorder_get_conf_port(t->rec_id);
             if (rp >= 0) {
                 conn(t->cslot, rp, t->active && (t->rec_mix == 0 || t->rec_mix == 1));
-                conn(0, rp, t->rec_mix == 0 || t->rec_mix == 2);
+                conn(0, rp, (t->rec_mix == 0 || t->rec_mix == 2) && !t->muted && !t->detached);
             }
         }
         if (t->player_id >= 0) {
@@ -495,7 +522,11 @@ void spc_call_cleanup_media(spc_call* c)
     }
     if (pl >= 0) pjsua_player_destroy(pl);
     if (tgs >= 0) pjsua_conf_remove_port(tgs);
-    if (tg) pjmedia_port_destroy(tg);
+    if (tg) {
+        spc_mutex_lock(&G.tg_mtx);          /* serialises with inband DTMF playing on the same port */
+        pjmedia_port_destroy(tg);
+        spc_mutex_unlock(&G.tg_mtx);
+    }
     if (tgp) pj_pool_release(tgp);
 }
 
@@ -561,8 +592,18 @@ static void cb_call_state(pjsua_call_id call_id, pjsip_event* e)
     if (created && c->role == 1 && !c->incoming_emitted) emit_incoming(c, &ci, NULL);
     terminal = (ci.state == PJSIP_INV_STATE_DISCONNECTED);
     if (!created || ci.state != PJSIP_INV_STATE_NULL) {
-        if (c->local_tag[0] == 0 || c->remote_tag[0] == 0)
-            spc_call_get_tags(call_id, c->local_tag, sizeof(c->local_tag), c->remote_tag, sizeof(c->remote_tag));
+        int need;
+        spc_registry_lock();
+        need = c->local_tag[0] == 0 || c->remote_tag[0] == 0;
+        spc_registry_unlock();
+        if (need) {
+            char lt[64], rt[64];
+            spc_call_get_tags(call_id, lt, sizeof(lt), rt, sizeof(rt));
+            spc_registry_lock();
+            spc_strlcpy(c->local_tag, lt, sizeof(c->local_tag));
+            spc_strlcpy(c->remote_tag, rt, sizeof(c->remote_tag));
+            spc_registry_unlock();
+        }
     }
     if (terminal) spc_call_cleanup_media(c);
     spc_registry_lock();
@@ -590,23 +631,31 @@ static void cb_call_state(pjsua_call_id call_id, pjsip_event* e)
     spc_registry_unlock();
 }
 
+static void timer_topology(void* ud)
+{
+    (void)ud;
+    if (G.started) spc_call_apply_topology();
+}
+
 static void cb_call_media_state(pjsua_call_id call_id)
 {
     pjsua_call_info ci;
-    spc_call* c = slot_lookup(call_id);
+    uint64_t cid = slot_snapshot(call_id, NULL);
+    spc_call* c;
     char codec[48], crypto[48], ice[16], lt[16], rt[16];
     int srtp, secure, changed = 0;
     const char* mname;
-    if (!c) return;
+    if (!cid) return;
     if (pjsua_call_get_info(call_id, &ci) != PJ_SUCCESS) return;
     mname = media_name(ci.media_status);
     codec_string(call_id, &ci, codec, sizeof(codec));
     transport_details(call_id, &ci, &srtp, crypto, sizeof(crypto), ice, sizeof(ice), lt, rt, sizeof(lt));
     secure = dlg_secure(call_id);
     if (ci.media_status == PJSUA_CALL_MEDIA_ACTIVE) spc_media_on_call_media(call_id, 1);
-    spc_call_apply_topology();
+    pjsua_schedule_timer2(&timer_topology, NULL, 0);     /* full re-apply happens off the dialog lock (m7) */
     spc_registry_lock();
-    if (!spc_call_find_locked(c->cid) || c->ended) { spc_registry_unlock(); return; }
+    c = spc_call_find_locked(cid);
+    if (!c || c->ended) { spc_registry_unlock(); return; }
     {
         int ns = srtp ? (secure ? 2 : 1) : 0;
         if (strcmp(c->last_media, mname) != 0 || strcmp(c->last_codec, codec) != 0 || c->last_srtp != ns) changed = 1;
@@ -642,81 +691,111 @@ static void cb_sdp_created(pjsua_call_id call_id, pjmedia_sdp_session* sdp, pj_p
 
 static void cb_dtmf_event(pjsua_call_id call_id, const pjsua_dtmf_event* ev)
 {
-    spc_call* c = slot_lookup(call_id);
+    uint64_t cid = slot_snapshot(call_id, NULL);
     cJSON* f;
     char d[2];
-    if (!c || !ev) return;
+    if (!cid || !ev) return;
     d[0] = (char)ev->digit; d[1] = 0;
     f = cJSON_CreateObject();
-    cJSON_AddNumberToObject(f, "cid", (double)c->cid);
+    cJSON_AddNumberToObject(f, "cid", (double)cid);
     cJSON_AddStringToObject(f, "digit", d);
     cJSON_AddStringToObject(f, "method", ev->method == PJSUA_DTMF_METHOD_SIP_INFO ? "info" : "rfc2833");
     cJSON_AddNumberToObject(f, "durationMs", ev->duration == PJSUA_UNKNOWN_DTMF_DURATION ? 0 : (double)ev->duration);
-    spc_call_emit(c->cid, "call.dtmf", f);
+    spc_call_emit(cid, "call.dtmf", f);
 }
 
 static void cb_transfer_request2(pjsua_call_id call_id, const pj_str_t* dst, pjsip_status_code* code, pjsua_call_setting* opt)
 {
-    spc_call* c = slot_lookup(call_id);
+    int acc = -1;
+    uint64_t cid = slot_snapshot(call_id, &acc);
     spc_acc* ma;
     cJSON* f;
-    int acc;
+    char rb[256];
+    spc_call* c;
     (void)opt;
-    if (!c) return;
-    acc = c->acc;
+    if (!cid) return;
     ma = spc_acc_from_id(acc);
     if (ma && ma->refer_reject) *code = PJSIP_SC_DECLINE;
+    rb[0] = 0;
+    c = spc_call_lock_find(cid);
+    if (c) { spc_strlcpy(rb, c->referred_by, sizeof(rb)); c->referred_by[0] = 0; spc_registry_unlock(); }
     f = cJSON_CreateObject();
-    cJSON_AddNumberToObject(f, "cid", (double)c->cid);
+    cJSON_AddNumberToObject(f, "cid", (double)cid);
     spc_jadd_pjstr(f, "target", dst);
-    cJSON_AddStringToObject(f, "referredBy", "");
+    cJSON_AddStringToObject(f, "referredBy", rb);
     cJSON_AddBoolToObject(f, "accepted", *code / 100 == 2);
-    spc_call_emit(c->cid, "call.transferRequest", f);
+    spc_call_emit(cid, "call.transferRequest", f);
 }
 
 static void cb_transfer_status(pjsua_call_id call_id, int st_code, const pj_str_t* st_text, pj_bool_t final, pj_bool_t* cont)
 {
-    spc_call* c = slot_lookup(call_id);
+    uint64_t cid = slot_snapshot(call_id, NULL);
     cJSON* f;
     (void)cont;
-    if (!c) return;
+    if (!cid) return;
     f = cJSON_CreateObject();
-    cJSON_AddNumberToObject(f, "cid", (double)c->cid);
+    cJSON_AddNumberToObject(f, "cid", (double)cid);
     cJSON_AddNumberToObject(f, "code", st_code);
     spc_jadd_pjstr(f, "reason", st_text);
     cJSON_AddBoolToObject(f, "final", final ? 1 : 0);
-    spc_call_emit(c->cid, "call.transferStatus", f);
+    spc_call_emit(cid, "call.transferStatus", f);
 }
 
 static void cb_call_replaced(pjsua_call_id old_id, pjsua_call_id new_id)
 {
     pjsua_call_info ci;
-    spc_call *o = slot_lookup(old_id), *n = slot_lookup(new_id);
+    uint64_t ocid = slot_snapshot(old_id, NULL), ncid = slot_snapshot(new_id, NULL);
     cJSON* f;
     int created;
-    if (!n && pjsua_call_get_info(new_id, &ci) == PJ_SUCCESS) {
-        n = call_create(new_id, &ci, &created, 1);
+    if (!ncid && pjsua_call_get_info(new_id, &ci) == PJ_SUCCESS) {
+        spc_call* n = call_create(new_id, &ci, &created, 1);
         if (n && created && n->role == 1 && !n->incoming_emitted) emit_incoming(n, &ci, NULL);
+        ncid = slot_snapshot(new_id, NULL);
     }
-    if (!o || !n) return;
+    if (!ocid || !ncid) return;
     f = cJSON_CreateObject();
-    cJSON_AddNumberToObject(f, "oldCid", (double)o->cid);
-    cJSON_AddNumberToObject(f, "newCid", (double)n->cid);
+    cJSON_AddNumberToObject(f, "oldCid", (double)ocid);
+    cJSON_AddNumberToObject(f, "newCid", (double)ncid);
     spc_registry_lock();
     spc_emit("call.replaced", f);
     spc_registry_unlock();
 }
 
+static void cb_call_tsx_state(pjsua_call_id call_id, pjsip_transaction* tsx, pjsip_event* e)
+{
+    static const pj_str_t RB = { "Referred-By", 11 };
+    static const pj_str_t RBS = { "b", 1 };
+    uint64_t cid;
+    pjsip_rx_data* rd;
+    pjsip_generic_string_hdr* h;
+    spc_call* c;
+    if (!tsx || !e || e->type != PJSIP_EVENT_TSX_STATE || e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) return;
+    if (tsx->role != PJSIP_ROLE_UAS || pjsip_method_cmp(&tsx->method, pjsip_get_refer_method()) != 0) return;
+    rd = e->body.tsx_state.src.rdata;
+    if (!rd || !rd->msg_info.msg) return;
+    h = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(rd->msg_info.msg, &RB, NULL);
+    if (!h) h = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(rd->msg_info.msg, &RBS, NULL);
+    cid = slot_snapshot(call_id, NULL);
+    if (!cid) return;
+    c = spc_call_lock_find(cid);
+    if (!c) return;
+    if (h) spc_pjcopy(c->referred_by, sizeof(c->referred_by), &h->hvalue);
+    else c->referred_by[0] = 0;
+    spc_registry_unlock();
+}
+
 static pjsip_redirect_op cb_redirected(pjsua_call_id call_id, const pjsip_uri* target, const pjsip_event* e)
 {
-    spc_call* c = slot_lookup(call_id);
+    int acc = -1;
+    uint64_t cid = slot_snapshot(call_id, &acc);
+    spc_call* c;
     spc_acc* ma;
     int mode = 0;
     char buf[512];
     int code = 302;
     cJSON* f;
-    if (!c) return PJSIP_REDIRECT_REJECT;
-    ma = spc_acc_from_id(c->acc);
+    if (!cid) return PJSIP_REDIRECT_REJECT;
+    ma = spc_acc_from_id(acc);
     if (ma) mode = ma->redirect;
     if (mode == 2) return PJSIP_REDIRECT_REJECT;
     if (mode == 0) return PJSIP_REDIRECT_ACCEPT_REPLACE;
@@ -731,9 +810,11 @@ static pjsip_redirect_op cb_redirected(pjsua_call_id call_id, const pjsip_uri* t
         if (rd && rd->msg_info.msg && rd->msg_info.msg->type == PJSIP_RESPONSE_MSG) code = rd->msg_info.msg->line.status.code;
     }
     spc_registry_lock();
+    c = spc_call_find_locked(cid);
+    if (!c) { spc_registry_unlock(); return PJSIP_REDIRECT_REJECT; }
     c->redirect_pending = 1;
     f = cJSON_CreateObject();
-    cJSON_AddNumberToObject(f, "cid", (double)c->cid);
+    cJSON_AddNumberToObject(f, "cid", (double)cid);
     cJSON_AddStringToObject(f, "target", buf);
     cJSON_AddNumberToObject(f, "code", code);
     spc_emit("call.redirected", f);
@@ -752,6 +833,7 @@ void spc_call_install_callbacks(pjsua_callback* cb)
     cb->on_call_transfer_status = &cb_transfer_status;
     cb->on_call_replaced = &cb_call_replaced;
     cb->on_call_redirected = &cb_redirected;
+    cb->on_call_tsx_state = &cb_call_tsx_state;
 }
 
 /* ------------------------------------------------------------------ */
@@ -917,8 +999,7 @@ void spc_call_stats_tick(int64_t now)
 
 uint64_t spc_call_cid_of_slot(int slot)
 {
-    spc_call* c = slot_lookup(slot);
-    return c ? c->cid : 0;
+    return slot_snapshot(slot, NULL);
 }
 
 /* ------------------------------------------------------------------ */

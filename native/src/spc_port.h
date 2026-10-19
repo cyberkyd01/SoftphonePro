@@ -31,8 +31,11 @@ int  spc_cond_timedwait(spc_cond_t* c, spc_mutex_t* m, int ms);
 void spc_cond_wait(spc_cond_t* c, spc_mutex_t* m);
 int  spc_thread_create(spc_thread_t* t, void (*fn)(void*), void* arg);
 void spc_thread_join(spc_thread_t* t);
+void spc_thread_detach(spc_thread_t* t);
 int64_t spc_now_ms(void);      /* unix epoch ms */
 int64_t spc_mono_ms(void);     /* monotonic ms */
 void spc_sleep_ms(int ms);
+/* runs fn exactly once even if called concurrently; state must be a zero-initialised static */
+void spc_once(volatile long* state, void (*fn)(void));
 
 #endif

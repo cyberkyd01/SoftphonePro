@@ -41,6 +41,7 @@ void spc_thread_join(spc_thread_t* t)
 {
     if (*t) { WaitForSingleObject(*t, INFINITE); CloseHandle(*t); *t = NULL; }
 }
+void spc_thread_detach(spc_thread_t* t) { if (*t) { CloseHandle(*t); *t = NULL; } }
 int64_t spc_now_ms(void)
 {
     FILETIME ft; ULARGE_INTEGER u;
@@ -50,6 +51,11 @@ int64_t spc_now_ms(void)
 }
 int64_t spc_mono_ms(void) { return (int64_t)GetTickCount64(); }
 void spc_sleep_ms(int ms) { Sleep((DWORD)ms); }
+void spc_once(volatile long* state, void (*fn)(void))
+{
+    if (InterlockedCompareExchange(state, 1, 0) == 0) { fn(); InterlockedExchange(state, 2); return; }
+    while (*state != 2) Sleep(1);
+}
 
 #else
 
@@ -64,7 +70,18 @@ void spc_mutex_init(spc_mutex_t* m)
 void spc_mutex_destroy(spc_mutex_t* m) { pthread_mutex_destroy(m); }
 void spc_mutex_lock(spc_mutex_t* m) { pthread_mutex_lock(m); }
 void spc_mutex_unlock(spc_mutex_t* m) { pthread_mutex_unlock(m); }
-void spc_cond_init(spc_cond_t* c) { pthread_cond_init(c, NULL); }
+void spc_cond_init(spc_cond_t* c)
+{
+#if !defined(__APPLE__) && defined(CLOCK_MONOTONIC)
+    pthread_condattr_t a;
+    pthread_condattr_init(&a);
+    pthread_condattr_setclock(&a, CLOCK_MONOTONIC);
+    pthread_cond_init(c, &a);
+    pthread_condattr_destroy(&a);
+#else
+    pthread_cond_init(c, NULL);
+#endif
+}
 void spc_cond_destroy(spc_cond_t* c) { pthread_cond_destroy(c); }
 void spc_cond_signal(spc_cond_t* c) { pthread_cond_signal(c); }
 void spc_cond_broadcast(spc_cond_t* c) { pthread_cond_broadcast(c); }
@@ -72,12 +89,18 @@ void spc_cond_wait(spc_cond_t* c, spc_mutex_t* m) { pthread_cond_wait(c, m); }
 int spc_cond_timedwait(spc_cond_t* c, spc_mutex_t* m, int ms)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
     if (ms < 0) ms = 0;
+#if defined(__APPLE__)
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (long)(ms % 1000) * 1000000L;
+    return pthread_cond_timedwait_relative_np(c, m, &ts) == ETIMEDOUT ? 1 : 0;
+#else
+    clock_gettime(CLOCK_MONOTONIC, &ts);      /* the condvar was created with CLOCK_MONOTONIC */
     ts.tv_sec += ms / 1000;
     ts.tv_nsec += (long)(ms % 1000) * 1000000L;
     if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
     return pthread_cond_timedwait(c, m, &ts) == ETIMEDOUT ? 1 : 0;
+#endif
 }
 
 typedef struct { void (*fn)(void*); void* arg; } thr_start;
@@ -97,6 +120,7 @@ int spc_thread_create(spc_thread_t* t, void (*fn)(void*), void* arg)
     return 0;
 }
 void spc_thread_join(spc_thread_t* t) { pthread_join(*t, NULL); }
+void spc_thread_detach(spc_thread_t* t) { pthread_detach(*t); }
 int64_t spc_now_ms(void)
 {
     struct timespec ts;
@@ -108,6 +132,11 @@ int64_t spc_mono_ms(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+void spc_once(volatile long* state, void (*fn)(void))
+{
+    if (__sync_bool_compare_and_swap(state, 0, 1)) { fn(); __sync_synchronize(); *state = 2; return; }
+    while (*(volatile long*)state != 2) { struct timespec ts = { 0, 1000000L }; nanosleep(&ts, NULL); }
 }
 void spc_sleep_ms(int ms)
 {

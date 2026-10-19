@@ -39,6 +39,9 @@ int spc_err(int code, pj_status_t status, const char* fmt, ...);
 int spc_pjerr(pj_status_t status, const char* what);
 
 typedef int (*spc_handler)(cJSON* p, cJSON** res);
+/* Defer the current request's response (handler returns SPC_OK with no result); complete it later from any thread. */
+int64_t spc_defer_response(void);       /* returns the request id, 0 if it cannot be deferred */
+void    spc_respond_deferred(int64_t id, int code, pj_status_t status, const char* msg, cJSON* result);
 typedef struct { const char* name; spc_handler fn; int flags; } spc_method;
 #define SPC_M_PRESTART 1
 
@@ -68,6 +71,13 @@ cJSON*      spc_sockaddr_json_str(const pj_sockaddr* a);
 /* msg_data from {"headers":{k:v}} into msg_data using pool */
 void        spc_fill_msg_data(pj_pool_t* pool, pjsua_msg_data* md, const cJSON* headers);
 cJSON*      spc_headers_from_rdata(pjsip_rx_data* rdata);
+int         spc_hdr_name_ok(const char* n);      /* token chars only and not a core header (Via, From, ...) */
+int         spc_hdr_value_ok(const char* v);     /* no CR/LF/NUL, <= 4 KB */
+int         spc_str_clean(const char* s);        /* no control characters */
+int         spc_validate_headers(const cJSON* headers, char* err, size_t en);   /* 1 ok */
+uint64_t    spc_jnum_to_id(const cJSON* e);      /* positive integer < 2^53 or 0 */
+int         spc_jint_range(const cJSON* o, const char* k, int def, int lo, int hi, int* out);   /* 0 if present but invalid */
+int         spc_jbool_strict(const cJSON* o, const char* k, int* out);                        /* 0 if absent or not a bool */
 
 /* ---- events / core (spc_core.c) ---- */
 typedef struct spc_global {
@@ -85,6 +95,7 @@ typedef struct spc_global {
     int64_t seq;
     /* registry mutex: protects calls/accounts/buddies tables */
     spc_mutex_t reg_mtx;
+    spc_mutex_t tg_mtx;            /* serialises inband-DTMF tonegen use vs destruction */
     /* queue */
     spc_mutex_t q_mtx;
     spc_cond_t q_cv;
@@ -193,6 +204,7 @@ typedef struct spc_call {
     int incoming_emitted;
     uint64_t parent_cid;           /* spawned by REFER */
     char call_id[128];
+    char referred_by[256];
     char local_tag[64], remote_tag[64];
     char last_media[12];
     char last_codec[48];
@@ -236,6 +248,7 @@ int       spc_call_media_audio_idx(const pjsua_call_info* ci);
 void      spc_call_get_tags(int slot, char* l, size_t ln, char* r, size_t rn);
 void      spc_call_schedule_timer(void (*cb)(void*), uint64_t cid, unsigned ms);
 uint64_t  spc_call_cid_of_slot(int slot);
+uint64_t  spc_call_ensure_slot(int slot);
 
 /* ---- IAX2 (spc_iax2.c); acc ids and call slots >= SPC_ID_IAX_BASE ---- */
 enum { SPC_IAXOP_ANSWER = 1, SPC_IAXOP_RING, SPC_IAXOP_REJECT, SPC_IAXOP_HANGUP, SPC_IAXOP_HOLD, SPC_IAXOP_UNHOLD,
@@ -296,14 +309,16 @@ void  spc_trace_shutdown(void);
 
 /* ---- tls (spc_tls.c) ---- */
 void  spc_tls_on_transport_state(pjsip_transport* tp, pjsip_transport_state state, const pjsip_transport_state_info* info);
-void  spc_tls_set_pins(const cJSON* pins);
+int   spc_tls_set_pins(const cJSON* pins);          /* 0 ok, -1 invalid entry (needs 64 hex chars) */
+int   spc_tls_check_ca(int verify, const char* ca, char* err, size_t en);   /* 1 ok */
 void  spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* cert, const char* key, const char* minProto);
-void  spc_tls_flag_failure(void);
-int   spc_tls_recent_failure(void);
+void  spc_tls_flag_failure(const char* host);
+int   spc_tls_recent_failure(const char* host);
 void  spc_tls_cleanup(void);
 
 /* ---- dns (spc_dns.c) ---- */
 int   spc_dns_detect(char servers[][64], int max);
+int   spc_resolve_ipv4(const char* host, uint32_t* addr_be, int timeout_ms);   /* 0 ok; bounded, never blocks longer than timeout_ms */
 
 /* ---- lan (spc_lan.c) ---- */
 int   spc_lan_start(int port, cJSON* res);
@@ -313,6 +328,11 @@ int   spc_presence_init_module(void);
 
 /* ---- diag ---- */
 void  spc_diag_install_callbacks(pjsua_callback* cb);
+void  spc_diag_new_session(void);
+/* heap tokens passed as pjsua user_data; freed by the completion callback, or in bulk at core.stop */
+void* spc_token_new(size_t size);
+void  spc_token_free(void* t);
+void  spc_tokens_free_all(void);
 
 /* sha256 */
 void  spc_sha256_hex(const unsigned char* data, size_t len, char out[65]);

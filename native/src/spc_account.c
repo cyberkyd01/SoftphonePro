@@ -2,6 +2,7 @@
 #include "spc_internal.h"
 #include "spc_ws_transport.h"
 #include <ctype.h>
+#include <math.h>
 
 static spc_acc* g_acc[PJSUA_MAX_ACC];
 static spc_acc* g_all;               /* every meta ever allocated this session */
@@ -43,7 +44,10 @@ int spc_acc_resolve(const cJSON* p, int* out)
     cJSON* ac = cJSON_GetObjectItemCaseSensitive((cJSON*)p, "acc");
     int i;
     if (ac && cJSON_IsNumber(ac)) {
-        int id = (int)ac->valuedouble;
+        int id;
+        if (!(ac->valuedouble >= -1.0 && ac->valuedouble <= 1048576.0) || ac->valuedouble != floor(ac->valuedouble))
+            return spc_err(SPC_E_INVALID_PARAM, 0, "'acc' must be an integer");
+        id = (int)ac->valuedouble;
         if (id == -1) {
             if (G.direct_acc < 0) return spc_err(SPC_E_NOT_FOUND, 0, "no direct account");
             *out = G.direct_acc;
@@ -191,13 +195,16 @@ static void cb_reg_state2(pjsua_acc_id acc, pjsua_reg_info* info)
         state = cp->expiration > 0 ? "registered" : "unregistered";
     } else {
         char em[160];
+        char host_only[128];
         state = "failed";
+        spc_strlcpy(host_only, m->domain, sizeof(host_only));
+        if (host_only[0] != '[') { char* cc = strchr(host_only, ':'); if (cc && strchr(cc + 1, ':') == NULL) *cc = 0; }
         pj_strerror(cp->status, em, sizeof(em));
         if (code == 401 || code == 403 || code == 407)
             snprintf(err, sizeof(err), "Wrong username/password (%d)", code);
         else if (code == 408)
             snprintf(err, sizeof(err), "Timeout (408)");
-        else if (spc_tls_recent_failure() && (strcmp(m->transport, "tls") == 0 || strcmp(m->transport, "wss") == 0))
+        else if (spc_tls_recent_failure(host_only) && (strcmp(m->transport, "tls") == 0 || strcmp(m->transport, "wss") == 0))
             snprintf(err, sizeof(err), "TLS certificate not trusted");
         else if (cp->status == PJ_ERESOLVE || strstr(em, "DNS") || strstr(em, "resolve") || strstr(em, "Resolve"))
             snprintf(err, sizeof(err), "DNS lookup failed");
@@ -282,12 +289,13 @@ static void add_hdr(pj_pool_t* pool, pjsip_hdr* list, const char* name, const ch
 
 static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size_t errn)
 {
-    int port = spc_jint(c, "localPort", 0);
+    int port = 0;
     const char* tr = spc_jstr(c, "transport");
     pjsua_transport_config tc;
     pjsip_transport_type_e type = PJSIP_TRANSPORT_UDP;
     pjsua_transport_id id;
     pjsua_transport_info ti;
+    if (!spc_jint_range(c, "localPort", 0, 0, 65535, &port)) { snprintf(err, errn, "'localPort' must be an integer in 0..65535"); return -1; }
     if (port <= 0 || (tr && (spc_strieq(tr, "ws") || spc_strieq(tr, "wss")))) {   /* ws/wss: outgoing connections only */
         if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
         *tp_id = PJSUA_INVALID_ID;
@@ -339,7 +347,7 @@ static int apply_ws(pjsua_acc_config* cfg, pj_pool_t* pool, const cJSON* c, cons
     memcpy(host, p, (size_t)n); host[n] = 0;
     spc_strlcpy(rest, semi ? semi : "", sizeof(rest));
     spc_ws_ensure_port(host, wss, hp, sizeof(hp));
-    snprintf(reg, sizeof(reg), "sip:%s%s", hp, rest);
+    snprintf(reg, sizeof(reg), "sip:%.199s%.150s", hp, rest);
     if (!strstr(reg, "transport=") && !strstr(reg, "TRANSPORT=")) {
         if (strlen(reg) + 16 < sizeof(reg)) strcat(reg, wss ? ";transport=wss" : ";transport=ws");
     }
@@ -388,6 +396,12 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
     if (!user || !user[0]) { snprintf(err, errn, "'username' required"); return -1; }
     if (!domain || !domain[0]) { snprintf(err, errn, "'domain' required"); return -1; }
     if (strlen(user) > 100 || strlen(domain) > 120) { snprintf(err, errn, "username/domain too long"); return -1; }
+    if (!spc_str_clean(user) || !spc_str_clean(domain) || !spc_str_clean(disp) || !spc_str_clean(registrar) ||
+        !spc_str_clean(authu) || !spc_str_clean(spc_jstr(c, "callerId")) || strpbrk(user, "@<>;\" ") || strpbrk(domain, "<>;\" @")) {
+        snprintf(err, errn, "username, domain, displayName, registrar, authUser or callerId contain invalid characters");
+        return -1;
+    }
+    if (spc_jstr(c, "userAgent") && !spc_hdr_value_ok(spc_jstr(c, "userAgent"))) { snprintf(err, errn, "invalid userAgent"); return -1; }
     if (!transport) transport = "udp";
     if (!(spc_strieq(transport, "udp") || spc_strieq(transport, "tcp") || spc_strieq(transport, "tls") ||
           spc_strieq(transport, "ws") || spc_strieq(transport, "wss") || spc_strieq(transport, "auto"))) {
@@ -430,20 +444,35 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
                 pj_strdup2_with_null(pool, &cfg->proxy[cfg->proxy_cnt++], e->valuestring);
         }
     }
-    cfg->reg_use_proxy = (unsigned)spc_jint(c, "regUseProxy", 3);
+#define RNG(k, def, lo, hi, var) do { if (!spc_jint_range(c, k, def, lo, hi, &(var))) { snprintf(err, errn, "'%s' must be an integer in %d..%d", k, lo, hi); return -1; } } while (0)
+    {
+        int n1, n2, n3, n4, n5, n6;
+        RNG("regUseProxy", 3, 0, 3, n1);
+        cfg->reg_use_proxy = (unsigned)n1;
+        RNG("regExpires", 300, 10, 86400, n2);
+        cfg->reg_timeout = (unsigned)n2;
+        RNG("regRetrySec", 30, 0, 86400, n3);
+        cfg->reg_retry_interval = (unsigned)n3;
+        RNG("regFirstRetrySec", 5, 0, 86400, n4);
+        cfg->reg_first_retry_interval = (unsigned)n4;
+        RNG("regRetryRandomSec", 10, 0, 3600, n5);
+        cfg->reg_retry_random_interval = (unsigned)n5;
+        RNG("regDelayBeforeRefreshSec", 5, 0, 3600, n6);
+        cfg->reg_delay_before_refresh = (unsigned)n6;
+        RNG("unregTimeoutMs", 4000, 0, 60000, n1);
+        cfg->unreg_timeout = (unsigned)n1;
+        RNG("keepAliveSec", 15, 0, 3600, n2);
+        cfg->ka_interval = (unsigned)n2;
+        RNG("mwiExpires", 3600, 0, 86400, n3);
+        cfg->mwi_expires = (unsigned)n3;
+        RNG("srtpSecureSignaling", 0, 0, 2, n4);
+        cfg->srtp_secure_signaling = n4;
+    }
     cfg->register_on_acc_add = spc_jbool(c, "register", 1) ? PJ_TRUE : PJ_FALSE;
-    v = spc_jint(c, "regExpires", 300); if (v >= 0) cfg->reg_timeout = (unsigned)v;
-    cfg->reg_retry_interval = (unsigned)spc_jint(c, "regRetrySec", 30);
-    cfg->reg_first_retry_interval = (unsigned)spc_jint(c, "regFirstRetrySec", 5);
-    cfg->reg_retry_random_interval = (unsigned)spc_jint(c, "regRetryRandomSec", 10);
-    cfg->reg_delay_before_refresh = (unsigned)spc_jint(c, "regDelayBeforeRefreshSec", 5);
-    cfg->unreg_timeout = (unsigned)spc_jint(c, "unregTimeoutMs", 4000);
     cfg->drop_calls_on_reg_fail = spc_jbool(c, "dropCallsOnRegFail", 0);
-    cfg->ka_interval = (unsigned)spc_jint(c, "keepAliveSec", 15);
     cfg->contact_use_src_port = spc_jbool(c, "contactUseSrcPort", 1);
     cfg->publish_enabled = spc_jbool(c, "publishPresence", 0);
     cfg->mwi_enabled = spc_jbool(c, "mwi", 1);
-    cfg->mwi_expires = (unsigned)spc_jint(c, "mwiExpires", 3600);
 
     s = spc_jstr(c, "srtp");
     cfg->use_srtp = PJMEDIA_SRTP_DISABLED;
@@ -452,7 +481,6 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
         else if (spc_strieq(s, "mandatory")) cfg->use_srtp = PJMEDIA_SRTP_MANDATORY;
         else if (!spc_strieq(s, "off")) { snprintf(err, errn, "invalid srtp '%s'", s); return -1; }
     }
-    cfg->srtp_secure_signaling = spc_jint(c, "srtpSecureSignaling", 0);
     arr = spc_jarr(c, "srtpKeying");
     if (arr) {
         cJSON_ArrayForEach(e, arr) {
@@ -524,8 +552,8 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
         else if (spc_strieq(s, "always")) cfg->use_timer = PJSUA_SIP_TIMER_ALWAYS;
         else if (!spc_strieq(s, "optional")) { snprintf(err, errn, "invalid sessionTimers '%s'", s); return -1; }
     }
-    v = spc_jint(c, "timerSe", 1800);
-    if (v >= 90) cfg->timer_setting.sess_expires = (unsigned)v;
+    RNG("timerSe", 1800, 90, 86400, v);
+    cfg->timer_setting.sess_expires = (unsigned)v;
     cfg->require_100rel = spc_jbool(c, "use100rel", 0) ? PJSUA_100REL_OPTIONAL : PJSUA_100REL_NOT_USED;
     s = spc_jstr(c, "holdType");
     cfg->call_hold_type = (s && spc_strieq(s, "rfc2543")) ? PJSUA_CALL_HOLD_TYPE_RFC2543 : PJSUA_CALL_HOLD_TYPE_RFC3264;
@@ -554,7 +582,7 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
     if (G.qos) {
         int dscp = 46;
         obj = spc_jobj(c, "dscp");
-        if (obj) dscp = spc_jint(obj, "rtp", 46);
+        if (obj && !spc_jint_range(obj, "rtp", 46, 0, 63, &dscp)) { snprintf(err, errn, "dscp.rtp must be 0..63"); return -1; }
         cfg->rtp_cfg.qos_type = PJ_QOS_TYPE_VOICE;
         cfg->rtp_cfg.qos_params.flags = PJ_QOS_PARAM_HAS_DSCP;
         cfg->rtp_cfg.qos_params.dscp_val = (pj_uint8_t)(dscp & 0x3f);
@@ -568,7 +596,9 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
         add_hdr(pool, &cfg->sub_hdr_list, "User-Agent", ua);
     }
     obj = spc_jobj(c, "headers");
+    if (spc_jhas(c, "headers") && !obj) { snprintf(err, errn, "'headers' must be an object"); return -1; }
     if (obj) {
+        if (!spc_validate_headers(obj, err, errn)) return -1;
         cJSON_ArrayForEach(e, obj) {
             if (e->string && cJSON_IsString(e)) add_hdr(pool, &cfg->reg_hdr_list, e->string, e->valuestring);
         }
@@ -746,10 +776,36 @@ static int h_account_remove(cJSON* p, cJSON** res)
     if (!m || m->is_lan || m->is_direct) return spc_err(SPC_E_INVALID_PARAM, 0, "cannot remove this account");
     st = pjsua_acc_del(acc);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_acc_del");
-    spc_registry_lock();
-    m->used = 0;
-    g_acc[acc] = NULL;
-    spc_registry_unlock();
+    {   /* a removed account always ends with a final "unregistered" account.reg */
+        cJSON* fin;
+        int need;
+        spc_registry_lock();
+        need = strcmp(m->reg_state, "unregistered") != 0;
+        spc_strlcpy(m->reg_state, "unregistered", sizeof(m->reg_state));
+        m->used = 0;
+        g_acc[acc] = NULL;
+        fin = cJSON_CreateObject();
+        cJSON_AddNumberToObject(fin, "acc", acc);
+        cJSON_AddStringToObject(fin, "uid", m->uid);
+        cJSON_AddStringToObject(fin, "proto", "sip");
+        cJSON_AddStringToObject(fin, "uri", "");
+        cJSON_AddStringToObject(fin, "regState", "unregistered");
+        cJSON_AddNumberToObject(fin, "regCode", m->reg_code);
+        cJSON_AddStringToObject(fin, "regReason", m->reg_reason);
+        cJSON_AddNumberToObject(fin, "status", 0);
+        cJSON_AddStringToObject(fin, "statusText", "removed");
+        cJSON_AddNullToObject(fin, "lastError");
+        cJSON_AddNumberToObject(fin, "expires", 0);
+        cJSON_AddBoolToObject(fin, "online", 0);
+        cJSON_AddBoolToObject(fin, "isUnreg", 1);
+        cJSON_AddNullToObject(fin, "contact");
+        cJSON_AddStringToObject(fin, "transport", m->transport);
+        cJSON_AddStringToObject(fin, "presence", m->presence);
+        cJSON_AddBoolToObject(fin, "isLan", 0);
+        cJSON_AddBoolToObject(fin, "isDirect", 0);
+        if (need) spc_emit("account.reg", fin); else cJSON_Delete(fin);
+        spc_registry_unlock();
+    }
     if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
     return SPC_OK;
 }
@@ -761,13 +817,14 @@ static int h_account_register(cJSON* p, cJSON** res)
     (void)res;
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
-    if (!spc_jhas(p, "register")) return spc_err(SPC_E_INVALID_PARAM, 0, "'register' (bool) required");
-    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_register(acc, spc_jbool(p, "register", 1));
+    int regv;
+    if (!spc_jbool_strict(p, "register", &regv)) return spc_err(SPC_E_INVALID_PARAM, 0, "'register' (bool) required");
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_register(acc, regv);
     {
         spc_acc* m = spc_acc_from_id(acc);
         if (!m || m->is_lan || m->is_direct) return spc_err(SPC_E_INVALID_PARAM, 0, "account has no registration");
     }
-    st = pjsua_acc_set_registration(acc, spc_jbool(p, "register", 1));
+    st = pjsua_acc_set_registration(acc, regv);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_acc_set_registration");
     return SPC_OK;
 }

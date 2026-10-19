@@ -1355,7 +1355,7 @@ static int start_factory(int wss, int v6, const char* invalid_host)
 
     if (wss) {
         spc_tls_cfg(&lf->tls, G.tls_verify, NULL, NULL, NULL, NULL);
-        if (lf->tls.cert_file.slen || lf->tls.ca_list_file.slen || lf->tls.privkey_file.slen) {
+        if (lf->tls.cert_file.slen || lf->tls.ca_list_file.slen || lf->tls.ca_list_path.slen || lf->tls.privkey_file.slen) {
             st = pj_ssl_cert_load_from_files2(pool, &lf->tls.ca_list_file, &lf->tls.ca_list_path, &lf->tls.cert_file,
                                               &lf->tls.privkey_file, &lf->tls.password, &lf->cert);
             if (st != PJ_SUCCESS) PJ_PERROR(2, (THIS_FILE, st, "WSS: cannot load TLS credentials (continuing without)"));

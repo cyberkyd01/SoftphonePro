@@ -119,6 +119,8 @@ void spc_media_on_call_media(int slot, int active)
     }
 }
 
+static int resolve_dev(const char* id, int capture, int* idx, int* special);
+
 int spc_media_ensure_clock(void)
 {
     if (pjsua_snd_is_active()) return 0;
@@ -129,9 +131,13 @@ int spc_media_ensure_clock(void)
     {
         pjsua_snd_dev_param prm;
         pj_status_t st;
+        int ci = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, pi = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV, cs = 1, ps = 1;
         pjsua_snd_dev_param_default(&prm);
-        prm.capture_dev = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV;
-        prm.playback_dev = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV;
+        /* honour the user's selection (media.setDevices), falling back to the OS defaults */
+        if (resolve_dev(g_cur_cap, 1, &ci, &cs) != 0 || cs >= 2) ci = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV;
+        if (resolve_dev(g_cur_play, 0, &pi, &ps) != 0 || ps >= 2) pi = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV;
+        prm.capture_dev = ci;
+        prm.playback_dev = pi;
         st = pjsua_set_snd_dev2(&prm);
         if (st != PJ_SUCCESS) {
             g_null_attached = 0;
@@ -211,8 +217,19 @@ cJSON* spc_media_devices_json(void)
     pjmedia_aud_dev_info info[SPC_MAX_AUDDEVS];
     unsigned count, i;
     cJSON *o = cJSON_CreateObject(), *cap = cJSON_CreateArray(), *play = cJSON_CreateArray(), *cur;
-    int cap_first = 1, play_first = 1;
+    int cap_def = -1, play_def = -1;
     if (enum_devs(info, &count) == 0) {
+        {   /* OS default devices: ask pjmedia what "default" resolves to */
+            pjmedia_aud_param dp;
+            if (pjmedia_aud_dev_default_param(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, &dp) == PJ_SUCCESS && dp.rec_id >= 0 && (unsigned)dp.rec_id < count) cap_def = dp.rec_id;
+            if (pjmedia_aud_dev_default_param(PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV, &dp) == PJ_SUCCESS && dp.play_id >= 0 && (unsigned)dp.play_id < count) play_def = dp.play_id;
+            if (cap_def < 0 || play_def < 0) {          /* fall back to the first device that can do the job */
+                for (i = 0; i < count; i++) {
+                    if (cap_def < 0 && info[i].input_count > 0) cap_def = (int)i;
+                    if (play_def < 0 && info[i].output_count > 0) play_def = (int)i;
+                }
+            }
+        }
         for (i = 0; i < count; i++) {
             char id[200];
             dev_id(&info[i], id, sizeof(id));
@@ -223,8 +240,7 @@ cJSON* spc_media_devices_json(void)
                 cJSON_AddStringToObject(d, "driver", info[i].driver);
                 cJSON_AddNumberToObject(d, "inputs", info[i].input_count);
                 cJSON_AddNumberToObject(d, "outputs", info[i].output_count);
-                cJSON_AddBoolToObject(d, "isDefault", cap_first);
-                cap_first = 0;
+                cJSON_AddBoolToObject(d, "isDefault", (int)i == cap_def);
                 cJSON_AddItemToArray(cap, d);
             }
             if (info[i].output_count > 0) {
@@ -234,8 +250,7 @@ cJSON* spc_media_devices_json(void)
                 cJSON_AddStringToObject(d, "driver", info[i].driver);
                 cJSON_AddNumberToObject(d, "inputs", info[i].input_count);
                 cJSON_AddNumberToObject(d, "outputs", info[i].output_count);
-                cJSON_AddBoolToObject(d, "isDefault", play_first);
-                play_first = 0;
+                cJSON_AddBoolToObject(d, "isDefault", (int)i == play_def);
                 cJSON_AddItemToArray(play, d);
             }
         }
@@ -440,7 +455,7 @@ static int h_set_codec_param(cJSON* p, cJSON** res)
             if (!e->string || n >= PJMEDIA_CODEC_MAX_FMTP_CNT) continue;
             spc_strlcpy(names[n], e->string, sizeof(names[n]));
             if (cJSON_IsString(e)) spc_strlcpy(vals[n], e->valuestring, sizeof(vals[n]));
-            else if (cJSON_IsNumber(e)) snprintf(vals[n], sizeof(vals[n]), "%d", (int)e->valuedouble);
+            else if (cJSON_IsNumber(e) && e->valuedouble > -1e9 && e->valuedouble < 1e9) snprintf(vals[n], sizeof(vals[n]), "%d", (int)e->valuedouble);
             else continue;
             prm.setting.dec_fmtp.param[n].name = spc_pjs(names[n]);
             prm.setting.dec_fmtp.param[n].val = spc_pjs(vals[n]);
@@ -624,10 +639,10 @@ static int h_ring_stop(cJSON* p, cJSON** res) { (void)p; (void)res; ring_stop();
 
 static int h_loopback(cJSON* p, cJSON** res)
 {
-    int en = spc_jbool(p, "enabled", 0);
+    int en = 0;
     pj_status_t st;
     (void)res;
-    if (!spc_jhas(p, "enabled")) return spc_err(SPC_E_INVALID_PARAM, 0, "'enabled' required");
+    if (!spc_jbool_strict(p, "enabled", &en)) return spc_err(SPC_E_INVALID_PARAM, 0, "'enabled' (bool) required");
     if (en && !g_loopback) {
         spc_media_ensure_clock();
         st = pjsua_conf_connect(0, 0);

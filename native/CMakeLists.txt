@@ -68,7 +68,7 @@ elseif(UNIX)
   target_link_options(spcore PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/exports.map")
 endif()
 if(UNIX AND NOT ANDROID)
-  target_link_libraries(spcore PRIVATE resolv)
+  target_link_libraries(spcore PRIVATE resolv m)
 endif()
 if(WIN32)
   target_link_libraries(spcore PRIVATE iphlpapi ws2_32)   # also in spc::deps; explicit for GetNetworkParams

@@ -583,12 +583,11 @@ static int resolve_host(const char* host, pj_sockaddr_in* out)
         return 0;
     }
     {
-        pj_addrinfo ai[4];
-        unsigned cnt = 4;
-        if (pj_getaddrinfo(pj_AF_INET(), &h, &cnt, ai) != PJ_SUCCESS || cnt == 0) return -1;
+        uint32_t a4 = 0;
+        if (spc_resolve_ipv4(host, &a4, 3000) != 0) return -1;      /* bounded: the worker must stay responsive */
         pj_bzero(out, sizeof(*out));
         out->sin_family = pj_AF_INET();
-        out->sin_addr = ai[0].ai_addr.ipv4.sin_addr;
+        out->sin_addr.s_addr = a4;
         return 0;
     }
 }
@@ -1777,8 +1776,7 @@ void spc_iax2_configure(const cJSON* iax)
     g_cfg_port = IAX_DEFAULT_PORT;
     g_cfg_enabled = 1;
     if (iax) {
-        g_cfg_port = spc_jint(iax, "port", IAX_DEFAULT_PORT);
-        if (g_cfg_port < 0 || g_cfg_port > 65535) g_cfg_port = IAX_DEFAULT_PORT;
+        if (!spc_jint_range(iax, "port", IAX_DEFAULT_PORT, 0, 65535, &g_cfg_port)) g_cfg_port = IAX_DEFAULT_PORT;
         g_cfg_enabled = spc_jbool(iax, "enabled", 1);
     }
     UK();
@@ -1860,10 +1858,13 @@ static int acct_fill(iax_acct* a, const cJSON* c)
     const char* s;
     cJSON* iax = spc_jobj(c, "iax");
     const char* host = iax ? spc_jstr(iax, "host") : NULL;
-    int port = iax ? spc_jint(iax, "port", 0) : 0;
+    int port = 0;
     char hbuf[128];
     cJSON* arr;
     cJSON* e;
+    if (iax && !spc_jint_range(iax, "port", 0, 0, 65535, &port)) return spc_err(SPC_E_INVALID_PARAM, 0, "'iax.port' must be an integer in 0..65535");
+    if (!spc_str_clean(host) || !spc_str_clean(spc_jstr(c, "domain")) || !spc_str_clean(spc_jstr(c, "username")) || !spc_str_clean(spc_jstr(c, "displayName")) || !spc_str_clean(spc_jstr(c, "callerId")))
+        return spc_err(SPC_E_INVALID_PARAM, 0, "control characters are not allowed");
     if (!host || !host[0]) host = spc_jstr(c, "domain");
     if (!host || !host[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "iax2 account needs 'iax.host' or 'domain'");
     spc_strlcpy(hbuf, host, sizeof(hbuf));
@@ -1890,11 +1891,10 @@ static int acct_fill(iax_acct* a, const cJSON* c)
     spc_strlcpy(a->context, s ? s : "", sizeof(a->context));
     s = spc_jstr(c, "displayName"); spc_strlcpy(a->display, s ? s : "", sizeof(a->display));
     s = spc_jstr(c, "callerId"); spc_strlcpy(a->caller_id, s ? s : "", sizeof(a->caller_id));
-    a->regexpires = spc_jint(c, "regExpires", 300);
-    if (a->regexpires < 10) a->regexpires = 10;
+    if (!spc_jint_range(c, "regExpires", 300, 10, 86400, &a->regexpires)) return spc_err(SPC_E_INVALID_PARAM, 0, "'regExpires' must be an integer in 10..86400");
     if (a->regexpires > 3600) a->regexpires = 3600;
-    a->retry_sec = spc_jint(c, "regRetrySec", 30);
-    a->first_retry_sec = spc_jint(c, "regFirstRetrySec", 5);
+    if (!spc_jint_range(c, "regRetrySec", 30, 0, 86400, &a->retry_sec)) return spc_err(SPC_E_INVALID_PARAM, 0, "'regRetrySec' must be an integer in 0..86400");
+    if (!spc_jint_range(c, "regFirstRetrySec", 5, 0, 86400, &a->first_retry_sec)) return spc_err(SPC_E_INVALID_PARAM, 0, "'regFirstRetrySec' must be an integer in 0..86400");
     if (a->retry_sec < 1) a->retry_sec = 30;
     if (a->first_retry_sec < 1) a->first_retry_sec = 5;
     a->ncodecs = 0;

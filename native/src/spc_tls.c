@@ -3,6 +3,9 @@
 #include "spc_ws_transport.h"
 #include <time.h>
 #include <ctype.h>
+#if defined(__APPLE__)
+#  include <TargetConditionals.h>
+#endif
 
 /* ---- sha256 ---- */
 typedef struct { uint32_t h[8]; uint64_t len; unsigned char buf[64]; size_t n; } sha_ctx;
@@ -99,39 +102,105 @@ size_t spc_pem_to_der(const char* pem, size_t pemlen, unsigned char* out, size_t
 typedef struct { char host[128]; char sha[65]; } pin_t;
 static pin_t g_pins[32];
 static int g_npins;
-static int64_t g_fail_ms;
+static struct { char host[96]; int64_t t; } g_fail[8];
+static int g_fail_pos;
 static char s_ca[512], s_cert[512], s_key[512], s_min[16];
 static int s_verify;
 
-void spc_tls_flag_failure(void) { g_fail_ms = spc_mono_ms(); }
-int spc_tls_recent_failure(void) { return g_fail_ms && (spc_mono_ms() - g_fail_ms) < 8000; }
+void spc_tls_flag_failure(const char* host)
+{
+    spc_registry_lock();
+    spc_strlcpy(g_fail[g_fail_pos].host, host ? host : "", sizeof(g_fail[0].host));
+    g_fail[g_fail_pos].t = spc_mono_ms();
+    g_fail_pos = (g_fail_pos + 1) % 8;
+    spc_registry_unlock();
+}
+/* host: the account's registrar host if known. An IP-literal host is matched exactly; a name falls back to
+ * "any TLS verification failure in the last 8 s" because the transport only knows the resolved address. */
+int spc_tls_recent_failure(const char* host)
+{
+    int i, r = 0, literal = 0;
+    int64_t now = spc_mono_ms();
+    if (host) {
+        pj_sockaddr tmp;
+        pj_str_t hs = spc_pjs(host);
+        literal = pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &hs, &tmp) == PJ_SUCCESS;
+    }
+    spc_registry_lock();
+    for (i = 0; i < 8; i++) {
+        if (!g_fail[i].t || now - g_fail[i].t > 8000) continue;
+        if (!literal || strcmp(g_fail[i].host, host) == 0) r = 1;
+    }
+    spc_registry_unlock();
+    return r;
+}
 
-void spc_tls_set_pins(const cJSON* pins)
+/* each pin: {host, sha256 = exactly 64 hex digits}. Returns 0 on success, -1 if any entry is invalid (nothing applied). */
+int spc_tls_set_pins(const cJSON* pins)
 {
     const cJSON* e;
+    pin_t np[32];
     int n = 0;
-    spc_registry_lock();
     cJSON_ArrayForEach(e, pins) {
         const char* h = spc_jstr(e, "host");
         const char* s = spc_jstr(e, "sha256");
         size_t i, k = 0;
-        if (!h || !s || n >= 32) continue;
-        spc_strlcpy(g_pins[n].host, h, sizeof(g_pins[n].host));
-        for (i = 0; s[i] && k < 64; i++) if (isxdigit((unsigned char)s[i])) g_pins[n].sha[k++] = (char)tolower((unsigned char)s[i]);
-        g_pins[n].sha[k] = 0;
+        if (!h || !s || n >= 32 || strlen(s) != 64 || !h[0]) return -1;
+        spc_strlcpy(np[n].host, h, sizeof(np[n].host));
+        for (i = 0; s[i]; i++) {
+            if (!isxdigit((unsigned char)s[i])) return -1;
+            np[n].sha[k++] = (char)tolower((unsigned char)s[i]);
+        }
+        np[n].sha[k] = 0;
         n++;
     }
+    spc_registry_lock();
+    memcpy(g_pins, np, sizeof(pin_t) * (size_t)n);
     g_npins = n;
     spc_registry_unlock();
+    return 0;
 }
 
 static int pinned(const char* sha)
 {
     int i, r = 0;
+    if (!sha || strlen(sha) != 64) return 0;          /* an uncomputable fingerprint never matches */
     spc_registry_lock();
     for (i = 0; i < g_npins; i++) if (strcmp(g_pins[i].sha, sha) == 0) r = 1;
     spc_registry_unlock();
     return r;
+}
+
+/* Is a usable CA configured for server verification? Fills `err` and returns 0 if not. */
+int spc_tls_check_ca(int verify, const char* ca, char* err, size_t en)
+{
+    if (!verify) return 1;
+    if (ca && ca[0]) {
+        FILE* f = fopen(ca, "rb");
+        if (!f) { snprintf(err, en, "tls.caFile '%s' is not readable", ca); return 0; }
+        fclose(f);
+        return 1;
+    }
+#if defined(__ANDROID__)
+    return 1;            /* system store directory is used */
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    snprintf(err, en, "tls.verifyServer requires tls.caFile on iOS (no system CA path is available to OpenSSL)");
+    return 0;
+#elif defined(_WIN32)
+    snprintf(err, en, "tls.verifyServer requires tls.caFile on Windows (no system CA path is available to OpenSSL)");
+    return 0;
+#else
+    {
+        static const char* const paths[] = { "/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", NULL };
+        int i;
+        for (i = 0; paths[i]; i++) {
+            FILE* f = fopen(paths[i], "rb");
+            if (f) { fclose(f); return 1; }
+        }
+    }
+    snprintf(err, en, "tls.verifyServer needs tls.caFile (no system CA bundle found)");
+    return 0;
+#endif
 }
 
 void spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* cert, const char* key, const char* minProto)
@@ -145,6 +214,9 @@ void spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* 
         spc_strlcpy(s_min, minProto ? minProto : "tls1.2", sizeof(s_min));
     }
     (void)s_verify;
+#if defined(__ANDROID__)
+    if (!s_ca[0] && G.tls_verify) st->ca_list_path = spc_pjs("/system/etc/security/cacerts");
+#endif
     if (!s_ca[0] && G.tls_verify) {
         static const char* const paths[] = { "/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", NULL };
         int i;
@@ -165,7 +237,7 @@ void spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* 
     st->verify_client = PJ_FALSE;
 }
 
-void spc_tls_cleanup(void) { g_fail_ms = 0; }
+void spc_tls_cleanup(void) { memset(g_fail, 0, sizeof(g_fail)); }
 
 static void verify_names(unsigned long vs, cJSON* arr)
 {
@@ -226,9 +298,12 @@ void spc_tls_on_transport_state(pjsip_transport* tp, pjsip_transport_state state
         pjsip_tls_state_info* ti = (pjsip_tls_state_info*)info->ext_info;
         ssi = ti->ssl_sock_info;
     }
-    if (is_tls && ssi && state == PJSIP_TP_STATE_CONNECTED && ssi->remote_cert_info) {
-        cert_sha(ssi->remote_cert_info, sha);
-        if (G.tls_verify && ssi->verify_status != 0 && tp->dir == PJSIP_TP_DIR_OUTGOING && !pinned(sha)) reject = 1;
+    if (is_tls && state == PJSIP_TP_STATE_CONNECTED && tp->dir == PJSIP_TP_DIR_OUTGOING) {
+        if (ssi && ssi->remote_cert_info) cert_sha(ssi->remote_cert_info, sha);
+        if (G.tls_verify) {
+            /* no certificate information at all, or a failed verification that is not pinned, is a rejection */
+            if (!ssi || !ssi->remote_cert_info || ssi->verify_status != 0) reject = !pinned(sha);
+        }
     }
     f = cJSON_CreateObject();
     cJSON_AddStringToObject(f, "transport", type);
@@ -254,11 +329,13 @@ void spc_tls_on_transport_state(pjsip_transport* tp, pjsip_transport_state state
         cJSON* v = cJSON_CreateObject();
         cJSON_AddStringToObject(v, "host", host);
         cJSON_AddStringToObject(v, "sha256", sha);
-        verify_names(ssi->verify_status, cJSON_AddArrayToObject(v, "verifyStatus"));
-        spc_jadd_pjstr(v, "subject", &ssi->remote_cert_info->subject.info);
-        spc_jadd_pjstr(v, "issuer", &ssi->remote_cert_info->issuer.info);
+        verify_names(ssi ? ssi->verify_status : 0, cJSON_AddArrayToObject(v, "verifyStatus"));
+        if (ssi && ssi->remote_cert_info) {
+            spc_jadd_pjstr(v, "subject", &ssi->remote_cert_info->subject.info);
+            spc_jadd_pjstr(v, "issuer", &ssi->remote_cert_info->issuer.info);
+        }
         spc_emit("transport.tlsVerify", v);
-        spc_tls_flag_failure();
+        spc_tls_flag_failure(host);
         pjsip_transport_shutdown(tp);
     }
 }

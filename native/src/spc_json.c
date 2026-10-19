@@ -1,5 +1,6 @@
 #include "spc_internal.h"
 #include <ctype.h>
+#include <math.h>
 
 const char* spc_jstr(const cJSON* o, const char* k)
 {
@@ -33,7 +34,40 @@ int spc_jint(const cJSON* o, const char* k, int def)
 uint64_t spc_ju64(const cJSON* o, const char* k)
 {
     double d = spc_jnum(o, k, 0);
-    return d > 0 ? (uint64_t)d : 0;
+    /* ids are positive integers below 2^53 (exactly representable); anything else is "missing" */
+    if (!(d >= 1.0 && d <= 9007199254740992.0) || d != floor(d)) return 0;
+    return (uint64_t)d;
+}
+uint64_t spc_jnum_to_id(const cJSON* e)
+{
+    double d;
+    if (!e || !cJSON_IsNumber(e)) return 0;
+    d = e->valuedouble;
+    if (!(d >= 1.0 && d <= 9007199254740992.0) || d != floor(d)) return 0;
+    return (uint64_t)d;
+}
+int spc_jint_range(const cJSON* o, const char* k, int def, int lo, int hi, int* out)
+{
+    const cJSON* v;
+    double d;
+    *out = def;
+    if (!o || !cJSON_IsObject(o)) return 1;
+    v = cJSON_GetObjectItemCaseSensitive((cJSON*)o, k);
+    if (!v || cJSON_IsNull(v)) return 1;
+    if (!cJSON_IsNumber(v)) return 0;
+    d = v->valuedouble;
+    if (!(d >= (double)lo && d <= (double)hi) || d != floor(d)) return 0;
+    *out = (int)d;
+    return 1;
+}
+int spc_jbool_strict(const cJSON* o, const char* k, int* out)
+{
+    const cJSON* v;
+    if (!o || !cJSON_IsObject(o)) return 0;
+    v = cJSON_GetObjectItemCaseSensitive((cJSON*)o, k);
+    if (!v || !cJSON_IsBool(v)) return 0;
+    *out = cJSON_IsTrue(v) ? 1 : 0;
+    return 1;
 }
 int spc_jbool(const cJSON* o, const char* k, int def)
 {
@@ -211,6 +245,48 @@ cJSON* spc_sockaddr_json_str(const pj_sockaddr* a)
     return cJSON_CreateString(buf);
 }
 
+/* RFC 3261 token characters */
+static int is_token_char(unsigned char c)
+{
+    return isalnum(c) || strchr("-.!%*_+`'~", c) != NULL;
+}
+int spc_hdr_name_ok(const char* n)
+{
+    static const char* const deny[] = { "via", "v", "cseq", "call-id", "i", "content-length", "l", "content-type", "c",
+        "from", "f", "to", "t", "route", "record-route", "contact", "m", "max-forwards", NULL };
+    size_t i, len;
+    if (!n || !n[0]) return 0;
+    len = strlen(n);
+    if (len > 64) return 0;
+    for (i = 0; i < len; i++) if (!is_token_char((unsigned char)n[i])) return 0;
+    for (i = 0; deny[i]; i++) if (spc_strieq(n, deny[i])) return 0;
+    return 1;
+}
+int spc_hdr_value_ok(const char* v)
+{
+    if (!v || strlen(v) > 4096) return 0;
+    for (; *v; v++) if (*v == '\r' || *v == '\n' || (unsigned char)*v < 0x09) return 0;
+    return 1;
+}
+/* no control characters (used for strings that end up inside SIP URIs / headers) */
+int spc_str_clean(const char* s)
+{
+    if (!s) return 1;
+    for (; *s; s++) if ((unsigned char)*s < 0x20 || *s == 0x7f) return 0;
+    return 1;
+}
+int spc_validate_headers(const cJSON* headers, char* err, size_t en)
+{
+    const cJSON* h;
+    if (!headers) return 1;
+    if (!cJSON_IsObject(headers)) { snprintf(err, en, "'headers' must be an object"); return 0; }
+    cJSON_ArrayForEach(h, headers) {
+        if (!h->string || !spc_hdr_name_ok(h->string)) { snprintf(err, en, "header name '%s' is not allowed", h->string ? h->string : ""); return 0; }
+        if (!cJSON_IsString(h) || !spc_hdr_value_ok(h->valuestring)) { snprintf(err, en, "invalid value for header '%s'", h->string); return 0; }
+    }
+    return 1;
+}
+
 void spc_fill_msg_data(pj_pool_t* pool, pjsua_msg_data* md, const cJSON* headers)
 {
     const cJSON* h;
@@ -220,6 +296,7 @@ void spc_fill_msg_data(pj_pool_t* pool, pjsua_msg_data* md, const cJSON* headers
         pj_str_t name, val;
         pjsip_generic_string_hdr* gh;
         if (!h->string || !cJSON_IsString(h) || !h->valuestring) continue;
+        if (!spc_hdr_name_ok(h->string) || !spc_hdr_value_ok(h->valuestring)) continue;     /* defence in depth */
         name = spc_pjs(h->string);
         pj_strdup2_with_null(pool, &name, h->string);
         pj_strdup2_with_null(pool, &val, h->valuestring);
@@ -239,7 +316,7 @@ cJSON* spc_headers_from_rdata(pjsip_rx_data* rdata)
     if (!rdata || !rdata->msg_info.msg) return o;
     for (h = rdata->msg_info.msg->hdr.next; h != (pjsip_hdr*)&rdata->msg_info.msg->hdr; h = h->next) {
         char name[64];
-        char buf[1024];
+        char buf[4096];
         int n, i, ok = 0;
         const char* val;
         spc_pjcopy(name, sizeof(name), &h->name);

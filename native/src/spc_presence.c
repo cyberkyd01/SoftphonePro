@@ -139,17 +139,49 @@ static void cb_buddy_dlg_state(pjsua_buddy_id pj)
     emit_buddy(b);
 }
 
-/* ---- dialog-info XML ---- */
-static const char* xml_find_tag(const char* s, const char* e, const char* tag, const char** tag_end)
+/* ---- dialog-info XML (bounded: the body is not NUL terminated; namespace prefixes such as <dm:dialog> accepted) ---- */
+static int is_delim(char c) { return c == '>' || c == ' ' || c == '/' || c == '\r' || c == '\n' || c == '\t'; }
+
+/* p points at '<' (or "</"); returns the start of the local name (after an optional "prefix:") or NULL */
+static const char* local_name(const char* p, const char* e, int closing)
+{
+    const char* q = p + 1 + (closing ? 1 : 0);
+    const char* r = q;
+    int n = 0;
+    if (q >= e) return NULL;
+    while (r < e && !is_delim(*r) && n < 32) { if (*r == ':') return r + 1; r++; n++; }
+    return q;
+}
+static int name_is(const char* ln, const char* e, const char* tag)
 {
     size_t tl = strlen(tag);
+    return (size_t)(e - ln) > tl && strncmp(ln, tag, tl) == 0 && is_delim(ln[tl]);
+}
+static const char* xml_find_tag(const char* s, const char* e, const char* tag, const char** tag_end)
+{
     const char* p = s;
     while (p < e && (p = (const char*)memchr(p, '<', (size_t)(e - p))) != NULL) {
-        if ((size_t)(e - p) > tl + 1 && strncmp(p + 1, tag, tl) == 0 && (p[1 + tl] == '>' || p[1 + tl] == ' ' || p[1 + tl] == '/' || p[1 + tl] == '\r' || p[1 + tl] == '\n')) {
-            const char* gt = (const char*)memchr(p, '>', (size_t)(e - p));
-            if (!gt) return NULL;
-            if (tag_end) *tag_end = gt;
-            return p;
+        if (p + 1 < e && p[1] != '/' && p[1] != '?' && p[1] != '!') {
+            const char* ln = local_name(p, e, 0);
+            if (ln && name_is(ln, e, tag)) {
+                const char* gt = (const char*)memchr(p, '>', (size_t)(e - p));
+                if (!gt) return NULL;
+                if (tag_end) *tag_end = gt;
+                return p;
+            }
+        }
+        p++;
+    }
+    return NULL;
+}
+/* position of the "</[prefix:]tag>" at or after s */
+static const char* xml_find_close(const char* s, const char* e, const char* tag)
+{
+    const char* p = s;
+    while (p < e && (p = (const char*)memchr(p, '<', (size_t)(e - p))) != NULL) {
+        if (p + 1 < e && p[1] == '/') {
+            const char* ln = local_name(p, e, 1);
+            if (ln && name_is(ln, e, tag)) return p;
         }
         p++;
     }
@@ -157,18 +189,16 @@ static const char* xml_find_tag(const char* s, const char* e, const char* tag, c
 }
 static int xml_attr(const char* tagstart, const char* tagend, const char* name, char* out, size_t n)
 {
-    char pat[40];
     const char* p = tagstart;
     size_t nl = strlen(name);
     out[0] = 0;
-    snprintf(pat, sizeof(pat), "%s=", name);
     while (p < tagend) {
-        const char* f = strstr(p, pat);
+        const char* f = (const char*)memchr(p, name[0], (size_t)(tagend - p));
         char q;
         const char* v;
         size_t l;
-        if (!f || f >= tagend) return 0;
-        if (f > tagstart && !isspace((unsigned char)f[-1])) { p = f + 1; continue; }
+        if (!f) return 0;
+        if ((size_t)(tagend - f) < nl + 2 || strncmp(f, name, nl) != 0 || f[nl] != '=' || !isspace((unsigned char)f[-1])) { p = f + 1; continue; }
         q = f[nl + 1];
         if (q != '"' && q != '\'') return 0;
         v = f + nl + 2;
@@ -185,14 +215,12 @@ static int xml_text(const char* s, const char* e, const char* tag, char* out, si
 {
     const char* te;
     const char* t = xml_find_tag(s, e, tag, &te);
-    char close[40];
     const char* c;
     size_t l;
     out[0] = 0;
     if (!t || te[-1] == '/') return 0;
-    snprintf(close, sizeof(close), "</%s>", tag);
-    c = strstr(te, close);
-    if (!c || c > e) return 0;
+    c = xml_find_close(te, e, tag);
+    if (!c) return 0;
     l = (size_t)(c - te - 1);
     if (l >= n) l = n - 1;
     memcpy(out, te + 1, l);
@@ -225,8 +253,8 @@ static void parse_dialog_info(spc_buddy* b, const char* xml, size_t len)
         /* tag "dialog" must not be "dialog-info" (xml_find_tag requires delimiter after name) */
         if (te[-1] == '/') { dend = te; }
         else {
-            dend = strstr(te, "</dialog>");
-            if (!dend || dend > e) dend = e;
+            dend = xml_find_close(te, e, "dialog");
+            if (!dend) dend = e;
         }
         if (n < MAX_DLGS) {
             dlg_t* x = &nd[n];
@@ -282,6 +310,13 @@ static pj_bool_t mod_on_rx_request(pjsip_rx_data* rd)
     if (!msg->body || !msg->body->data || msg->body->len == 0) return PJ_FALSE;
     if (!rd->msg_info.from || !rd->msg_info.from->uri) return PJ_FALSE;
     if (!PJSIP_URI_SCHEME_IS_SIP(rd->msg_info.from->uri) && !PJSIP_URI_SCHEME_IS_SIPS(rd->msg_info.from->uri)) return PJ_FALSE;
+    /* Only NOTIFYs inside one of our own subscription dialogs count: unknown Call-ID/tags are spoofs. */
+    if (!rd->msg_info.cid || !rd->msg_info.to || !rd->msg_info.from) return PJ_FALSE;
+    {
+        pjsip_dialog* dlg = pjsip_ua_find_dialog(&rd->msg_info.cid->id, &rd->msg_info.to->tag, &rd->msg_info.from->tag, PJ_TRUE);
+        if (!dlg) return PJ_FALSE;
+        pjsip_dlg_dec_lock(dlg);
+    }
     from = (pjsip_sip_uri*)pjsip_uri_get_uri(rd->msg_info.from->uri);
     spc_pjcopy(fuser, sizeof(fuser), &from->user);
     spc_pjcopy(fhost, sizeof(fhost), &from->host);
@@ -419,7 +454,7 @@ static void cb_pager_status2(pjsua_call_id call_id, const pj_str_t* to, const pj
     spc_jadd_pjstr(f, "reason", reason);
     cJSON_AddBoolToObject(f, "ok", status / 100 == 2);
     spc_emit("im.status", f);
-    free(mid);
+    spc_token_free(mid);
 }
 
 static void cb_typing2(pjsua_call_id call_id, const pj_str_t* from, const pj_str_t* to, const pj_str_t* contact,
@@ -630,10 +665,12 @@ static int h_im_send(cJSON* p, cJSON** res)
     d = spc_pjs(dest);
     mime = spc_pjs(ct ? ct : "text/plain");
     b = spc_pjs(body);
-    ud = spc_strdup(mid ? mid : "");
+    ud = (char*)spc_token_new(strlen(mid ? mid : "") + 1);
+    if (!ud) { pj_pool_release(pool); return spc_err(SPC_E_INTERNAL, 0, "out of memory"); }
+    strcpy(ud, mid ? mid : "");
     st = pjsua_im_send(acc, &d, &mime, &b, &md, ud);
     pj_pool_release(pool);
-    if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_im_send");
+    if (st != PJ_SUCCESS) { spc_token_free(ud); return spc_pjerr(st, "pjsua_im_send"); }
     return SPC_OK;
 }
 
@@ -645,13 +682,14 @@ static int h_im_typing(cJSON* p, cJSON** res)
     pj_str_t d;
     pj_status_t st;
     (void)res;
-    if (!to || !spc_jhas(p, "typing")) return spc_err(SPC_E_INVALID_PARAM, 0, "'to' and 'typing' required");
+    int tv;
+    if (!to || !spc_jbool_strict(p, "typing", &tv)) return spc_err(SPC_E_INVALID_PARAM, 0, "'to' and 'typing' (bool) required");
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
     if (spc_uri_normalize(acc, to, dest, sizeof(dest)) != 0 || pjsua_verify_url(dest) != PJ_SUCCESS)
         return spc_err(SPC_E_INVALID_PARAM, 0, "invalid 'to'");
     d = spc_pjs(dest);
-    st = pjsua_im_typing(acc, &d, spc_jbool(p, "typing", 0), NULL);
+    st = pjsua_im_typing(acc, &d, tv, NULL);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_im_typing");
     return SPC_OK;
 }

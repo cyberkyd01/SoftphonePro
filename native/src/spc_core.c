@@ -15,6 +15,9 @@ spc_global G;
 static void pj_log_early(int level, const char* data, int len) { (void)level; (void)data; (void)len; }
 
 static int g_locks_ready = 0;
+static volatile long g_once_state;
+static SPC_TLS int t_is_worker;      /* current thread is the request worker */
+static SPC_TLS int t_in_cb;          /* current thread is inside a sink callback (event/response delivery) */
 
 /* ------------------------------------------------------------------ */
 /* errors                                                              */
@@ -55,17 +58,18 @@ int spc_pjerr(pj_status_t status, const char* what)
 /* ------------------------------------------------------------------ */
 /* locks                                                               */
 /* ------------------------------------------------------------------ */
-static void ensure_locks(void)
+static void init_locks_once(void)
 {
-    if (g_locks_ready) return;
     spc_mutex_init(&G.emit_mtx);
     spc_mutex_init(&G.reg_mtx);
+    spc_mutex_init(&G.tg_mtx);
     spc_mutex_init(&G.q_mtx);
     spc_cond_init(&G.q_cv);
     G.next_req_id = 1;
     G.cid_counter = 0;
     g_locks_ready = 1;
 }
+static void ensure_locks(void) { spc_once(&g_once_state, init_locks_once); }
 void spc_registry_lock(void) { spc_mutex_lock(&G.reg_mtx); }
 void spc_registry_unlock(void) { spc_mutex_unlock(&G.reg_mtx); }
 
@@ -83,10 +87,25 @@ void spc_ensure_pj_thread(const char* name)
 /* ------------------------------------------------------------------ */
 /* event delivery                                                      */
 /* ------------------------------------------------------------------ */
+#define SPC_RING_MAX_BYTES (4 * 1024 * 1024)
+static size_t g_ring_bytes;
+
+static void ring_drop_oldest(void)
+{
+    if (G.ring_count <= 0) return;
+    if (G.ring[G.ring_head]) g_ring_bytes -= strlen(G.ring[G.ring_head]);
+    free(G.ring[G.ring_head]);
+    G.ring[G.ring_head] = NULL;
+    G.ring_head = (G.ring_head + 1) % SPC_EVENT_RING_MAX;
+    G.ring_count--;
+}
+
 static void deliver_locked(const char* s)
 {
     int delivered = 0;
+    t_in_cb++;
     if (G.cb) { G.cb(s, G.cb_user); delivered = 1; }
+    t_in_cb--;
     if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
         Dart_CObject o;
         o.type = Dart_CObject_kString;
@@ -96,14 +115,12 @@ static void deliver_locked(const char* s)
     }
     if (!delivered) {
         int idx;
-        if (G.ring_count == SPC_EVENT_RING_MAX) {
-            free(G.ring[G.ring_head]);
-            G.ring[G.ring_head] = NULL;
-            G.ring_head = (G.ring_head + 1) % SPC_EVENT_RING_MAX;
-            G.ring_count--;
-        }
+        size_t len = strlen(s);
+        if (G.ring_count == SPC_EVENT_RING_MAX) ring_drop_oldest();
+        while (G.ring_count > 0 && g_ring_bytes + len > SPC_RING_MAX_BYTES) ring_drop_oldest();
         idx = (G.ring_head + G.ring_count) % SPC_EVENT_RING_MAX;
         G.ring[idx] = spc_strdup(s);
+        g_ring_bytes += len;
         G.ring_count++;
     }
 }
@@ -129,6 +146,12 @@ void spc_emit(const char* event, cJSON* fields)
     out = (char*)malloc(n);
     if (!out) { free(body); return; }
     spc_mutex_lock(&G.emit_mtx);
+    if (!G.cb && !(G.dart_port && G.dart_ok) && (strcmp(event, "sip.trace") == 0 || strcmp(event, "log") == 0)) {
+        /* diagnostic firehose: never buffer it while detached (and do not burn a seq number) */
+        spc_mutex_unlock(&G.emit_mtx);
+        free(body); free(out);
+        return;
+    }
     G.seq++;
     if (body && strlen(body) > 2)
         snprintf(out, n, "{\"type\":\"event\",\"event\":\"%s\",\"ts\":%lld,\"seq\":%lld,%s",
@@ -146,7 +169,9 @@ void spc_emit(const char* event, cJSON* fields)
 static void post_response(const char* s)
 {
     spc_mutex_lock(&G.emit_mtx);
+    t_in_cb++;
     if (G.cb) G.cb(s, G.cb_user);
+    t_in_cb--;
     if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
         Dart_CObject o;
         o.type = Dart_CObject_kString;
@@ -165,7 +190,10 @@ static int replay_ring_locked(void)
         G.ring_head = (G.ring_head + 1) % SPC_EVENT_RING_MAX;
         G.ring_count--;
         if (s) {
+            g_ring_bytes -= strlen(s);
+            t_in_cb++;
             if (G.cb) G.cb(s, G.cb_user);
+            t_in_cb--;
             if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
                 Dart_CObject o;
                 o.type = Dart_CObject_kString;
@@ -177,6 +205,7 @@ static int replay_ring_locked(void)
         }
     }
     G.ring_head = 0;
+    g_ring_bytes = 0;
     return n;
 }
 
@@ -237,6 +266,7 @@ typedef struct spc_req {
     char* method;
     char* params;
     spc_waiter* waiter;
+    int deferred;
 } spc_req;
 
 static const spc_method* g_tables[8];
@@ -252,7 +282,7 @@ static const spc_method* find_method(const char* name)
     return NULL;
 }
 
-static char* build_response(int64_t id, int ok, cJSON* result, int code)
+static char* build_response_ex(int64_t id, int ok, cJSON* result, int code, pj_status_t status, const char* msg)
 {
     cJSON* r = cJSON_CreateObject();
     char* s;
@@ -264,13 +294,80 @@ static char* build_response(int64_t id, int ok, cJSON* result, int code)
     } else {
         cJSON* e = cJSON_AddObjectToObject(r, "error");
         cJSON_AddStringToObject(e, "code", spc_err_name(code));
-        cJSON_AddNumberToObject(e, "status", (double)g_err.status);
-        cJSON_AddStringToObject(e, "message", g_err.msg);
+        cJSON_AddNumberToObject(e, "status", (double)status);
+        cJSON_AddStringToObject(e, "message", msg);
         if (result) cJSON_Delete(result);
     }
     s = cJSON_PrintUnformatted(r);
     cJSON_Delete(r);
     return s;
+}
+
+static char* build_response(int64_t id, int ok, cJSON* result, int code)
+{
+    return build_response_ex(id, ok, result, code, g_err.status, g_err.msg);
+}
+
+/* hands a finished response to the sync waiter or to the attached sinks */
+static void deliver_response(spc_waiter* w, char* resp)
+{
+    if (w) {
+        spc_mutex_lock(&G.q_mtx);
+        if (w->abandoned) {
+            spc_cond_destroy(&w->cv);
+            free(w);
+            free(resp);
+        } else {
+            w->resp = resp;
+            w->done = 1;
+            spc_cond_broadcast(&w->cv);
+        }
+        spc_mutex_unlock(&G.q_mtx);
+    } else {
+        post_response(resp);
+        free(resp);
+    }
+}
+
+/* ---- deferred responses: a handler may answer later from another thread (keeps the worker free) ---- */
+#define SPC_MAX_DEFERRED 64
+static struct { int64_t id; spc_waiter* w; int used; } g_def[SPC_MAX_DEFERRED];
+static spc_req* g_cur_rq;
+
+int64_t spc_defer_response(void)
+{
+    int i;
+    int64_t id = 0;
+    if (!g_cur_rq) return 0;
+    spc_mutex_lock(&G.q_mtx);
+    for (i = 0; i < SPC_MAX_DEFERRED; i++) {
+        if (!g_def[i].used) {
+            g_def[i].used = 1; g_def[i].id = g_cur_rq->id; g_def[i].w = g_cur_rq->waiter;
+            id = g_cur_rq->id;
+            g_cur_rq->waiter = NULL;
+            g_cur_rq->deferred = 1;
+            break;
+        }
+    }
+    spc_mutex_unlock(&G.q_mtx);
+    return id;
+}
+
+/* safe from any thread; a response for an unknown/expired id (e.g. after shutdown) is dropped */
+void spc_respond_deferred(int64_t id, int code, pj_status_t status, const char* msg, cJSON* result)
+{
+    int i;
+    spc_waiter* w = NULL;
+    int found = 0;
+    char* resp;
+    spc_mutex_lock(&G.q_mtx);
+    for (i = 0; i < SPC_MAX_DEFERRED; i++)
+        if (g_def[i].used && g_def[i].id == id) { w = g_def[i].w; g_def[i].used = 0; found = 1; break; }
+    spc_mutex_unlock(&G.q_mtx);
+    if (!found) { if (result) cJSON_Delete(result); return; }
+    resp = build_response_ex(id, code == SPC_OK, result, code, status, msg ? msg : "");
+    if (!resp) return;
+    deliver_response(w, resp);
 }
 
 static void process_request(spc_req* rq)
@@ -284,7 +381,7 @@ static void process_request(spc_req* rq)
     g_err.code = 0; g_err.status = 0; g_err.msg[0] = 0;
     m = find_method(rq->method);
     if (!m) {
-        code = spc_err(SPC_E_INVALID_PARAM, 0, "unknown method '%s'", rq->method);
+        code = spc_err(SPC_E_UNSUPPORTED, 0, "unknown method '%s'", rq->method);
     } else {
         if (rq->params && rq->params[0]) {
             params = cJSON_Parse(rq->params);
@@ -296,23 +393,23 @@ static void process_request(spc_req* rq)
         }
         if (code == SPC_OK && !G.started && !(m->flags & SPC_M_PRESTART))
             code = spc_err(SPC_E_NOT_STARTED, 0, "core.start has not been called");
+        g_cur_rq = rq;
         if (code == SPC_OK) code = m->fn(params, &res);
+        g_cur_rq = NULL;
     }
     if (params) cJSON_Delete(params);
+    if (rq->deferred && code == SPC_OK) {      /* the handler will answer later */
+        if (res) cJSON_Delete(res);
+        return;
+    }
+    if (rq->deferred) {                         /* deferred but then failed synchronously: answer now */
+        spc_respond_deferred(rq->id, code, g_err.status, g_err.msg, res);
+        return;
+    }
     resp = build_response(rq->id, code == SPC_OK, res, code);
     if (!resp) resp = spc_strdup("{\"type\":\"response\",\"ok\":false}");
     if (rq->waiter) {
-        spc_mutex_lock(&G.q_mtx);
-        if (rq->waiter->abandoned) {
-            spc_cond_destroy(&rq->waiter->cv);
-            free(rq->waiter);
-            free(resp);
-        } else {
-            rq->waiter->resp = resp;
-            rq->waiter->done = 1;
-            spc_cond_broadcast(&rq->waiter->cv);
-        }
-        spc_mutex_unlock(&G.q_mtx);
+        deliver_response(rq->waiter, resp);
     } else {
         post_response(resp);
         free(resp);
@@ -326,6 +423,7 @@ static void worker_main(void* arg)
     (void)arg;
     pj_bzero(desc, sizeof(desc));
     pj_thread_register("spc-worker", desc, &th);
+    t_is_worker = 1;
     for (;;) {
         spc_req* rq;
         spc_mutex_lock(&G.q_mtx);
@@ -378,6 +476,10 @@ SPC_API char* spc_request_sync(const char* method, const char* params_json, int3
     int rem;
     if (!g_locks_ready || !G.inited) {
         return spc_strdup("{\"type\":\"response\",\"id\":0,\"ok\":false,\"error\":{\"code\":\"NOT_STARTED\",\"status\":0,\"message\":\"spc_init has not been called\"}}");
+    }
+    if (t_is_worker || t_in_cb) {
+        /* would deadlock: the worker cannot wait for itself, and event callbacks run under the emit lock */
+        return spc_strdup("{\"type\":\"response\",\"id\":0,\"ok\":false,\"error\":{\"code\":\"BUSY\",\"status\":0,\"message\":\"spc_request_sync must not be called from the worker or an event callback\"}}");
     }
     w = (spc_waiter*)calloc(1, sizeof(*w));
     if (!w) return NULL;
@@ -457,6 +559,7 @@ SPC_API void spc_shutdown(void)
 {
     int i;
     if (!g_locks_ready || !G.inited) return;
+    if (t_is_worker || t_in_cb) return;      /* would self-join / deadlock: ignored (documented) */
     G.shutting = 1;
     spc_ensure_pj_thread("spc-shutdown");
     /* run a non-graceful stop on the worker, then quit it */
@@ -470,6 +573,16 @@ SPC_API void spc_shutdown(void)
     spc_mutex_unlock(&G.q_mtx);
     if (G.worker_running) spc_thread_join(&G.worker);
     G.worker_running = 0;
+    /* answer requests whose deferred response never arrived */
+    {
+        int di;
+        for (di = 0; di < SPC_MAX_DEFERRED; di++) {
+            if (g_def[di].used) {
+                int64_t did = g_def[di].id;
+                spc_respond_deferred(did, SPC_E_NOT_STARTED, 0, "shutdown", NULL);
+            }
+        }
+    }
     /* drain anything left in the queue */
     spc_mutex_lock(&G.q_mtx);
     while (G.q_head) {
@@ -577,9 +690,61 @@ static int create_tp(pjsip_transport_type_e type, const pjsua_transport_config* 
     return 0;
 }
 
+/* ---- user_data tokens (IM / OPTIONS) ---- */
+typedef struct tok_hdr { struct tok_hdr* next; } tok_hdr;
+static tok_hdr* g_tokens;
+static spc_mutex_t g_tok_mtx;
+static volatile long g_tok_once;
+static void tok_init(void) { spc_mutex_init(&g_tok_mtx); }
+void* spc_token_new(size_t size)
+{
+    tok_hdr* t = (tok_hdr*)calloc(1, sizeof(tok_hdr) + size);
+    spc_once(&g_tok_once, tok_init);
+    if (!t) return NULL;
+    spc_mutex_lock(&g_tok_mtx);
+    t->next = g_tokens;
+    g_tokens = t;
+    spc_mutex_unlock(&g_tok_mtx);
+    return (void*)(t + 1);
+}
+void spc_token_free(void* p)
+{
+    tok_hdr *t = ((tok_hdr*)p) - 1, **pp;
+    if (!p) return;
+    spc_once(&g_tok_once, tok_init);
+    spc_mutex_lock(&g_tok_mtx);
+    for (pp = &g_tokens; *pp; pp = &(*pp)->next)
+        if (*pp == t) { *pp = t->next; free(t); break; }      /* unknown / already freed tokens are ignored */
+    spc_mutex_unlock(&g_tok_mtx);
+}
+void spc_tokens_free_all(void)
+{
+    tok_hdr* t;
+    spc_once(&g_tok_once, tok_init);
+    spc_mutex_lock(&g_tok_mtx);
+    t = g_tokens;
+    g_tokens = NULL;
+    spc_mutex_unlock(&g_tok_mtx);
+    while (t) { tok_hdr* n = t->next; free(t); t = n; }
+}
+
 /* ------------------------------------------------------------------ */
 /* DNS                                                                 */
 /* ------------------------------------------------------------------ */
+static int g_ns_mode;                              /* 0 auto, 1 none (OS resolver), 2 explicit */
+static char g_ns_explicit[PJ_DNS_RESOLVER_MAX_NS][64];
+static int g_ns_explicit_n;
+
+static int valid_ns_addr(const char* s)
+{
+    pj_in_addr a4;
+    pj_in6_addr a6;
+    pj_str_t str;
+    if (!s || !s[0] || strlen(s) > 60) return 0;
+    str = spc_pjs(s);
+    return pj_inet_pton(pj_AF_INET(), &str, &a4) == PJ_SUCCESS || pj_inet_pton(pj_AF_INET6(), &str, &a6) == PJ_SUCCESS;
+}
+
 static int apply_nameservers(char servers[][64], int n)
 {
     pjsip_endpoint* ep = pjsua_get_pjsip_endpt();
@@ -681,8 +846,14 @@ static int h_core_start(cJSON* p, cJSON** res)
     {
         cJSON* n = cJSON_GetObjectItemCaseSensitive(p, "nameservers");
         if (n && cJSON_IsArray(n)) {
+            cJSON* e;
             ns_mode = cJSON_GetArraySize(n) == 0 ? 1 : 2;
             ns_list = n;
+            cJSON_ArrayForEach(e, n) {
+                if (!cJSON_IsString(e) || !valid_ns_addr(e->valuestring))
+                    return spc_err(SPC_E_INVALID_PARAM, 0, "invalid nameserver address");
+            }
+            if (cJSON_GetArraySize(n) > PJ_DNS_RESOLVER_MAX_NS) return spc_err(SPC_E_INVALID_PARAM, 0, "too many nameservers");
         } else if (n && cJSON_IsString(n) && !spc_strieq(n->valuestring, "auto")) {
             return spc_err(SPC_E_INVALID_PARAM, 0, "nameservers must be \"auto\" or an array");
         }
@@ -712,8 +883,38 @@ static int h_core_start(cJSON* p, cJSON** res)
     G.ipv6 = spc_jbool(tr, "ipv6", 0);
     G.qos = spc_jbool(tr, "qos", 1);
 
+    /* numeric / string validation: everything is checked before any engine state is created */
+    {
+        int v, ok = 1;
+        char e[200];
+        e[0] = 0;
+        if (!spc_str_clean(G.user_agent) || !spc_hdr_value_ok(G.user_agent)) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid userAgent");
+        if (!spc_jint_range(p, "incomingAutoRingMs", 1500, 0, 600000, &v)) ok = 0;
+        if (!spc_jint_range(p, "incomingUnattendedMs", 30000, 0, 3600000, &v)) ok = 0;
+        if (!spc_jint_range(p, "statsIntervalMs", 0, 0, 3600000, &v)) ok = 0;
+        if (!ok) return spc_err(SPC_E_INVALID_PARAM, 0, "timer value out of range");
+        if (media) {
+            int rp, rr;
+            cJSON* jbo = spc_jobj(media, "jb");
+            if (!spc_jint_range(media, "rtpPort", 4000, 0, 65535, &rp) || !spc_jint_range(media, "rtpPortRange", 0, 0, 65535, &rr) ||
+                rp + rr > 65535) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid rtpPort / rtpPortRange");
+            if (jbo) {
+                static const char* const k[] = { "initMs", "minPreMs", "maxPreMs", "maxMs" };
+                int i;
+                for (i = 0; i < 4; i++) if (!spc_jint_range(jbo, k[i], -1, -1, 10000, &v)) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid jb.%s", k[i]);
+            }
+            if (!spc_jint_range(media, "clockRate", 0, 0, 192000, &v) || !spc_jint_range(media, "sndClockRate", 0, 0, 192000, &v))
+                return spc_err(SPC_E_INVALID_PARAM, 0, "invalid clock rate");
+        }
+        if (tls) {
+            if (!spc_tls_check_ca(spc_jbool(tls, "verifyServer", 0), spc_jstr(tls, "caFile"), e, sizeof(e)))
+                return spc_err(SPC_E_INVALID_PARAM, 0, "%s", e);
+        }
+    }
+
     st = pjsua_create();
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_create");
+    spc_diag_new_session();
 
     pjsua_config_default(&ucfg);
     ucfg.max_calls = (unsigned)G.max_calls;
@@ -804,16 +1005,17 @@ static int h_core_start(cJSON* p, cJSON** res)
     spc_presence_init_module();
 
     /* nameservers */
+    g_ns_mode = ns_mode;
+    g_ns_explicit_n = 0;
     if (ns_mode == 2) {
         cJSON* e;
-        char ns[PJ_DNS_RESOLVER_MAX_NS][64];
-        int n = 0;
         cJSON_ArrayForEach(e, ns_list) {
-            if (cJSON_IsString(e) && n < PJ_DNS_RESOLVER_MAX_NS) spc_strlcpy(ns[n++], e->valuestring, 64);
+            if (g_ns_explicit_n < PJ_DNS_RESOLVER_MAX_NS) spc_strlcpy(g_ns_explicit[g_ns_explicit_n++], e->valuestring, 64);
         }
-        apply_nameservers(ns, n);
+        st = apply_nameservers(g_ns_explicit, g_ns_explicit_n);
+        if (st != PJ_SUCCESS) { spc_trace_shutdown(); pjsua_destroy(); return spc_pjerr(st, "apply nameservers"); }
     } else if (ns_mode == 0 && ns_auto_n > 0) {
-        apply_nameservers(ns_auto, ns_auto_n);
+        apply_nameservers(ns_auto, ns_auto_n);     /* best effort: auto-detected servers may be unusable */
     }
 
     /* transports */
@@ -938,18 +1140,19 @@ static void do_stop(int graceful)
     if (!G.started) return;
     g_stats_gen++;
     if (graceful) { spc_iax2_unregister_all(4000); spc_account_graceful_unregister(4000); }
-    spc_call_hangup_all_and_wait(1500);
+    spc_call_hangup_all_and_wait(graceful ? 1500 : 500);
     spc_iax2_shutdown();
     spc_media_shutdown();
     spc_trace_set(0);
     spc_lan_stop();
-    pjsua_destroy2(0);
+    pjsua_destroy2(graceful ? 0 : PJSUA_DESTROY_NO_RX_MSG);   /* non-graceful: do not wait for unregistration responses */
     G.started = 0;
     spc_call_cleanup_all();
     spc_presence_cleanup();
     spc_account_cleanup();
     spc_tls_cleanup();
     spc_trace_shutdown();
+    spc_tokens_free_all();
     g_ntps = 0;
     pj_log_set_log_func(&pj_log_early);
     spc_emit("core.stopped", NULL);
@@ -1029,19 +1232,20 @@ static int h_core_set_log_level(cJSON* p, cJSON** res)
     int lvl = spc_jint(p, "level", 3);
     (void)res;
     if (lvl < 0 || lvl > 6) return spc_err(SPC_E_INVALID_PARAM, 0, "level must be 0..6");
+    if (spc_jhas(p, "forward")) G.log_forward = spc_jbool(p, "forward", 0);
     g_lcfg.level = (unsigned)lvl;
     g_lcfg.console_level = (unsigned)lvl;
     pjsua_reconfigure_logging(&g_lcfg);
     pj_log_set_level(lvl);
-    G.log_forward = spc_jbool(p, "forward", 0);
     return SPC_OK;
 }
 
 static int h_core_set_sip_trace(cJSON* p, cJSON** res)
 {
     (void)res;
-    if (!spc_jhas(p, "enabled")) return spc_err(SPC_E_INVALID_PARAM, 0, "missing 'enabled'");
-    G.sip_trace = spc_jbool(p, "enabled", 0);
+    int en;
+    if (!spc_jbool_strict(p, "enabled", &en)) return spc_err(SPC_E_INVALID_PARAM, 0, "'enabled' (bool) required");
+    G.sip_trace = en;
     spc_trace_set(G.sip_trace);
     return SPC_OK;
 }
@@ -1051,6 +1255,14 @@ static int h_core_handle_ip_change(cJSON* p, cJSON** res)
     pjsua_ip_change_param prm;
     pj_status_t st;
     (void)p; (void)res;
+    /* the network changed: refresh the resolver's nameserver list first */
+    if (g_ns_mode == 0) {
+        char ns[PJ_DNS_RESOLVER_MAX_NS][64];
+        int n = spc_dns_detect(ns, PJ_DNS_RESOLVER_MAX_NS);
+        if (n > 0) apply_nameservers(ns, n);
+    } else if (g_ns_mode == 2) {
+        apply_nameservers(g_ns_explicit, g_ns_explicit_n);
+    }
     pjsua_ip_change_param_default(&prm);
     st = pjsua_handle_ip_change(&prm);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_handle_ip_change");
@@ -1071,8 +1283,12 @@ static int h_core_set_nameservers(cJSON* p, cJSON** res)
         if (n < PJ_DNS_RESOLVER_MAX_NS) spc_strlcpy(ns[n++], e->valuestring, 64);
     }
     if (n == 0) return SPC_OK;
+    for (st = 0; st < n; st++) if (!valid_ns_addr(ns[st])) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid nameserver address");
     st = apply_nameservers(ns, n);
     if (st != PJ_SUCCESS) return spc_pjerr(st, "set nameservers");
+    memcpy(g_ns_explicit, ns, sizeof(ns));
+    g_ns_explicit_n = n;
+    g_ns_mode = 2;
     return SPC_OK;
 }
 
@@ -1085,7 +1301,7 @@ static int h_core_set_tls_pins(cJSON* p, cJSON** res)
     cJSON_ArrayForEach(e, arr) {
         if (!spc_jstr(e, "host") || !spc_jstr(e, "sha256")) return spc_err(SPC_E_INVALID_PARAM, 0, "pin needs host and sha256");
     }
-    spc_tls_set_pins(arr);
+    if (spc_tls_set_pins(arr) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "each pin needs a host and a sha256 of exactly 64 hex digits");
     return SPC_OK;
 }
 
@@ -1094,6 +1310,7 @@ static int h_core_set_user_agent(cJSON* p, cJSON** res)
     const char* ua = spc_jstr(p, "userAgent");
     (void)res;
     if (!ua) return spc_err(SPC_E_INVALID_PARAM, 0, "missing 'userAgent'");
+    if (!spc_hdr_value_ok(ua)) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid userAgent");
     spc_strlcpy(G.user_agent, ua, sizeof(G.user_agent));
     return SPC_OK;
 }

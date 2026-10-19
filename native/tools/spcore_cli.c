@@ -3,6 +3,9 @@
  *   {"m":"core.start","p":{...},"sync":true} sync: response printed after the call returns
  *   {"m":"__sleep","p":{"ms":N}}  {"m":"__quit"}  {"m":"__detach"}  {"m":"__attach"}
  */
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#  define _POSIX_C_SOURCE 200809L
+#endif
 #include "spcore.h"
 #include "cJSON.h"
 #include <stdio.h>
@@ -34,10 +37,26 @@ static void put_line(const char* s)
     unlock();
 }
 
+static volatile int g_shutdown_from_cb;
+
+static void local_reply(const char* m, const char* extra);
+
+/* __shutdown_from_cb: the next event makes the callback call spc_shutdown() and spc_request_sync() from inside the
+ * callback, which must both return immediately (BUSY / no-op) instead of deadlocking. */
 static void on_event(const char* json, void* user)
 {
     (void)user;
     put_line(json);
+    if (g_shutdown_from_cb) {
+        char* r;
+        char ex[512];
+        g_shutdown_from_cb = 0;
+        r = spc_request_sync("core.ping", "{}", 5000);
+        spc_shutdown();
+        snprintf(ex, sizeof(ex), "\"ok\":true,\"code\":%s", r && strstr(r, "\"BUSY\"") ? "\"BUSY\"" : "\"OTHER\"");
+        local_reply("__shutdown_from_cb", ex);
+        spc_free(r);
+    }
 }
 
 static char* read_line(void)
@@ -64,7 +83,7 @@ static char* read_line(void)
 
 static void local_reply(const char* m, const char* extra)
 {
-    char buf[256];
+    char buf[1024];
     snprintf(buf, sizeof(buf), "{\"type\":\"local\",\"m\":\"%s\"%s%s}", m, extra ? "," : "", extra ? extra : "");
     put_line(buf);
 }
@@ -97,6 +116,9 @@ int main(void)
             cJSON* ms = p ? cJSON_GetObjectItem(p, "ms") : NULL;
             msleep(ms && cJSON_IsNumber(ms) ? (int)ms->valuedouble : 0);
             local_reply("__sleep", "\"ok\":true");
+        } else if (strcmp(m, "__shutdown_from_cb") == 0) {
+            g_shutdown_from_cb = 1;
+            local_reply("__arm", "\"ok\":true");
         } else if (strcmp(m, "__detach") == 0) {
             spc_set_event_callback(NULL, NULL);
             local_reply("__detach", "\"ok\":true");

@@ -41,7 +41,10 @@ SPC_API void        spc_shutdown(void);                    // destroys pjsua, jo
    do the small native mechanics listed below. The event path must never
    take a lock that the worker holds while calling into pjsua.
    * `spc_request_sync` and `spc_shutdown` must never be called from the
-     event callback or a pjsua callback.
+     event callback or a pjsua callback. Called from the worker or from inside
+     an event callback anyway, `spc_request_sync` returns a `BUSY` response
+     immediately and `spc_shutdown` returns without doing anything (instead of
+     deadlocking or joining itself).
 4. **Event ordering.** Events produced synchronously by a request are
    delivered *before* that request's response. For example, the terminal
    `call.state` caused by `call.hangup` arrives before the hangup's
@@ -74,6 +77,13 @@ SPC_API void        spc_shutdown(void);                    // destroys pjsua, jo
 {"type":"response","id":17,"ok":true,"result":{...}}
 {"type":"response","id":17,"ok":false,"error":{"code":"INVALID_PARAM","status":70004,"message":"..."}}
 ```
+Unknown method names fail with `UNSUPPORTED` (so a newer Dart package can probe
+for a feature on an older engine). Numeric parameters are range-checked and
+must be integral where an integer is documented (ids, ports, timers); a value
+outside its range, `NaN`-like or non-integral, fails with `INVALID_PARAM`. Flags
+documented as required (`mute`, `detached`, `register`, `enabled`, `typing`,
+`bridge`) must be JSON booleans.
+
 Error codes: `INVALID_PARAM`, `NOT_FOUND`, `NOT_STARTED`, `ALREADY`, `PJ_ERROR`
 (with `status` = pj_status_t and `message` = pj_strerror), `TIMEOUT`,
 `UNSUPPORTED`, `BUSY`, `INTERNAL`.
@@ -101,11 +111,11 @@ after `=`.
 | `core.info` | `{}` | `{version, pjsip, started:b, accounts:i, calls:i, natType?:s, sndMode, soundDevice:{capture,playback,open:b}}` |
 | `core.snapshot` | `{}` | `{accounts:[AccountInfo], calls:[CallInfo], buddies:[BuddyInfo], devices:{...media.devices}, seq}`; resync after attach |
 | `core.ping` | `{}` | `{}`; worker liveness check. Dart restarts the engine if it times out (5 s). |
-| `core.setLogLevel` | `{level:i(0-6), forward:b}` | `{}`; when `forward` is set, log lines go out as `log` events, rate-limited to 200/s |
+| `core.setLogLevel` | `{level:i(0-6), forward?:b}` | `{}`; when `forward` is set, log lines go out as `log` events, rate-limited to 200/s; omitting `forward` keeps the current setting. `log` and `sip.trace` events are never buffered while no event sink is attached. |
 | `core.setSipTrace` | `{enabled:b}` | `{}` |
-| `core.handleIpChange` | `{}` | `{}`; `pjsua_handle_ip_change`; progress is reported through `core.ipChangeProgress` events |
+| `core.handleIpChange` | `{}` | `{}`; re-detects (or re-applies) the nameservers, then `pjsua_handle_ip_change`; progress is reported through `core.ipChangeProgress` events |
 | `core.setNameservers` | `{servers:[s]}` | `{}`; empty = keep the current list. Uses `pj_dns_resolver_set_ns`, creating the resolver if needed. |
-| `core.setTlsPins` | `{pins:[{host:s, sha256:s}]}` | `{}`; a pinned host whose certificate matches is accepted even when verification fails (self-signed PBX) |
+| `core.setTlsPins` | `{pins:[{host:s, sha256:s}]}` | `{}`; a certificate whose SHA-256 matches a pin is accepted even when verification fails (self-signed PBX). `sha256` must be exactly 64 hex digits and `host` non-empty, otherwise `INVALID_PARAM` (nothing is applied). |
 | `core.setUserAgent` | `{userAgent:s}` | `{}` |
 
 `core.start` params:
@@ -128,6 +138,12 @@ after `=`.
     "tcp": {"port": 5060, "enabled": true},
     "tls": {"port": 5061, "enabled": true, "verifyServer": false, "caFile": null,
             "certFile": null, "keyFile": null, "minProto": "tls1.2"},
+          // verifyServer:true needs trusted CAs. macOS/Linux fall back to the system bundle (/etc/ssl/cert.pem,
+          // /etc/ssl/certs/ca-certificates.crt, ...), Android to /system/etc/security/cacerts. iOS and Windows have
+          // no CA path OpenSSL can use: core.start fails with INVALID_PARAM unless caFile points to a readable
+          // PEM bundle (the app ships a Mozilla bundle). An unreadable caFile also fails the start. The verdict is
+          // applied right after the handshake, before any SIP data is sent; a connection with no certificate, or
+          // with a failed verification and no matching pin, is dropped (transport.tlsVerify event).
     "ipv6": false,                              // also create IPv6 UDP/TCP/TLS transports
     "qos": true                                 // DSCP: SIP=signalling (CS3), RTP=voice (EF)
   },
@@ -155,7 +171,7 @@ This is a userless local account on the main UDP transport, used by
 |---|---|---|
 | `account.add` | AccountConfig | `{acc:i}` |
 | `account.modify` | `{acc|uid, ...AccountConfig}` | `{}` (pjsua_acc_modify; re-registers) |
-| `account.remove` | `{acc|uid}` | `{}` (unregisters, deletes) |
+| `account.remove` | `{acc|uid}` | `{}` (unregisters, deletes); always ends with an `account.reg` event whose `regState` is `unregistered` |
 | `account.register` | `{acc|uid, register:b}` | `{}`; true sends REGISTER/refresh, false unregisters |
 | `account.setPresence` | `{acc|uid, status:"online\|away\|busy\|dnd\|onthephone\|offline", note?:s}` | `{}` |
 | `account.list` | `{}` | `{accounts:[AccountInfo]}` |
@@ -213,6 +229,17 @@ AccountConfig:
   "iax": {"host": "", "port": 4569, "context": null}   // proto=iax2 only; uses username/password
 }
 ```
+Numeric AccountConfig fields are range-checked (`INVALID_PARAM` otherwise):
+`regExpires` 10..86400, `regRetrySec` / `regFirstRetrySec` 0..86400,
+`regRetryRandomSec` / `regDelayBeforeRefreshSec` / `keepAliveSec` 0..3600 (the
+last: 0 = off), `unregTimeoutMs` 0..60000, `mwiExpires` 0..86400,
+`srtpSecureSignaling` 0..2, `regUseProxy` 0..3, `timerSe` 90..86400,
+`localPort` 0..65535, `dscp.*` 0..63. The same ranges apply to IAX2 accounts
+(`iax.port` 0..65535). `core.start` validates `media.rtpPort` +
+`media.rtpPortRange` <= 65535, `media.jb.*` >= -1, the timers
+(`incomingAutoRingMs`, `incomingUnattendedMs`, `statsIntervalMs`) and the
+nameserver addresses (IPv4 or IPv6 literals) before anything is created.
+
 AccountInfo, which is also the payload of the `account.reg` event:
 ```json
 {"acc":0,"uid":"…","proto":"sip","uri":"sip:1001@pbx","regState":"registered",
@@ -256,12 +283,25 @@ Every call request identifies the call by `cid` (u64).
 | `call.recordStart` | `{cid, file:s, mix?:"both\|remote\|local"="both"}` | `{file}` WAV PCM16 at the bridge clock rate |
 | `call.recordStop` | `{cid}` | `{file, durationMs}`; returns only after the WAV file is finalised |
 | `call.update` | `{cid, useUpdate?:b=false}` | `{}` (re-INVITE/UPDATE: refreshes media/contact) |
-| `call.sendRequest` | `{cid, method:s, headers?:{}, body?:s, contentType?:s}` | `{}` (in-dialog INFO/MESSAGE/NOTIFY...) |
+| `call.sendRequest` | `{cid, method:s, headers?:{}, body?:s, contentType?:s}` | `{}`; in-dialog request. Only `INFO`, `MESSAGE`, `NOTIFY` and `OPTIONS` are allowed; anything that changes the dialog or INVITE session (`BYE`, `INVITE`, `ACK`, `CANCEL`, `PRACK`, `UPDATE`, `REFER`, ...) is `INVALID_PARAM` - use the dedicated `call.*` methods. |
 | `call.info` | `{cid}` | `CallInfo` |
 | `call.stats` | `{cid}` | `CallStats` |
 | `call.list` | `{}` | `{calls:[CallInfo]}` |
 | `call.playFile` | `{cid, file:s, loop?:b}` | `{}`; plays a WAV into the call (the remote party hears it) |
 | `call.stopFile` | `{cid}` | `{}` |
+
+**Custom headers** (`headers` on `call.make`, `call.answer`, `call.reject`, `call.pickup`,
+`call.sendRequest` and the account-level `headers`): names must be SIP tokens
+(letters, digits and `-.!%*_+`'~`), values must not contain CR, LF or NUL and
+are limited to 4 KB. The headers the stack owns - `Via`, `CSeq`, `Call-ID`,
+`Content-Length`, `Content-Type`, `From`, `To`, `Route`, `Record-Route`,
+`Contact`, `Max-Forwards` (and their compact forms) - cannot be set; any
+violation fails the request with `INVALID_PARAM`. `userAgent`, `displayName`,
+`username`, `domain`, `registrar`, `authUser` and `callerId` must not contain
+control characters.
+
+`call.make` and `call.pickup` return only after the call has a `cid`; they never
+answer `ok` with `cid: 0` (a call that is already gone fails with `PJ_ERROR`).
 
 CallInfo:
 ```json
@@ -351,8 +391,8 @@ BuddyInfo:
 | method | params | result |
 |---|---|---|
 | `diag.natType` | `{}` | `{}` → `diag.natType` event |
-| `diag.resolve` | `{host:s, srv?:b, transport?:s}` | `{addresses:[s], srv:[{target,port,priority,weight}]}` |
-| `diag.optionsPing` | `{acc|uid, target?:s}` | `{}` → `diag.options` event `{code, reason, rttMs}` |
+| `diag.resolve` | `{host:s, srv?:b, transport?:"udp\|tcp\|tls"}` | `{addresses:[s], srv:[{target,port,priority,weight}]}`; never blocks the worker (the response is sent when the lookup completes). If the lookup has not finished after 5 s the request fails with `TIMEOUT`. `srv:true` without a DNS resolver (no nameservers) is `UNSUPPORTED`. |
+| `diag.optionsPing` | `{acc|uid, target?:s}` | `{}` → `diag.options` event `{code, reason, rttMs}`; an unanswered ping reports `code:408` after 5 s |
 
 ## 3. Events
 

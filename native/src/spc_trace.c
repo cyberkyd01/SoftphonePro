@@ -79,7 +79,6 @@ static pjsip_module g_mod = {
 int spc_trace_init(void)
 {
     pj_status_t st;
-    if (g_installed) return 0;
     g_mod.prev = g_mod.next = NULL;
     g_mod.id = -1;
     st = pjsip_endpt_register_module(pjsua_get_pjsip_endpt(), &g_mod);

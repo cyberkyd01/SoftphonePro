@@ -1063,12 +1063,17 @@ class TestIaxWire(IaxBase):
         base = 65400
         d = f.dialogs[-1]
         f.send(2, 0, tone_ulaw(160, 0), d=d, ts=base, raw_sub=0x82)
+        # rxLevel is the instantaneous level of the bridge port and falls back to 0 as soon as the burst ends, so it
+        # must be sampled while audio is flowing (sampling after the loop raced the end of the burst).
+        peak = 0
         for i in range(1, 160):
             f.send_mini((base + 20 * i), tone_ulaw(160, 160 * i), d=d)
             time.sleep(0.02)
-        st = self.media_ok(c, inc["cid"])
+            if i % 8 == 0 and i > 24:
+                peak = max(peak, c.req("call.stats", {"cid": inc["cid"]})["rxLevel"])
+        st = c.req("call.stats", {"cid": inc["cid"]})
         self.assertGreaterEqual(st["rx"]["packets"], 140)
-        self.assertGreater(st["rxLevel"], 20)
+        self.assertGreater(max(peak, st["rxLevel"]), 20, "no audio reached the bridge during the burst: %s" % st)
         self.assertGreater(st["tx"]["packets"], 0) if False else None
         # incoming DTMF
         f.send(12, ord("7"), d=d)
