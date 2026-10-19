@@ -159,6 +159,18 @@ class AppSettings {
   /// Play ringback, busy and congestion tones locally.
   bool get progressTones => _b('progressTones', true);
 
+  // ---- local automation API (lib/automation; off by default)
+  bool get automationEnabled => _b('automationEnabled', false);
+
+  /// TCP port on 127.0.0.1.
+  int get automationPort => _i('automationPort', 7771);
+
+  /// Bearer token (generated when the API is first enabled).
+  String get automationToken => _s('automationToken', '');
+
+  /// Browser origins (`https://crm.example.com`) allowed to call the API.
+  List<String> get automationOrigins => _l('automationOrigins');
+
   /// Speed dial slots 1-9: `{number, label, accountId?}`.
   Map<int, SpeedDialEntry> get speedDial {
     final raw = _m['speedDial'];

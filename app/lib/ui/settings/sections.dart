@@ -12,6 +12,8 @@ import '../../core/theme.dart';
 import '../../security/app_lock_settings.dart';
 import '../../models/chat.dart';
 import '../../platform/android/android_reliability_group.dart';
+import '../../automation/automation_section.dart';
+import '../../platform/desktop/default_handler.dart';
 import '../../platform/platform_services.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/contacts_controller.dart';
@@ -380,6 +382,11 @@ class CallsSection extends ConsumerWidget {
             SwitchTile(key: const Key('sync-feature-codes'), icon: Icons.sync_alt_rounded, title: 'Sync DND / forwarding to PBX via feature codes', subtitle: 'Dials the account\'s star codes (for example *78) briefly when you change DND or forwarding', value: s.syncFeatureCodes, onChanged: (v) => _s(ref).update({'syncFeatureCodes': v})),
           ],
         ),
+        if (ref.watch(defaultHandlerServiceProvider).supported)
+          const SettingsGroup(
+            title: 'System',
+            children: [DefaultHandlerTile()],
+          ),
         SettingsGroup(
           title: 'Auto-answer',
           footer: 'Call forwarding and per-account auto-answer are set in each account.',
@@ -914,6 +921,7 @@ class AdvancedSection extends ConsumerWidget {
               SwitchTile(icon: Icons.minimize_rounded, title: 'Close to tray', subtitle: 'Closing the window keeps SoftphonePro running so calls can still ring. Quit from the tray / menu bar icon.', value: s.minimizeToTray, onChanged: (v) => _s(ref).update({'minimizeToTray': v})),
             ],
           ),
+        if (desktop) const AutomationSettingsGroup(),
       ],
     );
   }
