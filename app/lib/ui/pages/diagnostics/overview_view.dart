@@ -7,6 +7,7 @@ import '../../../diagnostics/network_wizard.dart';
 import '../../../diagnostics/sip_trace_controller.dart';
 import '../../../diagnostics/system_info.dart';
 import '../../../diagnostics/trace_export.dart';
+import '../../../services/engine_controller.dart';
 import '../../widgets/settings_tiles.dart';
 import 'logs_view.dart';
 
@@ -117,6 +118,11 @@ class OverviewView extends ConsumerWidget {
     final logs = ref.read(logsProvider.notifier).lines;
     b.writeln('== Engine log (last ${logs.length > 300 ? 300 : logs.length}) ==');
     b.writeln(formatLogs(logs.length > 300 ? logs.sublist(logs.length - 300) : logs));
+    final fileLog = readEngineLogTail(ref.read(engineProvider.notifier).logFilePath);
+    if (fileLog.isNotEmpty) {
+      b.writeln('== Engine log file (logs/engine.log, tail) ==');
+      b.writeln(fileLog);
+    }
     final msgs = ref.read(sipTraceProvider.notifier).messages;
     b.writeln('== SIP trace (last ${msgs.length > 200 ? 200 : msgs.length}) ==');
     b.writeln(buildTraceText(msgs.length > 200 ? msgs.sublist(msgs.length - 200) : msgs));

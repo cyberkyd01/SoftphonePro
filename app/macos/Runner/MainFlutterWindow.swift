@@ -1,4 +1,5 @@
 import Cocoa
+import Contacts
 import FlutterMacOS
 import ServiceManagement
 
@@ -44,6 +45,10 @@ class MainFlutterWindow: NSWindow {
         result(self.setLoginItem(enable))
       case "loginItemEnabled":
         result(self.loginItemEnabled())
+      case "requestContactsPermission":
+        self.requestContactsAccess { result($0) }
+      case "readContacts":
+        self.readContacts { result($0) }
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -92,6 +97,47 @@ class MainFlutterWindow: NSWindow {
       ch.invokeMethod("onLink", arguments: s)
     } else {
       pendingLinks.append(s)
+    }
+  }
+
+  // MARK: - device contacts (Contacts framework)
+
+  private func requestContactsAccess(_ done: @escaping (String) -> Void) {
+    switch CNContactStore.authorizationStatus(for: .contacts) {
+    case .authorized: done("granted")
+    case .denied, .restricted: done("permanentlyDenied")
+    default:
+      CNContactStore().requestAccess(for: .contacts) { ok, _ in
+        DispatchQueue.main.async { done(ok ? "granted" : "permanentlyDenied") }
+      }
+    }
+  }
+
+  private func readContacts(_ done: @escaping ([[String: Any]]) -> Void) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      var out: [[String: Any]] = []
+      if CNContactStore.authorizationStatus(for: .contacts) == .authorized {
+        let keys: [CNKeyDescriptor] = [
+          CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
+          CNContactPhoneNumbersKey as CNKeyDescriptor,
+          CNContactEmailAddressesKey as CNKeyDescriptor,
+        ]
+        let req = CNContactFetchRequest(keysToFetch: keys)
+        try? CNContactStore().enumerateContacts(with: req) { c, _ in
+          let name = CNContactFormatter.string(from: c, style: .fullName) ?? ""
+          let numbers: [[String: String]] = c.phoneNumbers.map {
+            [
+              "label": CNLabeledValue<NSString>.localizedString(forLabel: $0.label ?? "other"),
+              "number": $0.value.stringValue,
+            ]
+          }
+          let emails = c.emailAddresses.map { $0.value as String }
+          if !numbers.isEmpty || !emails.isEmpty {
+            out.append(["id": c.identifier, "name": name, "numbers": numbers, "emails": emails])
+          }
+        }
+      }
+      DispatchQueue.main.async { done(out) }
     }
   }
 

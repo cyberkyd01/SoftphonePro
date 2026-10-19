@@ -18,6 +18,7 @@ import '../platform/platform_services.dart';
 import '../storage/app_database.dart';
 import '../storage/repositories.dart';
 import '../storage/secrets_store.dart';
+import 'ringtones.dart';
 
 /// An engine plus whether it is the in-memory simulator.
 class EngineHandle {
@@ -151,4 +152,26 @@ class NoticeController extends Notifier<AppNotice?> {
 
 final noticeProvider = NotifierProvider<NoticeController, AppNotice?>(
   NoticeController.new,
+);
+
+/// Turns a ringtone name into a playable local file (overridable in tests).
+final ringtoneFileProvider = Provider<Future<String?> Function(String name)>(
+  (ref) => (name) async {
+    try {
+      return await defaultRingtoneFile(name);
+    } catch (_) {
+      return null;
+    }
+  },
+);
+
+/// Local path of the recording-beep WAV (null if unavailable).
+final recordBeepFileProvider = Provider<Future<String?> Function()>(
+  (ref) => () async {
+    try {
+      return await supportAssetFile(kRecordBeepAsset);
+    } catch (_) {
+      return null;
+    }
+  },
 );

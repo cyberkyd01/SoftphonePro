@@ -24,12 +24,17 @@ class DialPad extends StatelessWidget {
     super.key,
     required this.onDigit,
     this.onVoicemail,
+    this.onLongPressDigit,
     this.compact = false,
     this.maxWidth = 320,
   });
 
   final void Function(String digit) onDigit;
   final VoidCallback? onVoicemail;
+
+  /// Long-press on digits 1-9 (speed dial). Takes precedence over
+  /// [onVoicemail] for `1` when set.
+  final void Function(String digit)? onLongPressDigit;
   final bool compact;
   final double maxWidth;
 
@@ -57,9 +62,12 @@ class DialPad extends StatelessWidget {
                       digit: d,
                       compact: compact,
                       onTap: () => onDigit(d),
+                      speedDial: onLongPressDigit != null && RegExp(r'[1-9]').hasMatch(d),
                       onLongPress: d == '0'
                           ? () => onDigit('+')
-                          : (d == '1' && onVoicemail != null ? onVoicemail : null),
+                          : (onLongPressDigit != null && RegExp(r'[1-9]').hasMatch(d)
+                                ? () => onLongPressDigit!(d)
+                                : (d == '1' && onVoicemail != null ? onVoicemail : null)),
                     ),
                 ],
               ),
@@ -77,11 +85,13 @@ class DialKey extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.compact = false,
+    this.speedDial = false,
   });
   final String digit;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool compact;
+  final bool speedDial;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +101,9 @@ class DialKey extends StatelessWidget {
     return Semantics(
       button: true,
       label: digit == '*' ? 'Star' : (digit == '#' ? 'Pound' : digit),
-      hint: digit == '0' ? 'Long press for plus' : (digit == '1' && onLongPress != null ? 'Long press for voicemail' : null),
+      hint: digit == '0'
+          ? 'Long press for plus'
+          : (speedDial ? 'Long press for speed dial' : (digit == '1' && onLongPress != null ? 'Long press for voicemail' : null)),
       excludeSemantics: true,
       child: Material(
         color: context.colors.card,

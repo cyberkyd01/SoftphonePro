@@ -120,9 +120,77 @@ class AppSettings {
   /// Fixed LAN Link TCP port (0 = random).
   int get lanLinkPort => _i('lanLinkPort', 0);
 
+  /// Ask before allowing an intercom from a paired device (else auto-allow).
+  bool get lanIntercomPrompt => _b('lanIntercomPrompt', false);
+
   // ---- developer / flow
   int get logLevel => _i('logLevel', 3);
   bool get sipTrace => _b('sipTrace', false);
   bool get useSimulator => _b('useSimulator', false);
   bool get onboardingDone => _b('onboardingDone', false);
+
+  // ---- app lock (PIN itself lives in the secrets store)
+  /// Minutes in the background before the app locks again (0 = immediately).
+  int get appLockMinutes => _i('appLockMinutes', 1);
+  bool get appLockBiometrics => _b('appLockBiometrics', true);
+
+  // ---- polish A1 (new fields are appended)
+  /// User-provided CA bundle (PEM); empty = bundled Mozilla CA list.
+  String get customCaFile => _s('customCaFile', '');
+
+  /// Place sip:/tel: links as calls immediately instead of filling the dialer.
+  bool get callLinksImmediately => _b('callLinksImmediately', false);
+
+  /// Dial the PBX feature codes when per-account DND / forwarding change.
+  bool get syncFeatureCodes => _b('syncFeatureCodes', false);
+
+  /// Dial plan helpers (passed to DialRules).
+  String get stripPrefix => _s('stripPrefix', '');
+  String get plusReplacement => _s('plusReplacement', '');
+
+  /// Jitter buffer (-1 = engine default) and packet time.
+  int get jbInitMs => _i('jbInitMs', -1);
+  int get jbMinPreMs => _i('jbMinPreMs', -1);
+  int get jbMaxPreMs => _i('jbMaxPreMs', -1);
+  int get jbMaxMs => _i('jbMaxMs', -1);
+  int get ptime => _i('ptime', 20);
+
+  // ---- polish A2 (appended)
+  /// Play ringback, busy and congestion tones locally.
+  bool get progressTones => _b('progressTones', true);
+
+  /// Speed dial slots 1-9: `{number, label, accountId?}`.
+  Map<int, SpeedDialEntry> get speedDial {
+    final raw = _m['speedDial'];
+    if (raw is! Map) return const {};
+    final out = <int, SpeedDialEntry>{};
+    for (final e in raw.entries) {
+      final k = int.tryParse('${e.key}');
+      if (k == null || k < 1 || k > 9 || e.value is! Map) continue;
+      final v = SpeedDialEntry.fromJson(Map<String, dynamic>.from(e.value as Map));
+      if (v.number.isNotEmpty) out[k] = v;
+    }
+    return out;
+  }
+}
+
+class SpeedDialEntry {
+  const SpeedDialEntry({required this.number, this.label = '', this.accountId});
+  final String number;
+  final String label;
+  final String? accountId;
+
+  factory SpeedDialEntry.fromJson(Map<String, dynamic> j) {
+    final a = j['accountId'] as String?;
+    return SpeedDialEntry(
+      number: j['number'] as String? ?? '',
+      label: j['label'] as String? ?? '',
+      accountId: (a == null || a.isEmpty) ? null : a,
+    );
+  }
+  Map<String, dynamic> toJson() => {
+    'number': number,
+    'label': label,
+    if (accountId != null) 'accountId': accountId,
+  };
 }

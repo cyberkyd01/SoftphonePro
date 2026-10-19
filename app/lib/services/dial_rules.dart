@@ -84,6 +84,7 @@ class DialRules {
     this.emergencyNumbers = const ['911', '112', '999', '000'],
     this.plusReplacement,
     this.stripPrefix = '',
+    this.defaultCountryPrefix = '',
   });
 
   final List<DialRule> rules;
@@ -94,6 +95,9 @@ class DialRules {
 
   /// Prefix removed from the start of every number before rules (e.g. `9`).
   final String stripPrefix;
+
+  /// Added in place of the trunk `0` of national numbers (e.g. `+44`).
+  final String defaultCountryPrefix;
 
   static final RegExp _uriLike = RegExp(
     r'^(sips?:|tel:|callto:)|@',
@@ -124,7 +128,14 @@ class DialRules {
     if (stripPrefix.isNotEmpty && s.startsWith(stripPrefix) && s.length > 4) {
       s = s.substring(stripPrefix.length);
     }
-    if (plusReplacement != null && s.startsWith('+')) {
+    if (defaultCountryPrefix.isNotEmpty &&
+        s.length > 4 &&
+        s.startsWith('0') &&
+        !s.startsWith('00') &&
+        RegExp(r'^\d+$').hasMatch(s)) {
+      s = defaultCountryPrefix + s.substring(1);
+    }
+    if (plusReplacement != null && plusReplacement!.isNotEmpty && s.startsWith('+')) {
       s = plusReplacement! + s.substring(1);
     }
     for (final r in rules) {

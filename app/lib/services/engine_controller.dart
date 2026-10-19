@@ -8,6 +8,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 
 import '../models/app_settings.dart';
 import '../platform/android/android_platform_services.dart';
+import 'engine_files.dart';
 import 'providers.dart';
 import 'settings_controller.dart';
 
@@ -31,6 +32,15 @@ final engineLogProvider = NotifierProvider<EngineLogController, List<String>>(
   EngineLogController.new,
 );
 
+/// Bumped whenever the audio device list may have changed (hot-plug).
+class DeviceRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+  void bump() => state++;
+}
+
+final deviceRevisionProvider = NotifierProvider<DeviceRevision, int>(DeviceRevision.new);
+
 enum EnginePhase { idle, starting, running, failed }
 
 class EngineState {
@@ -42,6 +52,7 @@ class EngineState {
     this.note,
     this.error,
     this.startResult,
+    this.libraryLoaded = true,
   });
   final EnginePhase phase;
   final bool demo;
@@ -55,6 +66,10 @@ class EngineState {
   /// Result of the last successful `core.start` (transports, pjsip, LAN).
   final CoreStartResult? startResult;
 
+  /// False only when the native library could not be loaded at all.
+  /// A failed phase with a loaded library is a blocking start failure.
+  final bool libraryLoaded;
+
   bool get running => phase == EnginePhase.running;
 
   EngineState copyWith({
@@ -65,6 +80,7 @@ class EngineState {
     String? note,
     String? error,
     CoreStartResult? startResult,
+    bool? libraryLoaded,
   }) => EngineState(
     phase: phase ?? this.phase,
     demo: demo ?? this.demo,
@@ -73,15 +89,21 @@ class EngineState {
     note: note ?? this.note,
     error: error,
     startResult: startResult ?? this.startResult,
+    libraryLoaded: libraryLoaded ?? this.libraryLoaded,
   );
 }
 
-CoreConfig buildCoreConfig(AppSettings s) {
+/// Loader for the CA bundle copy and engine log paths (override in tests).
+final engineFilesProvider = Provider<EngineFilesLoader>((ref) => prepareEngineFiles);
+
+CoreConfig buildCoreConfig(AppSettings s, {EngineFiles files = EngineFiles.none}) {
+  final customCa = s.customCaFile.trim();
   return CoreConfig(
     userAgent: kUserAgent,
     logLevel: s.logLevel,
     logForward: s.logLevel >= 4,
     sipTrace: s.sipTrace,
+    logFile: files.logFile,
     nameservers: s.dnsServers.isEmpty ? null : s.dnsServers,
     stunServers: s.stunServers,
     statsIntervalMs: 0,
@@ -92,6 +114,7 @@ CoreConfig buildCoreConfig(AppSettings s) {
         port: s.tlsPort == 0 ? 5061 : s.tlsPort,
         enabled: s.tlsEnabled,
         verifyServer: s.tlsVerify,
+        caFile: customCa.isNotEmpty ? customCa : files.caFile,
       ),
       ipv6: s.ipv6,
       qos: s.qos,
@@ -105,6 +128,13 @@ CoreConfig buildCoreConfig(AppSettings s) {
         agc: s.agc,
       ),
       vad: s.vad,
+      ptime: s.ptime,
+      jb: JbConfig(
+        initMs: s.jbInitMs,
+        minPreMs: s.jbMinPreMs,
+        maxPreMs: s.jbMaxPreMs,
+        maxMs: s.jbMaxMs,
+      ),
       rtpPort: s.rtpPort,
       rtpPortRange: s.rtpPortRange,
       sndMode: (!kIsWeb && Platform.isIOS) ? SndMode.manual : SndMode.auto,
@@ -128,6 +158,12 @@ const _restartKeys = [
   'lanEnabled',
   'useSimulator',
   'vad',
+  'customCaFile',
+  'jbInitMs',
+  'jbMinPreMs',
+  'jbMaxPreMs',
+  'jbMaxMs',
+  'ptime',
 ];
 
 /// Owns the [SipEngine]: start/stop, settings application, connectivity,
@@ -144,6 +180,11 @@ class EngineController extends Notifier<EngineState> {
   bool _pendingRestart = false;
   bool _starting = false;
   bool _disposed = false;
+  bool _forceSimulator = false;
+
+  /// `logs/engine.log` of the running engine (diagnostics export).
+  String? logFilePath;
+  Timer? _devicePoll;
 
   SipEngine get engine => _engine ?? (throw StateError('Engine not started'));
   bool get hasEngine => _engine != null && state.running;
@@ -154,6 +195,7 @@ class EngineController extends Notifier<EngineState> {
     ref.onDispose(() {
       _disposed = true;
       _ipDebounce?.cancel();
+      _devicePoll?.cancel();
       _connSub?.cancel();
       _sub?.cancel();
       final e = _engine;
@@ -180,30 +222,44 @@ class EngineController extends Notifier<EngineState> {
     _starting = true;
     state = state.copyWith(phase: EnginePhase.starting);
     final settings = ref.read(settingsProvider);
+    EngineHandle? handle;
     try {
-      var handle = await ref.read(engineFactoryProvider)(
-        simulator: settings.useSimulator,
+      handle = await ref.read(engineFactoryProvider)(
+        simulator: settings.useSimulator || _forceSimulator,
       );
-      try {
-        await _boot(handle, settings);
-      } catch (e) {
-        if (handle.demo) rethrow;
-        // Real engine loaded but could not start: fall back to the simulator.
-        await _safeDispose(handle.engine);
-        handle = await ref.read(engineFactoryProvider)(simulator: true);
-        handle = EngineHandle(
-          handle.engine,
-          demo: true,
-          note: 'Native engine failed to start ($e)',
-        );
-        await _boot(handle, settings);
-      }
+      await _boot(handle, settings);
     } catch (e) {
       if (_disposed) return;
-      state = state.copyWith(phase: EnginePhase.failed, error: '$e');
+      final h = handle;
+      if (h != null && !h.demo) {
+        // The native library loaded but core.start failed: never fall back
+        // silently, the UI shows a blocking error with Retry / Settings / demo.
+        await _safeDispose(h.engine);
+        _engine = null;
+        ref.read(engineLogProvider.notifier).add('engine start failed: $e');
+      }
+      state = state.copyWith(
+        phase: EnginePhase.failed,
+        error: e is EngineException ? e.error.message : '$e',
+        libraryLoaded: h != null && !h.demo,
+      );
     } finally {
       _starting = false;
     }
+  }
+
+  /// User chose "Use simulator (demo)" after a start failure.
+  Future<void> startSimulator() async {
+    _forceSimulator = true;
+    state = state.copyWith(phase: EnginePhase.idle);
+    await start();
+  }
+
+  /// Retry after a start failure.
+  Future<void> retry() async {
+    if (_starting) return;
+    state = state.copyWith(phase: EnginePhase.idle);
+    await start();
   }
 
   Future<void> _boot(EngineHandle handle, AppSettings settings) async {
@@ -212,7 +268,9 @@ class EngineController extends Notifier<EngineState> {
     _liveCalls.clear();
     _sub?.cancel();
     _sub = engine.events.listen(_onEvent);
-    final res = await engine.start(buildCoreConfig(settings));
+    final files = await ref.read(engineFilesProvider)();
+    logFilePath = files.logFile;
+    final res = await engine.start(buildCoreConfig(settings, files: files));
     await _applyAndroidDns(engine, settings);
     _engine = engine;
     _startedAt = DateTime.now();
@@ -258,9 +316,13 @@ class EngineController extends Notifier<EngineState> {
       ref.read(engineLogProvider.notifier).add(_describe(e));
     }
     switch (e) {
+      case MediaDevicesChangedEvent():
+        ref.read(deviceRevisionProvider.notifier).bump();
       case CallIncomingEvent():
         _liveCalls.add(e.cid);
+        _refreshDevicesOnDesktop();
       case CallStateEvent():
+        if (!e.isTerminal && !_liveCalls.contains(e.cid)) _refreshDevicesOnDesktop();
         if (e.isTerminal) {
           _liveCalls.remove(e.cid);
           if (_pendingRestart && _liveCalls.isEmpty) {
@@ -277,6 +339,37 @@ class EngineController extends Notifier<EngineState> {
     _events.add(e);
   }
 
+  bool get _desktop => !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+
+  /// Re-enumerates audio devices and tells the UI to reload its lists.
+  Future<void> refreshDevices() async {
+    if (!hasEngine) return;
+    try {
+      await engine.refreshDevices();
+    } catch (err) {
+      debugPrint('refreshDevices failed: $err');
+    }
+    if (!_disposed) ref.read(deviceRevisionProvider.notifier).bump();
+  }
+
+  void _refreshDevicesOnDesktop() {
+    // Deferred: the engine may be mid-dispatch of the event that got us here.
+    if (_desktop) Future<void>.delayed(Duration.zero, refreshDevices);
+  }
+
+  /// Desktop: poll for plugged / unplugged devices while Settings > Audio is
+  /// visible. Pair every call with [stopDevicePolling].
+  void startDevicePolling({Duration every = const Duration(seconds: 10)}) {
+    if (!_desktop && every == const Duration(seconds: 10)) return;
+    _devicePoll?.cancel();
+    _devicePoll = Timer.periodic(every, (_) => unawaited(refreshDevices()));
+  }
+
+  void stopDevicePolling() {
+    _devicePoll?.cancel();
+    _devicePoll = null;
+  }
+
   static String _describe(EngineEvent e) => switch (e) {
     AccountRegEvent() => 'account.reg ${e.account.uid} ${e.account.regState.wire} ${e.account.regCode} ${e.account.lastError ?? ''}',
     CallStateEvent() => 'call.state ${e.cid} ${e.call.state.wire} ${e.call.stateCode}',
@@ -285,10 +378,11 @@ class EngineController extends Notifier<EngineState> {
   };
 
   void _onSettings(AppSettings? old, AppSettings next) {
-    if (old == null || !state.running) return;
+    if (old == null || (!state.running && state.phase != EnginePhase.failed)) return;
     final o = old.toJson();
     final n = next.toJson();
     final needsRestart = _restartKeys.any((k) => o[k] != n[k]);
+    if (needsRestart && state.phase == EnginePhase.failed) unawaited(retry());
     if (needsRestart) {
       if (_liveCalls.isEmpty) {
         unawaited(restart());

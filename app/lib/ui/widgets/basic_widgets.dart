@@ -181,7 +181,10 @@ class Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = color ?? Color(hashColor(name.isEmpty ? '#' : name));
+    // Unknown callers get a calm neutral tint instead of a hashed (possibly
+    // alarming red) colour.
+    final unknown = color == null && initialsOf(name) == '#';
+    final base = color ?? (unknown ? Theme.of(context).colorScheme.onSurfaceVariant : Color(hashColor(name.isEmpty ? '#' : name)));
     final c = context.colors;
     Color? ring;
     switch (lamp) {

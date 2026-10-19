@@ -32,6 +32,26 @@ String stamp([DateTime? t]) {
   return '${d.year}${p(d.month)}${p(d.day)}-${p(d.hour)}${p(d.minute)}${p(d.second)}';
 }
 
+/// Last [maxBytes] of the on-disk engine log ('' when there is none).
+String readEngineLogTail(String? path, {int maxBytes = 200 * 1024}) {
+  if (path == null) return '';
+  try {
+    final f = File(path);
+    if (!f.existsSync()) return '';
+    final len = f.lengthSync();
+    final raf = f.openSync();
+    try {
+      final start = len > maxBytes ? len - maxBytes : 0;
+      raf.setPositionSync(start);
+      return utf8.decode(raf.readSync(len - start), allowMalformed: true);
+    } finally {
+      raf.closeSync();
+    }
+  } catch (_) {
+    return '';
+  }
+}
+
 /// Save/copy helpers that report through the app notice bar.
 class DiagnosticsExporter {
   DiagnosticsExporter(this.ref);

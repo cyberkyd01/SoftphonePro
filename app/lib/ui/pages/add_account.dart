@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
 import '../../models/provider_templates.dart';
@@ -9,6 +10,7 @@ import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../../storage/repositories.dart';
 import '../widgets/basic_widgets.dart';
+import '../settings/account_editor.dart' show validateHost, validateInt;
 import '../settings/provisioning_section.dart';
 
 /// Template picker -> credentials form. Used by onboarding and the wizard.
@@ -28,12 +30,15 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
   final _name = TextEditingController();
   final _label = TextEditingController();
   final _auth = TextEditingController();
+  final _port = TextEditingController(text: '4569');
+  final _context = TextEditingController();
+  final _callerId = TextEditingController();
   bool _showPass = false;
   String? _err;
 
   @override
   void dispose() {
-    for (final c in [_user, _pass, _domain, _name, _label, _auth]) {
+    for (final c in [_user, _pass, _domain, _name, _label, _auth, _port, _context, _callerId]) {
       c.dispose();
     }
     super.dispose();
@@ -44,12 +49,46 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
       _tpl = t;
       _domain.text = t.domainHint;
       _label.text = t.id == 'generic' ? '' : t.name;
+      _err = null;
+      _portErr = null;
+      if (t.isIax) _port.text = '${t.defaultPort ?? 4569}';
     });
   }
+
+  String? _portErr;
+  String? _domainErr;
+
+  /// Protocol picker: SIP shows the provider list, IAX2 goes straight to the
+  /// IAX2 form.
+  Widget _protoPicker() => SegmentedButton<SipProto>(
+    key: const Key('acc-proto'),
+    segments: const [
+      ButtonSegment(value: SipProto.sip, label: Text('SIP'), icon: Icon(Icons.phone_in_talk_rounded)),
+      ButtonSegment(value: SipProto.iax2, label: Text('IAX2'), icon: Icon(Icons.swap_calls_rounded)),
+    ],
+    selected: {_tpl?.proto ?? SipProto.sip},
+    onSelectionChanged: (v) {
+      if (v.first == SipProto.iax2) {
+        _pick(templateById('iax2'));
+      } else {
+        setState(() => _tpl = null);
+      }
+    },
+  );
 
   Future<void> _save() async {
     if (_user.text.trim().isEmpty || _domain.text.trim().isEmpty) {
       setState(() => _err = 'Username and server are required');
+      return;
+    }
+    final domErr = validateHost(_domain.text);
+    final portErr = _tpl!.isIax ? validateInt(_port.text, min: 1, max: 65535) : null;
+    if (domErr != null || portErr != null) {
+      setState(() {
+        _err = null;
+        _domainErr = domErr;
+        _portErr = portErr;
+      });
       return;
     }
     final accounts = ref.read(accountsProvider);
@@ -62,6 +101,9 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
       label: _label.text.trim(),
       authUser: _auth.text.trim(),
       color: kAvatarPalette[accounts.profiles.length % kAvatarPalette.length],
+      port: _tpl!.isIax ? int.parse(_port.text.trim()) : null,
+      iaxContext: _context.text,
+      callerId: _callerId.text,
     );
     await ref.read(accountsProvider.notifier).add(p);
     widget.onDone();
@@ -77,6 +119,8 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
           Text('Choose your provider', style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text('We prefill transport, ports and NAT settings for you.', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          _protoPicker(),
           const SizedBox(height: 12),
           for (final tpl in kProviderTemplates)
             Padding(
@@ -97,12 +141,24 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
+                  key: const Key('scan-provisioning-qr'),
+                  onPressed: () async {
+                    final n = await scanProvisioningQr(context, ref);
+                    if (n > 0) widget.onDone();
+                  },
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Scan QR'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
                   onPressed: () async {
                     final n = await importProvisioningDialog(context, ref);
                     if (n > 0) widget.onDone();
                   },
                   icon: const Icon(Icons.link_rounded),
-                  label: const Text('Import from URL or QR'),
+                  label: const Text('Import from URL'),
                 ),
               ),
             ],
@@ -123,7 +179,25 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
             Expanded(child: Text(_tpl!.name, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
+        _protoPicker(),
+        if (_tpl!.notes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            key: const Key('acc-notes'),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: t.colorScheme.secondaryContainer.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 20, color: t.colorScheme.onSecondaryContainer),
+                const SizedBox(width: 10),
+                Expanded(child: Text(_tpl!.notes, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSecondaryContainer))),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
         TextField(key: const Key('acc-username'), controller: _user, autocorrect: false, decoration: InputDecoration(labelText: _tpl!.usernameHint, prefixIcon: const Icon(Icons.person_rounded))),
         const SizedBox(height: 12),
         TextField(
@@ -138,18 +212,49 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
           ),
         ),
         const SizedBox(height: 12),
-        TextField(key: const Key('acc-domain'), controller: _domain, autocorrect: false, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Server / domain', prefixIcon: Icon(Icons.dns_rounded))),
+        TextField(
+          key: const Key('acc-domain'),
+          controller: _domain,
+          autocorrect: false,
+          keyboardType: TextInputType.url,
+          onChanged: (_) {
+            if (_domainErr != null) setState(() => _domainErr = null);
+          },
+          decoration: InputDecoration(
+            labelText: _tpl!.serverLabel,
+            prefixIcon: const Icon(Icons.dns_rounded),
+            errorText: _domainErr,
+            helperText: _tpl!.defaultPort != null && !_tpl!.isIax ? 'Port ${_tpl!.defaultPort} is used unless you add :port' : null,
+          ),
+        ),
         const SizedBox(height: 12),
+        if (_tpl!.isIax) ...[
+          TextField(
+            key: const Key('acc-port'),
+            controller: _port,
+            keyboardType: TextInputType.number,
+            onChanged: (_) {
+              if (_portErr != null) setState(() => _portErr = null);
+            },
+            decoration: InputDecoration(labelText: 'Port', prefixIcon: const Icon(Icons.numbers_rounded), errorText: _portErr, helperText: 'IAX2 default is 4569'),
+          ),
+          const SizedBox(height: 12),
+          TextField(key: const Key('acc-context'), controller: _context, autocorrect: false, decoration: const InputDecoration(labelText: 'Context (optional)', prefixIcon: Icon(Icons.account_tree_rounded))),
+          const SizedBox(height: 12),
+        ],
         TextField(key: const Key('acc-name'), controller: _name, decoration: const InputDecoration(labelText: 'Display name (optional)', prefixIcon: Icon(Icons.badge_rounded))),
         const SizedBox(height: 12),
         TextField(controller: _label, decoration: const InputDecoration(labelText: 'Account label (optional)', prefixIcon: Icon(Icons.label_rounded))),
         const SizedBox(height: 12),
-        TextField(controller: _auth, autocorrect: false, decoration: const InputDecoration(labelText: 'Authorization user (if different)', prefixIcon: Icon(Icons.verified_user_rounded))),
+        if (_tpl!.isIax)
+          TextField(key: const Key('acc-callerid'), controller: _callerId, decoration: const InputDecoration(labelText: 'Caller ID (optional)', prefixIcon: Icon(Icons.contact_phone_rounded)))
+        else
+          TextField(controller: _auth, autocorrect: false, decoration: const InputDecoration(labelText: 'Authorization user (if different)', prefixIcon: Icon(Icons.verified_user_rounded))),
         if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: TextStyle(color: t.colorScheme.error))),
         const SizedBox(height: 20),
         FilledButton(key: const Key('acc-save'), onPressed: _save, child: const Text('Add account')),
         const SizedBox(height: 8),
-        Text('You can fine-tune transport, NAT, security and codecs later in Settings.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
+        Text('You can fine-tune ${_tpl!.isIax ? 'codecs and registration' : 'transport, NAT, security and codecs'} later in Settings.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
       ],
     );
   }

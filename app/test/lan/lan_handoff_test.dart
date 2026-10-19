@@ -315,4 +315,60 @@ void main() {
     expect(id, isNull);
     expect(p.a.engine.methods, isNot(contains('call.make')));
   });
+
+  test('intercom: prompt mode, user allows -> granted and auto-answered', () async {
+    final p = await setup(bSettings: {'lanIntercomPrompt': true});
+    p.wireNetwork();
+    await allLive(p);
+    p.cb.read(lanControllerProvider.notifier).intercomPrompts.listen((r) => r.respond(true, expiresSec: 30));
+    final id = await p.a.lan().callPeer(p.b.id(p.cb), intercom: true);
+    expect(id, isNotNull);
+    await until(() => p.b.engine.methods.contains('call.answer'), what: 'auto answer');
+    expect(p.cb.read(lanControllerProvider.notifier).intercomGranted(p.a.id(p.ca)), isTrue);
+  });
+
+  test('intercom: prompt mode, user denies -> no call', () async {
+    final p = await setup(bSettings: {'lanIntercomPrompt': true});
+    p.wireNetwork();
+    await allLive(p);
+    p.cb.read(lanControllerProvider.notifier).intercomPrompts.listen((r) => r.respond(false));
+    final id = await p.a.lan().callPeer(p.b.id(p.cb), intercom: true);
+    expect(id, isNull);
+    expect(p.a.engine.methods, isNot(contains('call.make')));
+    expect(p.cb.read(lanControllerProvider.notifier).intercomGranted(p.a.id(p.ca)), isFalse);
+  });
+
+  test('intercom: no answer within the timeout counts as denied', () async {
+    final p = await setup(bSettings: {'lanIntercomPrompt': true});
+    p.wireNetwork();
+    await allLive(p);
+    p.cb.read(lanControllerProvider.notifier).intercomPrompts.listen((_) {});
+    p.a.lan().intercomRequestTimeout = const Duration(milliseconds: 400);
+    final id = await p.a.lan().callPeer(p.b.id(p.cb), intercom: true);
+    expect(id, isNull);
+    expect(p.a.engine.methods, isNot(contains('call.make')));
+  });
+
+  test('refer failure: exactly one notice, no hold flap, relay fallback', () async {
+    final p = await setup(bAccount: true);
+    p.wireNetwork();
+    await until(() => (p.ca.read(lanControllerProvider).peer(p.b.id(p.cb))?.info?.aors ?? []).isNotEmpty, what: 'peer AOR');
+    p.a.engine.transferResultCode = 503;
+    final cid = await p.externalCall();
+    final notices = <String>[];
+    p.ca.listen(noticeProvider, (_, n) {
+      if (n != null) notices.add(n.message);
+    }, fireImmediately: false);
+    p.a.engine.log.clear();
+    await p.callsA.handoffToLan(cid, p.deviceB);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(p.a.engine.of('call.transfer'), hasLength(1));
+    // Relay fallback happened (call to B over LAN), and nothing unheld before it.
+    expect(p.a.engine.methods, contains('call.make'));
+    final m = p.a.engine.methods;
+    final iMake = m.indexOf('call.make');
+    expect(m.sublist(m.indexOf('call.transfer'), iMake), isNot(contains('call.unhold')));
+    expect(notices.where((n) => n.contains('Transfer failed')), isEmpty);
+    expect(notices.where((n) => n.contains('Relaying')), hasLength(1));
+  });
 }

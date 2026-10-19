@@ -7,6 +7,19 @@ Map<String, dynamic> rt(Map<String, dynamic> j) =>
     jsonDecode(jsonEncode(j)) as Map<String, dynamic>;
 
 void main() {
+  test('AccountConfig wsPath / rtcpFb round trip with defaults', () {
+    final d = AccountConfig.fromJson({});
+    expect(d.wsPath, '/ws');
+    expect(d.rtcpFb, false);
+    final c = AccountConfig.fromJson({'wsPath': '/sip', 'rtcpFb': true});
+    expect(c.wsPath, '/sip');
+    final j = rt(c.toJson());
+    expect(j['wsPath'], '/sip');
+    expect(j['rtcpFb'], true);
+    expect(c.copyWith(wsPath: '/x').wsPath, '/x');
+    expect(c.copyWith(rtcpFb: false).rtcpFb, false);
+  });
+
   test('empty json yields defaults for every model', () {
     final models = <Map<String, dynamic> Function()>[
       () => CoreConfig.fromJson({}).toJson(),

@@ -9,6 +9,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../security/app_lock_settings.dart';
 import '../../models/chat.dart';
 import '../../platform/android/android_reliability_group.dart';
 import '../../platform/platform_services.dart';
@@ -24,6 +25,8 @@ import '../../storage/repositories.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
 import '../widgets/recording_player.dart';
+import '../../services/ringtones.dart';
+import 'speed_dial_page.dart';
 import '../widgets/settings_tiles.dart';
 
 SettingsController _s(WidgetRef ref) => ref.read(settingsProvider.notifier);
@@ -122,7 +125,7 @@ class _AccountTile extends ConsumerWidget {
           ],
         ],
       ),
-      subtitle: Text(acc.errorOf(id) ?? '${p.address}  ·  ${statusLabel(st)}', maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(acc.errorOf(id) ?? '${p.address}  ·  ${statusLabel(st)}${acc.usingBackup.contains(id) ? '  ·  using backup server' : ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: Switch(value: p.enabled, onChanged: (v) => ref.read(accountsProvider.notifier).setEnabled(id, v)),
       onTap: () => context.push('/settings/accounts/$id'),
     );
@@ -146,6 +149,9 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
   @override
   void initState() {
     super.initState();
+    Future.microtask(() {
+      if (mounted) ref.read(engineProvider.notifier).startDevicePolling();
+    });
     _t = Timer.periodic(const Duration(milliseconds: 200), (_) async {
       final ctl = ref.read(engineProvider.notifier);
       if (!ctl.hasEngine || !mounted) return;
@@ -159,6 +165,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
   @override
   void dispose() {
     _t?.cancel();
+    ref.read(engineProvider.notifier).stopDevicePolling();
     if (_loop) {
       final ctl = ref.read(engineProvider.notifier);
       if (ctl.hasEngine) ctl.engine.loopback(false);
@@ -226,6 +233,17 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
             SwitchTile(title: 'Noise suppression', value: s.noiseSuppression, onChanged: (v) => _s(ref).update({'noiseSuppression': v})),
             SwitchTile(title: 'Automatic gain control', value: s.agc, onChanged: (v) => _s(ref).update({'agc': v})),
             SwitchTile(title: 'Voice activity detection', subtitle: 'Saves bandwidth during silence', value: s.vad, onChanged: (v) => _s(ref).update({'vad': v})),
+          ],
+        ),
+        SettingsGroup(
+          title: 'Advanced',
+          footer: 'Jitter buffer values are in milliseconds; -1 uses the engine default. Changing these restarts the call engine.',
+          children: [
+            SelectTile<int>(title: 'Packet time (ptime)', value: const {10, 20, 30, 40, 60}.contains(s.ptime) ? s.ptime : 20, options: const {10: '10 ms', 20: '20 ms', 30: '30 ms', 40: '40 ms', 60: '60 ms'}, onChanged: (v) => _s(ref).update({'ptime': v})),
+            TextTile(key: const Key('jb-init'), title: 'Jitter buffer: initial', value: '${s.jbInitMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbInitMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-min'), title: 'Jitter buffer: minimum prefetch', value: '${s.jbMinPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMinPreMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-max-pre'), title: 'Jitter buffer: maximum prefetch', value: '${s.jbMaxPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxPreMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-max'), title: 'Jitter buffer: maximum size', value: '${s.jbMaxMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxMs': int.tryParse(v.trim()) ?? -1})),
           ],
         ),
       ],
@@ -358,6 +376,8 @@ class CallsSection extends ConsumerWidget {
             SwitchTile(icon: Icons.phone_callback_rounded, title: 'Call waiting', subtitle: 'Allow a second incoming call during a call', value: s.callWaiting, onChanged: (v) => _s(ref).update({'callWaiting': v})),
             SelectTile<int>(title: 'When busy and waiting is off', value: s.busyRejectCode, options: const {486: 'Busy Here (486)', 603: 'Decline (603)'}, onChanged: (v) => _s(ref).update({'busyRejectCode': v})),
             SwitchTile(icon: Icons.person_off_rounded, title: 'Reject anonymous calls', value: s.rejectAnonymous, onChanged: (v) => _s(ref).update({'rejectAnonymous': v})),
+            SwitchTile(key: const Key('call-links-immediately'), icon: Icons.link_rounded, title: 'Call links immediately', subtitle: 'tel:, sip: and callto: links place the call without waiting in the dialer', value: s.callLinksImmediately, onChanged: (v) => _s(ref).update({'callLinksImmediately': v})),
+            SwitchTile(key: const Key('sync-feature-codes'), icon: Icons.sync_alt_rounded, title: 'Sync DND / forwarding to PBX via feature codes', subtitle: 'Dials the account\'s star codes (for example *78) briefly when you change DND or forwarding', value: s.syncFeatureCodes, onChanged: (v) => _s(ref).update({'syncFeatureCodes': v})),
           ],
         ),
         SettingsGroup(
@@ -389,9 +409,18 @@ class CallsSection extends ConsumerWidget {
           ],
         ),
         SettingsGroup(
+          title: 'Speed dial',
+          children: [
+            NavTile(key: const Key('speed-dial-entry'), icon: Icons.speed_rounded, title: 'Speed dial', subtitle: '${s.speedDial.length} of 9 assigned', onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SpeedDialPage()))),
+          ],
+        ),
+        SettingsGroup(
           title: 'Dial plan',
           children: [
             NavTile(icon: Icons.rule_rounded, title: 'Dial rules', subtitle: '${s.dialRules.length} rule(s)', onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DialRulesEditor()))),
+            TextTile(key: const Key('strip-prefix'), icon: Icons.content_cut_rounded, title: 'Outside-line prefix to strip', subtitle: 'For example 9, removed from the start of dialled numbers', hint: 'None', value: s.stripPrefix, onChanged: (v) => _s(ref).update({'stripPrefix': v.trim()})),
+            TextTile(key: const Key('plus-replacement'), icon: Icons.add_rounded, title: 'Replace leading + with', subtitle: 'For example 00 for international access', hint: 'Keep +', value: s.plusReplacement, onChanged: (v) => _s(ref).update({'plusReplacement': v.trim()})),
+            TextTile(key: const Key('default-country-prefix'), icon: Icons.flag_rounded, title: 'Default country prefix', subtitle: 'National numbers starting with 0 get this prefix, for example +44', hint: 'None', value: s.defaultCountryPrefix, onChanged: (v) => _s(ref).update({'defaultCountryPrefix': v.trim()})),
             TextTile(icon: Icons.emergency_rounded, title: 'Emergency numbers', subtitle: 'Comma separated. These bypass dial rules.', value: s.emergencyNumbers.join(', '), onChanged: (v) => _s(ref).update({'emergencyNumbers': v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList()})),
           ],
         ),
@@ -568,6 +597,7 @@ class NetworkSection extends ConsumerWidget {
             SwitchTile(title: 'TLS', value: s.tlsEnabled, onChanged: (v) => _s(ref).update({'tlsEnabled': v})),
             TextTile(title: 'TLS port', value: '${s.tlsPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'tlsPort': port(v)})),
             SwitchTile(icon: Icons.verified_rounded, title: 'Verify server certificates', subtitle: 'Turn off only for self-signed PBXs, or pin the certificate below', value: s.tlsVerify, onChanged: (v) => _s(ref).update({'tlsVerify': v})),
+            TextTile(key: const Key('custom-ca-file'), icon: Icons.security_rounded, title: 'Custom CA file', subtitle: 'PEM bundle used instead of the built-in list (private PBX CA)', hint: 'Built-in Mozilla list', value: s.customCaFile, onChanged: (v) => _s(ref).update({'customCaFile': v.trim()})),
             TextTile(icon: Icons.push_pin_rounded, title: 'Pinned certificates', subtitle: 'host=SHA256 fingerprint, comma separated', value: s.tlsPins.join(', '), onChanged: (v) => _s(ref).update({'tlsPins': list(v)})),
           ],
         ),
@@ -652,7 +682,8 @@ class NotificationsSection extends ConsumerWidget {
         SettingsGroup(
           title: 'Ringtone',
           children: [
-            SelectTile<String>(icon: Icons.music_note_rounded, title: 'Default ringtone', value: s.ringtone, options: const {'default': 'Default', 'classic': 'Classic', 'soft': 'Soft'}, onChanged: (v) => _s(ref).update({'ringtone': v})),
+            SelectTile<String>(icon: Icons.music_note_rounded, title: 'Default ringtone', value: s.ringtone, options: kRingtoneOptions, onChanged: (v) => _s(ref).update({'ringtone': v})),
+            SwitchTile(key: const Key('progress-tones'), icon: Icons.volume_up_rounded, title: 'Call progress tones', subtitle: 'Ringback, busy and congestion tones while dialling', value: s.progressTones, onChanged: (v) => _s(ref).update({'progressTones': v})),
             SliderTile(icon: Icons.volume_up_rounded, title: 'Ringer volume', value: s.ringerVolume, divisions: 10, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'ringerVolume': v})),
             TextTile(icon: Icons.audio_file_rounded, title: 'Custom ringtone file', subtitle: 'Path to a WAV file (desktop)', value: s.ringtone.contains('/') ? s.ringtone : '', hint: 'None', onChanged: (v) => _s(ref).update({'ringtone': v.isEmpty ? 'default' : v})),
           ],
@@ -745,7 +776,6 @@ class PrivacySection extends ConsumerWidget {
   const PrivacySection({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(settingsProvider);
     Future<void> wipe(String what, Future<void> Function() f) async {
       if (await confirm(context, title: 'Delete $what?', message: 'This cannot be undone.', confirmLabel: 'Delete')) {
         await f();
@@ -760,9 +790,9 @@ class PrivacySection extends ConsumerWidget {
           title: 'Security',
           children: [
             const ListTile(leading: Icon(Icons.shield_rounded), title: Text('Passwords'), subtitle: Text('Stored in the system keychain / keystore (encrypted file fallback)')),
-            SwitchTile(icon: Icons.lock_rounded, title: 'App lock (PIN or biometrics)', subtitle: 'Coming soon', value: s.appLock, onChanged: null),
           ],
         ),
+        const AppLockSettingsGroup(),
         const SettingsGroup(
           title: 'Privacy',
           children: [ListTile(leading: Icon(Icons.visibility_off_rounded), title: Text('No telemetry'), subtitle: Text('SoftphonePro sends no analytics. Network traffic goes only to your SIP servers.'))],
@@ -805,6 +835,7 @@ class LanSection extends ConsumerWidget {
             SwitchTile(icon: Icons.lan_rounded, title: 'Enable LAN Link', value: s.lanEnabled, onChanged: (v) => _s(ref).update({'lanEnabled': v})),
             TextTile(icon: Icons.badge_rounded, title: 'Device name', hint: 'This device', value: s.lanDeviceName, onChanged: (v) => _s(ref).update({'lanDeviceName': v})),
             SwitchTile(icon: Icons.volume_up_rounded, title: 'Allow intercom', subtitle: 'Let paired devices call you and be auto-answered', value: s.lanAllowIntercom, onChanged: (v) => _s(ref).update({'lanAllowIntercom': v})),
+            if (s.lanAllowIntercom) SwitchTile(icon: Icons.help_outline_rounded, title: 'Ask before allowing intercom', subtitle: 'Otherwise paired devices are auto-answered for 30 s after they ask', value: s.lanIntercomPrompt, onChanged: (v) => _s(ref).update({'lanIntercomPrompt': v})),
             SwitchTile(icon: Icons.download_for_offline_rounded, title: 'Auto-accept files from paired devices', subtitle: 'Otherwise you are asked for every file', value: s.lanAutoAcceptFiles, onChanged: (v) => _s(ref).update({'lanAutoAcceptFiles': v})),
             SwitchTile(icon: Icons.call_received_rounded, title: 'Let paired devices pull my calls', subtitle: 'A paired device can take over a call that is active here', value: s.lanAllowPull, onChanged: (v) => _s(ref).update({'lanAllowPull': v})),
             TextTile(icon: Icons.folder_rounded, title: 'Downloads folder', hint: 'Default (Downloads/SoftphonePro)', value: s.lanDownloadsDir, onChanged: (v) => _s(ref).update({'lanDownloadsDir': v})),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme.dart';
+import 'security/app_lock_gate.dart';
 import 'services/app_services.dart';
 import 'services/calls_controller.dart';
 import 'services/engine_controller.dart';
@@ -10,6 +11,7 @@ import 'services/providers.dart';
 import 'services/settings_controller.dart';
 import 'ui/router.dart';
 import 'ui/widgets/account_widgets.dart';
+import 'ui/widgets/engine_failure_gate.dart';
 
 final rootMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -66,6 +68,24 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
         ),
       );
     });
+    ref.listen(redirectPromptProvider, (_, p) {
+      if (p == null) return;
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      showDialog<bool>(
+        context: ctx,
+        barrierDismissible: false,
+        builder: (dctx) => AlertDialog(
+          key: const Key('redirect-prompt'),
+          title: const Text('Call redirected'),
+          content: Text('Call redirected to ${p.target} - follow?'),
+          actions: [
+            TextButton(key: const Key('redirect-reject'), onPressed: () => Navigator.pop(dctx, false), child: const Text('Cancel call')),
+            FilledButton(key: const Key('redirect-follow'), onPressed: () => Navigator.pop(dctx, true), child: const Text('Follow')),
+          ],
+        ),
+      ).then((v) => ref.read(callsProvider.notifier).resolveRedirect(v ?? false));
+    });
     return MaterialApp.router(
       title: 'SoftphonePro',
       debugShowCheckedModeBanner: false,
@@ -78,7 +98,7 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
         final b = Theme.of(context).brightness;
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlayFor(b),
-          child: CallRouteCoordinator(child: child ?? const SizedBox.shrink()),
+          child: AppLockGate(child: EngineFailureGate(child: CallRouteCoordinator(child: child ?? const SizedBox.shrink()))),
         );
       },
     );

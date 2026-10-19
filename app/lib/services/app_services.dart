@@ -12,11 +12,11 @@ import 'calls_controller.dart';
 import 'contacts_controller.dart';
 import 'engine_controller.dart';
 import 'history_controller.dart';
+import 'link_handler.dart';
 import 'messages_controller.dart';
 import 'presence_controller.dart';
 import 'providers.dart';
 import '../platform/desktop/desktop_shell.dart';
-import '../platform/desktop/launch_args.dart';
 
 /// Text in the dial field; shared so other screens can prefill it.
 class DialInputController extends Notifier<String> {
@@ -69,11 +69,8 @@ final appServicesProvider = Provider<void>((ref) {
   // Desktop: tray / menu bar, hotkeys, close-to-tray, window geometry (no-op elsewhere).
   ref.read(desktopShellProvider);
 
-  // Incoming sip:/tel:/callto: links fill the dialer.
-  Future<void> handleLink(Uri uri) async {
-    ref.read(dialInputProvider.notifier).set(dialTargetFromLink(uri));
-    ref.read(dialFocusProvider.notifier).request();
-  }
+  // Incoming links: provision / LAN / dial (see link_handler.dart).
+  Future<void> handleLink(Uri uri) => handleIncomingLink(ref, uri);
 
   final linkSub = platform.incomingLinks.listen(handleLink);
   ref.onDispose(linkSub.cancel);

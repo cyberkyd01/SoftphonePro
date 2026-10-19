@@ -6,9 +6,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/accounts_controller.dart';
 import '../../services/provisioning.dart';
+import '../../services/provisioning_import.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../../models/app_settings.dart';
+import '../widgets/qr_payload.dart';
+import '../widgets/qr_scanner_sheet.dart';
 import '../widgets/settings_tiles.dart';
 
 /// Applies a parsed provisioning result after user confirmation.
@@ -39,8 +42,8 @@ Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningR
   for (final a in r.accounts) {
     await ref.read(accountsProvider.notifier).add(a);
   }
-  if (r.settings.isNotEmpty) {
-    await ref.read(settingsProvider.notifier).update(r.settings);
+  if (r.settings.isNotEmpty || r.accounts.isNotEmpty) {
+    await ref.read(settingsProvider.notifier).update({...r.settings, if (r.accounts.isNotEmpty) 'onboardingDone': true});
   }
   ref.read(noticeProvider.notifier).show('Imported ${r.accounts.length} account(s)');
   return r.accounts.length;
@@ -50,19 +53,41 @@ Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningR
 Future<int> importProvisioningDialog(BuildContext context, WidgetRef ref) async {
   final text = await promptText(context, title: 'Import from URL or JSON', hint: 'https://... or paste JSON', maxLines: 4);
   if (text == null || text.isEmpty || !context.mounted) return 0;
+  return importProvisioningText(context, ref, text);
+}
+
+/// Imports provisioning JSON, an http(s) URL or a `softphonepro://provision`
+/// link (what the QR code carries). Returns accounts added.
+Future<int> importProvisioningText(BuildContext context, WidgetRef ref, String text) async {
   try {
-    final r = text.trimLeft().startsWith('{')
-        ? Provisioning.parse(text)
-        : await Provisioning.fetch(Uri.parse(text.trim()));
+    final p = parseQrPayload(text);
+    final r = switch (p) {
+      QrProvisionJson(:final json) => Provisioning.parse(json),
+      QrProvisionUrl(:final url) => await Provisioning.fetch(
+        url,
+        vars: await provisioningVars(
+          settings: ref.read(settingsProvider).toJson(),
+          save: ref.read(settingsProvider.notifier).update,
+        ),
+      ),
+      _ => throw const FormatException('unsupported'),
+    };
     if (!context.mounted) return 0;
     return applyProvisioning(context, ref, r);
   } on ProvisioningException catch (e) {
     ref.read(noticeProvider.notifier).error(e.message);
     return 0;
   } on FormatException {
-    ref.read(noticeProvider.notifier).error('That is not a valid URL or JSON');
+    ref.read(noticeProvider.notifier).error('That is not a valid URL, link or JSON');
     return 0;
   }
+}
+
+/// Opens the QR scanner (camera, with paste fallback) and imports the result.
+Future<int> scanProvisioningQr(BuildContext context, WidgetRef ref) async {
+  final code = await showQrScannerSheet(context, title: 'Scan provisioning QR', pasteHint: 'Paste JSON, a link or a URL');
+  if (code == null || !context.mounted) return 0;
+  return importProvisioningText(context, ref, code);
 }
 
 class ProvisioningSection extends ConsumerStatefulWidget {
@@ -92,6 +117,11 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
           title: 'Import',
           footer: 'Supports JSON with accounts and settings. \${VAR} placeholders are filled with empty values unless a default is given as \${VAR:-default}.',
           children: [
+            NavTile(
+              icon: Icons.qr_code_scanner_rounded,
+              title: 'Scan QR code',
+              onTap: () => scanProvisioningQr(context, ref),
+            ),
             NavTile(
               icon: Icons.link_rounded,
               title: 'From URL or pasted JSON',

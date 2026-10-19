@@ -10,6 +10,8 @@ class ContactNumber {
   Map<String, dynamic> toJson() => {'label': label, 'value': value};
 }
 
+const Object _keep = Object();
+
 class Contact {
   const Contact({
     required this.id,
@@ -24,6 +26,7 @@ class Contact {
     this.avatarColor = 0xFF3F51E0,
     this.blf = false,
     this.presenceUri,
+    this.presenceAccountId,
   });
 
   final String id;
@@ -38,6 +41,10 @@ class Contact {
   final int avatarColor;
   final bool blf;
   final String? presenceUri;
+
+  /// Account used to subscribe to this contact's presence/BLF (null =
+  /// default account).
+  final String? presenceAccountId;
 
   /// All dialable addresses (numbers then SIP URIs).
   List<String> get addresses => [
@@ -68,6 +75,7 @@ class Contact {
     int? avatarColor,
     bool? blf,
     String? presenceUri,
+    Object? presenceAccountId = _keep,
   }) => Contact(
     id: id,
     name: name ?? this.name,
@@ -81,6 +89,9 @@ class Contact {
     avatarColor: avatarColor ?? this.avatarColor,
     blf: blf ?? this.blf,
     presenceUri: presenceUri ?? this.presenceUri,
+    presenceAccountId: identical(presenceAccountId, _keep)
+        ? this.presenceAccountId
+        : presenceAccountId as String?,
   );
 
   factory Contact.fromJson(Map<String, dynamic> j) => Contact(
@@ -99,6 +110,7 @@ class Contact {
     avatarColor: (j['avatarColor'] as num?)?.toInt() ?? 0xFF3F51E0,
     blf: j['blf'] == true,
     presenceUri: j['presenceUri'] as String?,
+    presenceAccountId: j['presenceAccountId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -114,5 +126,6 @@ class Contact {
     'avatarColor': avatarColor,
     'blf': blf,
     'presenceUri': presenceUri,
+    'presenceAccountId': presenceAccountId,
   };
 }

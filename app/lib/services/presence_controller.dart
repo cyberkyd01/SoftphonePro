@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../core/format.dart';
+import '../models/account_profile.dart';
 import '../models/contact.dart';
 import 'accounts_controller.dart';
 import 'contacts_controller.dart';
@@ -56,6 +57,7 @@ class PresenceState {
 class PresenceController extends Notifier<PresenceState> {
   final Map<String, int> _buddyIds = {}; // contactId -> buddy id
   final Map<String, String> _uris = {}; // contactId -> uri used
+  final Map<String, String> _subAccount = {}; // contactId -> account id used
   Future<void> _queue = Future.value();
   int _generation = -1;
 
@@ -68,13 +70,18 @@ class PresenceController extends Notifier<PresenceState> {
       final a = prev?.defaultProfile?.id;
       final b = next.defaultProfile?.id;
       final regA = prev?.anyRegistered;
-      if (a != b || regA != next.anyRegistered) _enqueue();
+      if (a != b ||
+          regA != next.anyRegistered ||
+          prev?.profiles.length != next.profiles.length) {
+        _enqueue();
+      }
     });
     ref.listen<EngineState>(engineProvider, (_, next) {
       if (next.running && next.generation != _generation) {
         _generation = next.generation;
         _buddyIds.clear();
         _uris.clear();
+        _subAccount.clear();
         state = const PresenceState();
         _enqueue();
       }
@@ -94,7 +101,16 @@ class PresenceController extends Notifier<PresenceState> {
     final ctl = ref.read(engineProvider.notifier);
     if (!ctl.hasEngine) return;
     final accounts = ref.read(accountsProvider);
-    final acc = accounts.defaultProfile;
+    final defaultAcc = accounts.defaultProfile;
+    AccountProfile? accFor(Contact c) {
+      final id = c.presenceAccountId;
+      if (id != null && id.isNotEmpty) {
+        final p = accounts.byId(id);
+        if (p != null) return p;
+      }
+      return defaultAcc;
+    }
+
     final contacts = ref.read(contactsProvider);
     final want = {
       for (final c in contacts)
@@ -102,18 +118,22 @@ class PresenceController extends Notifier<PresenceState> {
     };
     for (final id in _buddyIds.keys.toList()) {
       final c = want[id];
-      if (c == null || _uris[id] != c.watchTarget) {
+      if (c == null ||
+          _uris[id] != c.watchTarget ||
+          _subAccount[id] != accFor(c)?.id) {
         try {
           await ctl.engine.removeBuddy(_buddyIds[id]!);
         } catch (_) {}
         _buddyIds.remove(id);
         _uris.remove(id);
+        _subAccount.remove(id);
         state = PresenceState(buddies: {...state.buddies}..remove(id));
       }
     }
-    if (acc == null) return;
     for (final c in want.values) {
       if (_buddyIds.containsKey(c.id)) continue;
+      final acc = accFor(c);
+      if (acc == null) continue;
       try {
         final uri = c.watchTarget;
         final id = await ctl.engine.addBuddy(
@@ -124,6 +144,7 @@ class PresenceController extends Notifier<PresenceState> {
         );
         _buddyIds[c.id] = id;
         _uris[c.id] = uri;
+        _subAccount[c.id] = acc.id;
       } catch (e) {
         debugPrint('addBuddy failed: $e');
       }

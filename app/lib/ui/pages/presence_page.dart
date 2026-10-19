@@ -133,7 +133,12 @@ class _BlfTile extends ConsumerWidget {
               enabled: lamp == LampState.ringing || lamp == LampState.unknown,
               onTap: () {
                 Navigator.pop(ctx);
-                calls.pickup(extension: userPart(contact.primary));
+                final b = ref.read(presenceProvider).buddies[contact.id];
+                if (b != null) {
+                  calls.pickupBuddy(b);
+                } else {
+                  calls.pickup(extension: userPart(contact.primary));
+                }
               },
             ),
             ListTile(

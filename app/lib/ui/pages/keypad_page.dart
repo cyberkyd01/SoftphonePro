@@ -16,6 +16,8 @@ import '../../services/providers.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/dial_pad.dart';
+import '../settings/speed_dial_page.dart';
+import '../../services/settings_controller.dart';
 
 class Suggestion {
   const Suggestion(this.name, this.number, {this.contact});
@@ -147,6 +149,21 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
     await ref.read(callsProvider.notifier).dial(p.effectiveVoicemail, accountId: p.id, applyRules: false);
   }
 
+  /// Long-press on a digit with an empty number field: dial the speed dial
+  /// slot, or open the assignment dialog when it is empty.
+  Future<void> _speedDial(String d) async {
+    if (_ctl.text.trim().isNotEmpty) return d == '1' ? _voicemail() : null;
+    final slot = int.tryParse(d);
+    if (slot == null) return;
+    final e = ref.read(settingsProvider).speedDial[slot];
+    if (e == null) {
+      if (d == '1') return _voicemail(); // slot 1 defaults to voicemail
+      await showSpeedDialEditor(context, ref, slot);
+      return;
+    }
+    await ref.read(callsProvider.notifier).dial(e.number, accountId: e.accountId);
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen<String>(dialInputProvider, (_, v) => _syncFrom(v));
@@ -158,7 +175,8 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
     final expanded = context.isExpanded;
     final acc = ref.watch(accountsProvider);
     final selId = ref.watch(dialAccountProvider);
-    final selected = (selId != null ? acc.byId(selId) : null) ?? acc.defaultProfile;
+    final isDirect = selId == kDirectAccountId;
+    final selected = isDirect ? null : (selId != null ? acc.byId(selId) : null) ?? acc.defaultProfile;
 
     final field = _NumberField(
       controller: _ctl,
@@ -214,12 +232,12 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                           ),
                         ],
                         const SizedBox(height: 16),
-                        DialPad(onDigit: _digit, onVoicemail: _voicemail),
+                        DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial),
                         const SizedBox(height: 16),
                         callBtn,
                         const SizedBox(height: 8),
                         Text(
-                          selected == null ? 'Add an account to place calls' : 'Call from ${selected.name}',
+                          isDirect ? 'Call directly (no account)' : (selected == null ? 'Add an account to place calls' : 'Call from ${selected.name}'),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ],
@@ -258,6 +276,17 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
             ),
             const SizedBox(height: 4),
             AccountSelector(dense: tight),
+            if (!tight)
+              // Tall phones: use the gap above the keypad for the top T9
+              // suggestions (or recent calls while nothing is typed).
+              Expanded(
+                child: _QuickList(
+                  title: text.trim().isEmpty ? 'Recent' : 'Suggestions',
+                  entries: text.trim().isEmpty ? _recent(history) : suggestions.take(3).toList(),
+                  onPick: pick,
+                ),
+              )
+            else
             AnimatedSize(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
@@ -282,14 +311,62 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                       ),
                     ),
             ),
-            const Spacer(),
-            DialPad(onDigit: _digit, onVoicemail: _voicemail, compact: tight),
+            if (tight) const Spacer(),
+            DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: tight),
             const SizedBox(height: 8),
             callBtn,
             const SizedBox(height: 12),
           ],
         );
       },
+    );
+  }
+}
+
+List<Suggestion> _recent(List<CallRecord> history) {
+  final out = <Suggestion>[];
+  for (final r in history) {
+    final n = r.remoteNumber.isNotEmpty ? r.remoteNumber : r.remoteUri;
+    if (n.isEmpty || out.any((s) => sameNumber(s.number, n))) continue;
+    out.add(Suggestion(r.remoteDisplay, n));
+    if (out.length == 3) break;
+  }
+  return out;
+}
+
+/// Top suggestions / recent numbers shown between the number field and the
+/// keypad on tall phones.
+class _QuickList extends StatelessWidget {
+  const _QuickList({required this.title, required this.entries, required this.onPick});
+  final String title;
+  final List<Suggestion> entries;
+  final void Function(Suggestion) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return ClipRect(
+      child: ListView(
+        key: const Key('keypad-quick-list'),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            child: Text(title, style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+          ),
+          for (final s in entries)
+            ListTile(
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              leading: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 32),
+              title: Text(s.name.isEmpty ? s.number : s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), maxLines: 1),
+              onTap: () => onPick(s),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -16,6 +16,7 @@ import '../storage/repositories.dart';
 import '../lan/lan_handoff_impl.dart';
 import '../lan/lan_models.dart';
 import '../platform/lan_handoff.dart';
+import '../platform/ios/ios_platform_services.dart';
 import '../platform/platform_services.dart';
 import 'accounts_controller.dart';
 import 'contacts_controller.dart';
@@ -23,6 +24,7 @@ import 'dial_rules.dart';
 import 'engine_controller.dart';
 import 'history_controller.dart';
 import 'providers.dart';
+import 'ringtones.dart';
 import 'settings_controller.dart';
 
 /// A live call: engine [CallInfo] merged with UI/app state.
@@ -79,6 +81,11 @@ class UiCall {
   String? recordingFile;
   String dialed = '';
   bool transferPending = false;
+
+  /// Per-party levels in a conference (1.0 = unity): what we hear from this
+  /// party (rx) and what this party hears of our microphone (tx).
+  double rxLevel = 1.0;
+  double txLevel = 1.0;
   Timer? noAnswerTimer;
   Timer? autoAnswerTimer;
 
@@ -187,6 +194,59 @@ final dialAccountProvider = NotifierProvider<DialAccountController, String?>(
   DialAccountController.new,
 );
 
+/// Selector value meaning "no account": place the call over the direct
+/// (account-less) transport.
+const String kDirectAccountId = '__direct__';
+
+/// DTMF digits typed on the system call UI (iOS CallKit); null elsewhere.
+/// Overridable in tests.
+final systemDtmfProvider = Provider<Stream<({String callKey, String digits})>?>((ref) {
+  final p = ref.watch(platformServicesProvider);
+  return p is IosPlatformServices ? p.systemDtmf : null;
+});
+
+/// A redirect (3xx) that needs the user's decision.
+class RedirectPrompt {
+  const RedirectPrompt({required this.cid, required this.target, required this.code});
+  final int cid;
+  final String target;
+  final int code;
+}
+
+class RedirectPromptController extends Notifier<RedirectPrompt?> {
+  @override
+  RedirectPrompt? build() => null;
+  void set(RedirectPrompt? p) => state = p;
+}
+
+final redirectPromptProvider = NotifierProvider<RedirectPromptController, RedirectPrompt?>(
+  RedirectPromptController.new,
+);
+
+/// True when [target] points at an IPv4/IPv6 literal host (`sip:u@1.2.3.4`,
+/// `u@[::1]:5060`, bare `1.2.3.4`); returns the literal or null.
+String? ipLiteralHost(String target) {
+  var t = target.trim();
+  final m = RegExp(r'^sips?:', caseSensitive: false).firstMatch(t);
+  if (m != null) t = t.substring(m.end);
+  final at = t.lastIndexOf('@');
+  if (at >= 0) t = t.substring(at + 1);
+  t = t.split(RegExp(r'[;?>]')).first;
+  if (t.startsWith('[')) {
+    final end = t.indexOf(']');
+    if (end > 1) {
+      final h = t.substring(1, end);
+      return InternetAddress.tryParse(h)?.type == InternetAddressType.IPv6 ? h : null;
+    }
+    return null;
+  }
+  final host = t.contains(':') && t.split(':').length == 2 ? t.split(':').first : t;
+  return InternetAddress.tryParse(host)?.type == InternetAddressType.IPv4 ? host : null;
+}
+
+/// Interval of the recording beep while a call is being recorded.
+const Duration kRecordBeepInterval = Duration(seconds: 15);
+
 String describeCallFailure(int code, String reason) {
   switch (code) {
     case 400:
@@ -232,6 +292,15 @@ class CallsController extends Notifier<CallsState> {
   // before or after makeCall returns, so both paths consult these maps.
   final Map<int, LanCallMeta?> _lanOutMeta = {};
   final Set<int> _silentCids = {};
+  // Side effects are only pushed to the platform when their value changes.
+  bool? _lastProximity;
+  bool? _lastKeepOn;
+  ({bool inCall, bool ringing})? _lastTray;
+  // Call-progress tone currently owned by us (ringback / busy / congestion).
+  ToneKind? _tone;
+  Timer? _toneTimer;
+  // Recording-beep timers per cid.
+  final Map<int, Timer> _beepTimers = {};
 
   EngineController get _ctl => ref.read(engineProvider.notifier);
   SipEngine get _engine => _ctl.engine;
@@ -242,12 +311,22 @@ class CallsController extends Notifier<CallsState> {
   CallsState build() {
     final sub = _ctl.events.listen(_onEvent);
     final actions = _platform.systemCallActions.listen(_onSystemAction);
+    final dtmfSub = ref.read(systemDtmfProvider)?.listen((e) {
+      final cid = int.tryParse(e.callKey);
+      if (cid != null && _calls.containsKey(cid)) unawaited(sendDtmf(cid, e.digits));
+    });
     _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollStats());
     ref.onDispose(() {
       sub.cancel();
       actions.cancel();
+      dtmfSub?.cancel();
       _statsTimer?.cancel();
       _waitingTimer?.cancel();
+      _toneTimer?.cancel();
+      for (final t in _beepTimers.values) {
+        t.cancel();
+      }
+      _beepTimers.clear();
       for (final c in _calls.values) {
         c.noAnswerTimer?.cancel();
         c.autoAnswerTimer?.cancel();
@@ -260,6 +339,7 @@ class CallsController extends Notifier<CallsState> {
           _finalize(c, forceEnded: true);
         }
         _calls.clear();
+        _stopTone();
         _emit();
       }
     });
@@ -313,18 +393,28 @@ class CallsController extends Notifier<CallsState> {
       unawaited(_guard(() => _platform.stopForegroundService()));
     }
     final connected = live.any((c) => c.isConfirmed);
-    unawaited(_guard(() => _platform.setProximityEnabled(connected)));
-    unawaited(_guard(() => _platform.setKeepScreenOn(any)));
-    unawaited(
-      _guard(
-        () => _platform.updateTray(
-          missedCalls: 0,
-          inCall: connected,
-          ringing: ringingNow.isNotEmpty,
-          tooltip: connected ? 'In a call' : null,
+    if (_lastProximity != connected) {
+      _lastProximity = connected;
+      unawaited(_guard(() => _platform.setProximityEnabled(connected)));
+    }
+    if (_lastKeepOn != any) {
+      _lastKeepOn = any;
+      unawaited(_guard(() => _platform.setKeepScreenOn(any)));
+    }
+    final tray = (inCall: connected, ringing: ringingNow.isNotEmpty);
+    if (_lastTray != tray) {
+      _lastTray = tray;
+      unawaited(
+        _guard(
+          () => _platform.updateTray(
+            missedCalls: 0,
+            inCall: connected,
+            ringing: ringingNow.isNotEmpty,
+            tooltip: connected ? 'In a call' : null,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   Future<void> _guard(Future<void> Function() f) async {
@@ -337,19 +427,82 @@ class CallsController extends Notifier<CallsState> {
 
   Future<void> _playWaiting() => _guard(() => _engine.playTone(ToneKind.waiting));
 
+  // ---- call-progress tones ---------------------------------------------------
+
+  /// Ringback is played locally while an outgoing call is calling/early and
+  /// the remote sends no early media.
+  bool _wantsRingback() => _calls.values.any(
+    (c) =>
+        !c.hidden &&
+        !c.silent &&
+        c.direction == CallDirection.outgoing &&
+        (c.state == CallState.calling || c.state == CallState.early) &&
+        c.info.media == MediaStatus.none,
+  );
+
+  void _startTone(ToneKind kind, {Duration? duration}) {
+    if (!_settings.progressTones || !_ctl.hasEngine) return;
+    _toneTimer?.cancel();
+    _toneTimer = null;
+    _tone = kind;
+    unawaited(_guard(() => _engine.playTone(kind, loop: true)));
+    if (duration != null) {
+      _toneTimer = Timer(duration, () {
+        if (_tone == kind) _stopTone();
+      });
+    }
+  }
+
+  void _stopTone() {
+    _toneTimer?.cancel();
+    _toneTimer = null;
+    if (_tone == null) return;
+    _tone = null;
+    if (_ctl.hasEngine) unawaited(_guard(() => _engine.stopTone()));
+  }
+
+  /// Starts/stops ringback to match the current calls. Timed tones (busy,
+  /// congestion) are left to their own timer unless a new call is dialling.
+  void _syncTones() {
+    final want = _wantsRingback();
+    if (want) {
+      if (_tone != ToneKind.ringback) _startTone(ToneKind.ringback);
+    } else if (_tone == ToneKind.ringback) {
+      _stopTone();
+    }
+  }
+
+  /// Tone for a failed outgoing call, or null.
+  ToneKind? _terminalToneFor(UiCall c) {
+    if (c.direction != CallDirection.outgoing || c.hidden || c.silent) return null;
+    if (c.answered || c.userHangup || c.forcedResult != null) return null;
+    final code = c.info.lastCode;
+    if (code == 486 || code == 600 || code == 603) return ToneKind.busy;
+    if (code == 408 || code == 404 || code == 484 || code >= 500) return ToneKind.congestion;
+    return null;
+  }
+
+  void _endTone(UiCall c) {
+    final t = _terminalToneFor(c);
+    if (t != null && !_wantsRingback()) {
+      _startTone(t, duration: const Duration(seconds: 3));
+    } else {
+      _syncTones();
+    }
+  }
+
   Future<void> _startRinger(UiCall call) async {
     final contacts = ref.read(contactsProvider);
     final contact = findContact(contacts, call.number);
     final profile = ref.read(accountsProvider).byId(call.accountId);
-    var tone = _settings.ringtone;
-    if (profile != null && profile.ringtone != 'default') tone = profile.ringtone;
-    if (contact != null && contact.ringtone != 'default') tone = contact.ringtone;
+    final tone = resolveRingtoneName(_settings, profile, contact);
+    final file = await ref.read(ringtoneFileProvider)(tone);
+    if (!_ringing) return; // the call ended while the file was prepared
     if (_platform.ringsViaOs) {
       await _guard(
-        () => _platform.startRingtone(ringtone: tone, volume: _settings.ringerVolume),
+        () => _platform.startRingtone(ringtone: file ?? 'default', volume: _settings.ringerVolume),
       );
     } else {
-      final file = (tone.contains('/') || tone.contains(r'\')) ? tone : null;
       await _guard(
         () => _engine.ringStart(
           file: file,
@@ -405,6 +558,7 @@ class CallsController extends Notifier<CallsState> {
           srtp: e.srtp,
           secureSignaling: e.secureSignaling,
         );
+        _syncTones();
         _emit();
         unawaited(_refresh(e.cid));
       case CallStatsEvent():
@@ -432,11 +586,37 @@ class CallsController extends Notifier<CallsState> {
           old.forcedResult = CallResult.transferred;
         }
       case CallRedirectedEvent():
-        unawaited(_guard(() => _engine.processRedirect(e.cid, RedirectAction.accept)));
+        _onRedirected(e);
       case ResyncSnapshotEvent():
         _reconcile(e.snapshot.calls);
       default:
     }
+  }
+
+  void _onRedirected(CallRedirectedEvent e) {
+    final c = _calls[e.cid];
+    final profile = ref.read(accountsProvider).byId(c?.accountId ?? c?.info.uid ?? '');
+    final policy = profile?.config.redirect ?? RedirectPolicy.auto;
+    switch (policy) {
+      case RedirectPolicy.ask:
+        ref.read(redirectPromptProvider.notifier).set(
+          RedirectPrompt(cid: e.cid, target: e.target, code: e.code),
+        );
+      case RedirectPolicy.reject:
+        unawaited(_guard(() => _engine.processRedirect(e.cid, RedirectAction.reject)));
+      case RedirectPolicy.auto:
+        unawaited(_guard(() => _engine.processRedirect(e.cid, RedirectAction.accept)));
+    }
+  }
+
+  /// The user's answer to a [RedirectPrompt].
+  Future<void> resolveRedirect(bool follow) async {
+    final p = ref.read(redirectPromptProvider);
+    if (p == null) return;
+    ref.read(redirectPromptProvider.notifier).set(null);
+    await _guard(
+      () => _engine.processRedirect(p.cid, follow ? RedirectAction.accept : RedirectAction.reject),
+    );
   }
 
   void _reconcile(List<CallInfo> snapshot) {
@@ -467,6 +647,7 @@ class CallsController extends Notifier<CallsState> {
         _finalize(c);
       }
     }
+    _syncTones();
     _emit();
   }
 
@@ -504,6 +685,7 @@ class CallsController extends Notifier<CallsState> {
         _calls[e.cid] = c;
         _finalize(c);
         _calls.remove(e.cid);
+        _endTone(c);
         _emit();
         return;
       }
@@ -546,7 +728,7 @@ class CallsController extends Notifier<CallsState> {
       _focused = c.cid;
       unawaited(_guard(() => _platform.reportCallConnected('${c!.cid}')));
       unawaited(_refresh(c.cid));
-      if (_settings.autoRecord && !c.recording) {
+      if (!c.silent && !c.recording && _shouldAutoRecord(c)) {
         unawaited(startRecording(c.cid));
       }
     }
@@ -554,6 +736,11 @@ class CallsController extends Notifier<CallsState> {
       _finalize(c);
       _calls.remove(c.cid);
       if (_focused == c.cid) _focused = null;
+      final prompt = ref.read(redirectPromptProvider);
+      if (prompt?.cid == c.cid) ref.read(redirectPromptProvider.notifier).set(null);
+      _endTone(c);
+    } else {
+      _syncTones();
     }
     _emit();
   }
@@ -566,6 +753,8 @@ class CallsController extends Notifier<CallsState> {
       c.transferredAway = true;
       c.forcedResult = CallResult.transferred;
       unawaited(_guard(() => _engine.hangup(e.cid)));
+    } else if (ref.exists(lanHandoffImplProvider) && ref.read(lanHandoffImplProvider).sessionFor(e.cid) != null) {
+      // A LAN hand-off owns this call: it decides (relay fallback / keep call).
     } else {
       ref.read(noticeProvider.notifier).error(
         'Transfer failed: ${e.reason} (${e.code})',
@@ -608,7 +797,7 @@ class CallsController extends Notifier<CallsState> {
     if (list.isEmpty) return false;
     for (final b in list) {
       if (b.trim().isEmpty) continue;
-      if (sameNumber(i.remoteUri, b) || i.remoteUri.contains(b)) return true;
+      if (sameNumber(i.remoteUri, b)) return true;
     }
     return false;
   }
@@ -773,6 +962,7 @@ class CallsController extends Notifier<CallsState> {
   void _finalize(UiCall c, {bool forceEnded = false}) {
     c.noAnswerTimer?.cancel();
     c.autoAnswerTimer?.cancel();
+    _beepTimers.remove(c.cid)?.cancel();
     if (_notified.remove('${c.cid}')) {
       unawaited(_guard(() => _platform.cancelIncomingCallNotification('${c.cid}')));
     }
@@ -855,6 +1045,9 @@ class CallsController extends Notifier<CallsState> {
     return DialRules(
       rules: [for (final r in s.dialRules) DialRule.fromJson(r)],
       emergencyNumbers: s.emergencyNumbers,
+      stripPrefix: s.stripPrefix,
+      plusReplacement: s.plusReplacement.isEmpty ? null : s.plusReplacement,
+      defaultCountryPrefix: s.defaultCountryPrefix,
     );
   }
 
@@ -883,18 +1076,38 @@ class CallsController extends Notifier<CallsState> {
     }
     final res = applyRules ? dialRules().apply(input) : DialResult(input.trim());
     if (res.target.isEmpty) return null;
-    var profile = _pickAccount(accountId, res);
     final accState = ref.read(accountsProvider);
-    if (res.emergency) {
-      // Emergency numbers go out through any registered account.
-      profile = accState.profiles.firstWhere(
+    final selected = ref.read(dialAccountProvider);
+    final explicitDirect =
+        accountId == kDirectAccountId || (accountId == null && selected == kDirectAccountId);
+    var profile = explicitDirect ? null : _pickAccount(accountId, res);
+    // sip:user@<IP literal> with an account whose domain differs goes out
+    // directly, unless the user picked an account on purpose.
+    final ip = ipLiteralHost(res.target);
+    final pickedOnPurpose =
+        accountId != null || res.accountId != null || (selected != null && selected != kDirectAccountId);
+    if (!explicitDirect && ip != null && profile != null && !pickedOnPurpose) {
+      final dom = profile.config.domain.replaceAll(RegExp(r'^\[|\]$'), '').split(RegExp(r':(?=\d+$)')).first;
+      if (dom != ip) profile = null;
+    }
+    if (res.emergency && !explicitDirect && (ip == null || profile != null)) {
+      // Emergency numbers go out through any registered account; with no
+      // account at all they use the direct path.
+      final registered = accState.profiles.where(
         (p) => accState.statusOf(p.id) == AccountStatus.registered,
-        orElse: () => profile ?? accState.profiles.first,
       );
+      profile = registered.isNotEmpty
+          ? registered.first
+          : (profile ?? (accState.profiles.isEmpty ? null : accState.profiles.first));
     }
     AccountRef ref0;
     if (profile == null) {
-      final looksDirect = res.isUri || RegExp(r'^\d{1,3}(\.\d{1,3}){3}').hasMatch(res.target);
+      final looksDirect =
+          explicitDirect ||
+          res.emergency ||
+          ip != null ||
+          res.isUri ||
+          RegExp(r'^\d{1,3}(\.\d{1,3}){3}').hasMatch(res.target);
       if (!looksDirect) {
         notices.error('Add an account to place calls');
         return null;
@@ -902,7 +1115,7 @@ class CallsController extends Notifier<CallsState> {
       ref0 = const AccountRef.direct();
     } else {
       final st = accState.statusOf(profile.id);
-      if (st == AccountStatus.failed || st == AccountStatus.disabled) {
+      if (!res.emergency && (st == AccountStatus.failed || st == AccountStatus.disabled)) {
         notices.error(
           '${profile.name} is not registered',
           details: accState.errorOf(profile.id),
@@ -1065,6 +1278,16 @@ class CallsController extends Notifier<CallsState> {
     await _refresh(cid);
   }
 
+  /// Sets the conference levels for one party (see [UiCall.rxLevel]).
+  Future<void> setPartyLevels(int cid, {double? rx, double? tx}) async {
+    final c = _calls[cid];
+    if (c == null) return;
+    c.rxLevel = rx ?? c.rxLevel;
+    c.txLevel = tx ?? c.txLevel;
+    await _guard(() => _engine.setCallLevels(cid, rx: c.rxLevel, tx: c.txLevel));
+    _emit();
+  }
+
   Future<void> toggleMute(int cid) async {
     final c = _calls[cid];
     if (c != null) await setMute(cid, !c.muted);
@@ -1196,6 +1419,35 @@ class CallsController extends Notifier<CallsState> {
     return ref.read(recordingsDirProvider)();
   }
 
+  bool _shouldAutoRecord(UiCall c) {
+    final profile = ref.read(accountsProvider).byId(c.accountId);
+    switch (profile?.autoRecord ?? 'inherit') {
+      case 'always':
+        return true;
+      case 'never':
+        return false;
+      default:
+        return _settings.autoRecord;
+    }
+  }
+
+  /// While recording with "recording beep" on, plays a short beep into the
+  /// call every [kRecordBeepInterval] (and once when recording starts).
+  void _startBeeps(int cid) {
+    _beepTimers.remove(cid)?.cancel();
+    if (!_settings.recordBeep) return;
+    Future<void> beep() async {
+      final c = _calls[cid];
+      if (c == null || c.isEnded || !c.recording || !_ctl.hasEngine) return;
+      final file = await ref.read(recordBeepFileProvider)();
+      if (file == null) return;
+      await _guard(() => _engine.playFile(cid, file));
+    }
+
+    unawaited(beep());
+    _beepTimers[cid] = Timer.periodic(kRecordBeepInterval, (_) => unawaited(beep()));
+  }
+
   Future<void> startRecording(int cid) async {
     final c = _calls[cid];
     if (c == null) return;
@@ -1209,6 +1461,7 @@ class CallsController extends Notifier<CallsState> {
       final file = await _engine.recordStart(cid, p.join(dir, name));
       c.recordingFile = file;
       c.info = c.info.copyWith(recording: true);
+      _startBeeps(cid);
       _emit();
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error('Could not start recording', details: '$e');
@@ -1218,6 +1471,7 @@ class CallsController extends Notifier<CallsState> {
   Future<void> stopRecording(int cid) async {
     final c = _calls[cid];
     if (c == null) return;
+    _beepTimers.remove(cid)?.cancel();
     try {
       final r = await _engine.recordStop(cid);
       c.recordingFile = r.file.isNotEmpty ? r.file : c.recordingFile;
@@ -1279,7 +1533,75 @@ class CallsController extends Notifier<CallsState> {
     return dial(code, accountId: profile.id, applyRules: false);
   }
 
+  /// Retrieves a parked call: dials `<parkRetrieve prefix><slot>`.
+  Future<int?> retrieveParked(String slot, {String? accountId}) async {
+    final s = slot.trim();
+    if (s.isEmpty) return null;
+    final profile =
+        ref.read(accountsProvider).byId(accountId ?? '') ??
+        ref.read(accountsProvider).defaultProfile;
+    final prefix = profile?.featureCodes.parkRetrieve ?? '';
+    return dial('$prefix$s', accountId: profile?.id, applyRules: false);
+  }
+
+  /// Directed pickup of a ringing BLF buddy. Uses an INVITE with Replaces
+  /// when the early dialog is known, else falls back to the feature code.
+  Future<int?> pickupBuddy(BuddyInfo b, {String? accountId}) async {
+    final accState = ref.read(accountsProvider);
+    final profile =
+        accState.byId(accountId ?? '') ??
+        accState.byId(b.uid) ??
+        accState.defaultProfile;
+    BlfDialog? d;
+    for (final x in b.blf.dialogs) {
+      if (x.state == BlfState.early &&
+          x.callId.isNotEmpty &&
+          x.localTag.isNotEmpty &&
+          x.remoteTag.isNotEmpty) {
+        d = x;
+        break;
+      }
+    }
+    if (d != null && profile != null && _ctl.hasEngine && b.uri.isNotEmpty) {
+      try {
+        await _holdActive();
+        final r = await _engine.pickup(
+          acc: AccountRef.uid(profile.id),
+          uri: b.uri,
+          callId: d.callId,
+          toTag: d.localTag,
+          fromTag: d.remoteTag,
+        );
+        _focused = r.cid;
+        _emit();
+        return r.cid;
+      } on EngineException catch (e) {
+        debugPrint('Replaces pickup failed, using feature code: $e');
+      }
+    }
+    return pickup(extension: userPart(b.uri), accountId: profile?.id);
+  }
+
   // ---- LAN Link hooks ---------------------------------------------------------
+
+  /// Places a hidden call (no UI, no history) through [accountId]; used for
+  /// PBX feature codes. Returns the call id or null.
+  Future<int?> dialSilent(String uri, {required String accountId}) async {
+    if (!_ctl.hasEngine) return null;
+    try {
+      final r = await _engine.makeCall(acc: AccountRef.uid(accountId), uri: uri);
+      _silentCids.add(r.cid);
+      final c = _calls[r.cid];
+      if (c != null) {
+        c.hidden = true;
+        c.silent = true;
+        _emit();
+      }
+      return r.cid;
+    } on EngineException {
+      return null;
+    }
+  }
 
   /// Places a call through the engine's LAN account (`__lan__`). [silent]
   /// calls are internal relay legs: hidden from the UI and the history.

@@ -14,6 +14,7 @@ import '../../../models/chat.dart';
 import '../../../services/providers.dart';
 import '../../../services/settings_controller.dart';
 import '../../widgets/basic_widgets.dart';
+import '../../widgets/qr_scanner_sheet.dart';
 import '../../widgets/settings_tiles.dart';
 import 'lan_dialogs.dart';
 import 'lan_widgets.dart';
@@ -147,6 +148,14 @@ Future<void> showManualConnect(BuildContext context, WidgetRef ref) async {
         ],
       ),
       actions: [
+        TextButton(
+          key: const Key('manual-connect-scan'),
+          onPressed: () async {
+            final code = await showQrScannerSheet(ctx, title: 'Scan LAN pairing QR', pasteHint: 'softphonepro://lan?... or host:port');
+            if (code != null && ctx.mounted) Navigator.pop(ctx, code);
+          },
+          child: const Text('Scan QR'),
+        ),
         TextButton(
           onPressed: () async {
             final d = await Clipboard.getData(Clipboard.kTextPlain);

@@ -48,7 +48,11 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SoftphonePro needs the microphone to carry your voice during calls.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>SoftphonePro can show your device contacts when you search or dial.</string>
+	<string>SoftphonePro can show your device contacts when you search or dial, and import them on request.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>SoftphonePro uses the camera to scan provisioning and pairing QR codes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SoftphonePro uses Face ID to unlock the app.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>SoftphonePro discovers other SoftphonePro devices on your local network.</string>
 	<key>NSBonjourServices</key>

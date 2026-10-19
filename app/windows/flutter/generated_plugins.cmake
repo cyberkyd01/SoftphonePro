@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
   flutter_secure_storage_windows
   hotkey_manager_windows
+  local_auth_windows
   local_notifier
   screen_retriever_windows
   tray_manager

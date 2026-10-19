@@ -40,10 +40,17 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
     }
   }
 
-  Widget _tx(String title, String value, ValueChanged<String> on, {bool obscure = false, String? hint, String? sub, TextInputType? kb, IconData? icon}) =>
-      TextTile(title: title, value: value, onChanged: on, obscure: obscure, hint: hint, subtitle: sub, keyboardType: kb, icon: icon);
+  Widget _tx(String title, String value, ValueChanged<String> on, {bool obscure = false, String? hint, String? sub, TextInputType? kb, IconData? icon, String? Function(String)? validator}) =>
+      TextTile(title: title, value: value, onChanged: on, obscure: obscure, hint: hint, subtitle: sub, keyboardType: kb, icon: icon, validator: validator);
   Widget _sw(String title, bool v, ValueChanged<bool> on, {String? sub}) => SwitchTile(title: title, subtitle: sub, value: v, onChanged: on);
-  Widget _num(String title, int v, ValueChanged<int> on, {String? sub}) => TextTile(title: title, subtitle: sub, value: '$v', keyboardType: TextInputType.number, onChanged: (s) => on(int.tryParse(s) ?? v));
+  Widget _num(String title, int v, ValueChanged<int> on, {String? sub, int? min, int? max}) => TextTile(
+    title: title,
+    subtitle: sub == null && min != null && max != null ? 'Allowed range $min to $max' : sub,
+    value: '$v',
+    keyboardType: TextInputType.number,
+    validator: (s) => validateInt(s, min: min, max: max),
+    onChanged: (s) => on(int.tryParse(s) ?? v),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +58,10 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
     final acc = ref.watch(accountsProvider);
     final known = ref.watch(codecListProvider).value ?? kFallbackCodecs;
     final codecs = c.codecs.isEmpty ? <String>[] : orderCodecs(known, c.codecs);
+    final iax = c.proto == SipProto.iax2;
+    final ws = c.transport == AccTransport.ws || c.transport == AccTransport.wss;
+    final iaxKnown = const ['PCMU/8000/1', 'PCMA/8000/1', 'GSM/8000/1'];
+    final iaxCodecs = orderCodecs(iaxKnown, c.codecs);
     final headersText = c.headers.entries.map((e) => '${e.key}: ${e.value}').join('\n');
     return PopScope(
       canPop: !_dirty,
@@ -85,9 +96,20 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   _tx('Label', _p.label, (v) => _upd((p) => p.copyWith(label: v)), hint: 'e.g. Office'),
                   _tx('Display name', c.displayName, (v) => _cfg((x) => x.copyWith(displayName: v))),
                   _tx('Username', c.username, (v) => _cfg((x) => x.copyWith(username: v))),
-                  _tx('Authorization user', c.authUser ?? '', (v) => _cfg((x) => AccountConfigX.withAuth(x, v)), hint: 'Same as username'),
+                  ListTile(
+                    key: const Key('acc-protocol'),
+                    title: const Text('Protocol'),
+                    subtitle: const Text('Fixed when the account is created'),
+                    trailing: Text(iax ? 'IAX2' : 'SIP', style: Theme.of(context).textTheme.bodyMedium),
+                  ),
+                  if (!iax) _tx('Authorization user', c.authUser ?? '', (v) => _cfg((x) => AccountConfigX.withAuth(x, v)), hint: 'Same as username', sub: 'Only if the provider uses a different login name than the username'),
                   _tx('Password', c.password, (v) => _cfg((x) => x.copyWith(password: v)), obscure: true),
-                  _tx('Server / domain', c.domain, (v) => _cfg((x) => x.copyWith(domain: v))),
+                  if (iax) ...[
+                    _tx('Server host', c.iax.host.isEmpty ? c.domain : c.iax.host, (v) => _cfg((x) => x.copyWith(domain: v, iax: x.iax.copyWith(host: v))), validator: validateHost),
+                    _num('Port', c.iax.port, (v) => _cfg((x) => x.copyWith(iax: x.iax.copyWith(port: v))), min: 1, max: 65535, sub: 'IAX2 default is 4569'),
+                    _tx('Context', c.iax.context ?? '', (v) => _cfg((x) => x.copyWith(iax: IaxConfig(host: x.iax.host, port: x.iax.port, context: v.isEmpty ? null : v))), hint: 'Not set', sub: 'Optional. Sent to the PBX as the called context'),
+                  ] else
+                    _tx('Server / domain', c.domain, (v) => _cfg((x) => x.copyWith(domain: v)), validator: validateHost, sub: 'host or host:port'),
                   _sw('Enabled', _p.enabled, (v) => _upd((p) => p.copyWith(enabled: v))),
                   _sw('Default account for outgoing calls', _p.isDefault, (v) => _upd((p) => p.copyWith(isDefault: v))),
                   ListTile(
@@ -98,15 +120,65 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     ]),
                   ),
                 ]),
+                if (iax) ...[
+                  SettingsGroup(title: 'Registration', children: [
+                    _sw('Register', c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: 'Turn off for peers that need no registration'),
+                    _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: 'Asterisk usually forces 60 s. Range 10 to 86400'),
+                    _num('Retry interval (s)', c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400),
+                    _num('First retry (s)', c.regFirstRetrySec, (v) => _cfg((x) => x.copyWith(regFirstRetrySec: v)), min: 0, max: 86400),
+                  ]),
+                  SettingsGroup(
+                    title: 'Codecs',
+                    footer: 'IAX2 supports G.711 and GSM. Drag to set the preference order.',
+                    children: [
+                      ReorderableListView(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        buildDefaultDragHandles: false,
+                        onReorder: (a, b) {
+                          if (b > a) b -= 1;
+                          final l = [...iaxCodecs];
+                          l.insert(b, l.removeAt(a));
+                          _cfg((x) => x.copyWith(codecs: l));
+                        },
+                        children: [
+                          for (var i = 0; i < iaxCodecs.length; i++)
+                            ListTile(
+                              key: ValueKey('iax-${iaxCodecs[i]}'),
+                              leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_indicator_rounded)),
+                              title: Text(iaxCodecs[i].split('/').first),
+                              trailing: c.codecs.contains(iaxCodecs[i]) || c.codecs.isEmpty
+                                  ? IconButton(tooltip: 'Remove ${iaxCodecs[i].split('/').first}', icon: const Icon(Icons.close_rounded), onPressed: iaxCodecs.length <= 1 ? null : () => _cfg((x) => x.copyWith(codecs: iaxCodecs.where((e) => e != iaxCodecs[i]).toList())))
+                                  : null,
+                            ),
+                        ],
+                      ),
+                      if (iaxCodecs.length < iaxKnown.length)
+                        ListTile(
+                          leading: const Icon(Icons.add_rounded),
+                          title: const Text('Add codec'),
+                          onTap: () async {
+                            final pick = await showModalBottomSheet<String>(
+                              context: context,
+                              builder: (ctx) => SafeArea(child: ListView(shrinkWrap: true, children: [for (final k in iaxKnown.where((k) => !iaxCodecs.contains(k))) ListTile(title: Text(k.split('/').first), onTap: () => Navigator.pop(ctx, k))])),
+                            );
+                            if (pick != null) _cfg((x) => x.copyWith(codecs: [...iaxCodecs, pick]));
+                          },
+                        ),
+                    ],
+                  ),
+                ] else ...[
                 SettingsGroup(title: 'Server and transport', children: [
                   _tx('Registrar override', c.registrar ?? '', (v) => _cfg((x) => AccountConfigX.withRegistrar(x, v)), hint: 'sip:server:5060'),
+                  _tx('Backup registrar', _p.backupRegistrar, (v) => _upd((p) => p.copyWith(backupRegistrar: v.trim())), hint: 'None', sub: 'Used after 3 failed attempts; the primary is retried every 5 minutes'),
                   _tx('Outbound proxies', c.proxies.join(', '), (v) => _cfg((x) => x.copyWith(proxies: v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList())), hint: 'None'),
                   SelectTile<AccTransport>(title: 'Transport', value: c.transport, options: {for (final t in AccTransport.values) t: t.wire.toUpperCase()}, onChanged: (v) => _cfg((x) => x.copyWith(transport: v))),
-                  _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v))),
-                  _num('Keep-alive (s)', c.keepAliveSec, (v) => _cfg((x) => x.copyWith(keepAliveSec: v))),
-                  _num('Local SIP port', c.localPort, (v) => _cfg((x) => x.copyWith(localPort: v)), sub: '0 uses the shared transport'),
+                  if (ws) _tx('WebSocket path', c.wsPath, (v) => _cfg((x) => x.copyWith(wsPath: v)), hint: '/ws', sub: 'HTTP path of the WebSocket upgrade, e.g. /ws. Must start with "/"', validator: validateWsPath),
+                  _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: '300 to 3600 is typical. Range 10 to 86400'),
+                  if (!ws) _num('Keep-alive (s)', c.keepAliveSec, (v) => _cfg((x) => x.copyWith(keepAliveSec: v)), min: 0, max: 3600, sub: 'UDP keep-alive interval. 0 turns it off. Range 0 to 3600'),
+                  _num('Local SIP port', c.localPort, (v) => _cfg((x) => x.copyWith(localPort: v)), min: 0, max: 65535, sub: '0 uses the shared transport. Range 0 to 65535'),
                   _sw('Register', c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: 'Turn off for trunks without registration'),
-                  _sw('SIP Outbound (RFC 5626)', c.sipOutbound, (v) => _cfg((x) => x.copyWith(sipOutbound: v))),
+                  if (!ws) _sw('SIP Outbound (RFC 5626)', c.sipOutbound, (v) => _cfg((x) => x.copyWith(sipOutbound: v)), sub: 'Keeps a persistent flow through NAT. Needs server support'),
                 ]),
                 SettingsGroup(title: 'NAT', children: [
                   _sw('Use STUN', c.useStun, (v) => _cfg((x) => x.copyWith(useStun: v))),
@@ -117,12 +189,17 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     _tx('TURN username', c.turn.username, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(username: v)))),
                     _tx('TURN password', c.turn.password, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(password: v))), obscure: true),
                   ],
-                  _sw('Rewrite Contact header', c.contactRewrite, (v) => _cfg((x) => x.copyWith(contactRewrite: v))),
-                  _sw('Rewrite Via header', c.viaRewrite, (v) => _cfg((x) => x.copyWith(viaRewrite: v))),
-                  _sw('Rewrite SDP address', c.sdpNatRewrite, (v) => _cfg((x) => x.copyWith(sdpNatRewrite: v))),
-                  _sw('RTCP multiplexing', c.rtcpMux, (v) => _cfg((x) => x.copyWith(rtcpMux: v))),
+                  if (!ws) ...[
+                    _sw('Rewrite Contact header', c.contactRewrite, (v) => _cfg((x) => x.copyWith(contactRewrite: v)), sub: 'Use the address the server sees. Keep on behind NAT'),
+                    _sw('Rewrite Via header', c.viaRewrite, (v) => _cfg((x) => x.copyWith(viaRewrite: v)), sub: 'Use the address the server sees. Keep on behind NAT'),
+                  ],
+                  _sw('Rewrite SDP address', c.sdpNatRewrite, (v) => _cfg((x) => x.copyWith(sdpNatRewrite: v)), sub: 'Replace the media address in SDP with the public one'),
                   SelectTile<Ipv6Mode>(title: 'IPv6 signalling', value: c.ipv6Sip, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Sip: v))),
                   SelectTile<Ipv6Mode>(title: 'IPv6 media', value: c.ipv6Media, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Media: v))),
+                ]),
+                SettingsGroup(title: 'Advanced media', footer: 'WebRTC gateways need RTCP multiplexing and RTCP feedback.', children: [
+                  _sw('RTCP multiplexing', c.rtcpMux, (v) => _cfg((x) => x.copyWith(rtcpMux: v)), sub: 'Send RTP and RTCP on one port (rtcp-mux)'),
+                  _sw('RTCP feedback (AVPF)', c.rtcpFb, (v) => _cfg((x) => x.copyWith(rtcpFb: v)), sub: 'Offer RTP/AVPF with NACK. Needed for WebRTC servers'),
                 ]),
                 SettingsGroup(title: 'Security', children: [
                   SelectTile<SrtpMode>(title: 'Media encryption (SRTP)', value: c.srtp, options: const {SrtpMode.off: 'Off', SrtpMode.optional: 'Optional', SrtpMode.mandatory: 'Required'}, onChanged: (v) => _cfg((x) => x.copyWith(srtp: v))),
@@ -173,10 +250,11 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                       ),
                   ],
                 ),
+                ],
                 SettingsGroup(title: 'Features', children: [
                   _tx('Voicemail number', _p.voicemailNumber, (v) => _upd((p) => p.copyWith(voicemailNumber: v)), hint: '*97'),
-                  _sw('Voicemail indicator (MWI)', c.mwi, (v) => _cfg((x) => x.copyWith(mwi: v))),
-                  _sw('Publish my presence', c.publishPresence, (v) => _cfg((x) => x.copyWith(publishPresence: v))),
+                  if (!iax) _sw('Voicemail indicator (MWI)', c.mwi, (v) => _cfg((x) => x.copyWith(mwi: v)), sub: 'Subscribe to message-waiting notifications'),
+                  if (!iax) _sw('Publish my presence', c.publishPresence, (v) => _cfg((x) => x.copyWith(publishPresence: v)), sub: 'Let the server share your online status'),
                   _sw('Do not disturb', _p.dnd, (v) => _upd((p) => p.copyWith(dnd: v))),
                   SelectTile<ForwardMode>(title: 'Call forwarding', value: _p.forwarding.mode, options: const {ForwardMode.off: 'Off', ForwardMode.always: 'Always', ForwardMode.busy: 'When busy', ForwardMode.noAnswer: 'No answer'}, onChanged: (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(mode: v)))),
                   if (_p.forwarding.mode != ForwardMode.off) _tx('Forward to', _p.forwarding.target, (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(target: v))), hint: 'Number or SIP address'),
@@ -186,20 +264,27 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     _num('Answer after (s)', _p.autoAnswer.delaySec, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(delaySec: v)))),
                     _sw('Only for intercom calls', _p.autoAnswer.onlyIntercomHeaders, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(onlyIntercomHeaders: v))), sub: 'Needs an auto-answer header from the PBX'),
                   ],
-                  SelectTile<String>(title: 'Ringtone', value: _p.ringtone, options: const {'default': 'Default', 'classic': 'Classic', 'soft': 'Soft'}, onChanged: (v) => _upd((p) => p.copyWith(ringtone: v))),
+                  SelectTile<String>(title: 'Ringtone', value: _p.ringtone, options: const {'default': 'Default', 'classic': 'Classic', 'soft': 'Soft', 'digital': 'Digital'}, onChanged: (v) => _upd((p) => p.copyWith(ringtone: v))),
+                  SelectTile<String>(key: const Key('acc-auto-record'), title: 'Record calls', value: _p.autoRecord, options: const {'inherit': 'Use global setting', 'always': 'Always', 'never': 'Never'}, onChanged: (v) => _upd((p) => p.copyWith(autoRecord: v))),
                 ]),
                 SettingsGroup(title: 'Feature codes', footer: 'Dialled for park, pickup, DND and forwarding on your PBX.', children: [
                   _tx('Park', _p.featureCodes.park, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(park: v)))),
                   _tx('Group pickup', _p.featureCodes.pickupGroup, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupGroup: v)))),
                   _tx('Directed pickup prefix', _p.featureCodes.pickupDirectedPrefix, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupDirectedPrefix: v)))),
+                  _tx('Park retrieve prefix', _p.featureCodes.parkRetrieve, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(parkRetrieve: v))), hint: 'Dial the slot number', sub: 'Prefix dialled before the park slot to pick a parked call back up'),
                   _tx('DND on', _p.featureCodes.dndOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOn: v)))),
                   _tx('DND off', _p.featureCodes.dndOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOff: v)))),
                   _tx('Forward on', _p.featureCodes.forwardOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOn: v)))),
                   _tx('Forward off', _p.featureCodes.forwardOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOff: v)))),
                 ]),
+                if (iax)
+                  SettingsGroup(title: 'Advanced', footer: 'DTMF is sent as native IAX2 frames.', children: [
+                    _tx('Caller ID override', c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: 'Use account default', sub: 'Caller ID name or number sent to the PBX'),
+                  ])
+                else
                 SettingsGroup(title: 'Advanced', children: [
                   SelectTile<SessionTimers>(title: 'Session timers', value: c.sessionTimers, options: {for (final s in SessionTimers.values) s: s.wire}, onChanged: (v) => _cfg((x) => x.copyWith(sessionTimers: v))),
-                  _num('Session expires (s)', c.timerSe, (v) => _cfg((x) => x.copyWith(timerSe: v))),
+                  _num('Session expires (s)', c.timerSe, (v) => _cfg((x) => x.copyWith(timerSe: v)), min: 90, max: 86400, sub: 'Range 90 to 86400'),
                   _sw('100rel (reliable provisional)', c.use100rel, (v) => _cfg((x) => x.copyWith(use100rel: v))),
                   SelectTile<HoldType>(title: 'Hold method', value: c.holdType, options: const {HoldType.rfc3264: 'RFC 3264 (sendonly)', HoldType.rfc2543: 'RFC 2543 (0.0.0.0)'}, onChanged: (v) => _cfg((x) => x.copyWith(holdType: v))),
                   SelectTile<DtmfMethod>(title: 'DTMF method', value: c.dtmfMethod, options: const {DtmfMethod.rfc2833: 'RFC 2833', DtmfMethod.info: 'SIP INFO', DtmfMethod.inband: 'In-band', DtmfMethod.auto: 'Automatic'}, onChanged: (v) => _cfg((x) => x.copyWith(dtmfMethod: v))),
@@ -210,11 +295,11 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   _tx('Caller ID override', c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: 'Use account default'),
                   _tx('User-Agent', c.userAgent ?? '', (v) => _cfg((x) => AccountConfigX.withUserAgent(x, v)), hint: 'Default'),
                   _tx('Extra SIP headers', headersText, (v) => _cfg((x) => x.copyWith(headers: parseHeaders(v))), hint: 'X-Header: value (one per line)'),
-                  _num('Retry interval (s)', c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v))),
-                  _num('Unregister timeout (ms)', c.unregTimeoutMs, (v) => _cfg((x) => x.copyWith(unregTimeoutMs: v))),
-                  _num('MWI subscription expiry (s)', c.mwiExpires, (v) => _cfg((x) => x.copyWith(mwiExpires: v))),
-                  _num('DSCP for SIP', c.dscp.sip, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: v, rtp: x.dscp.rtp)))),
-                  _num('DSCP for RTP', c.dscp.rtp, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: x.dscp.sip, rtp: v)))),
+                  _num('Retry interval (s)', c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400, sub: 'Wait before retrying a failed registration. Range 0 to 86400'),
+                  _num('Unregister timeout (ms)', c.unregTimeoutMs, (v) => _cfg((x) => x.copyWith(unregTimeoutMs: v)), min: 0, max: 60000, sub: 'How long to wait for the unregister reply. Range 0 to 60000'),
+                  _num('MWI subscription expiry (s)', c.mwiExpires, (v) => _cfg((x) => x.copyWith(mwiExpires: v)), min: 0, max: 86400),
+                  _num('DSCP for SIP', c.dscp.sip, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: v, rtp: x.dscp.rtp))), min: 0, max: 63, sub: 'QoS marking of signalling. 24 (CS3) is typical'),
+                  _num('DSCP for RTP', c.dscp.rtp, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: x.dscp.sip, rtp: v))), min: 0, max: 63, sub: 'QoS marking of media. 46 (EF) is typical'),
                   _sw('Re-INVITE after network change', c.ipChange.reinvite, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(reinvite: v)))),
                   _sw('Hang up calls on network change', c.ipChange.hangupCalls, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(hangupCalls: v)))),
                 ]),
@@ -228,6 +313,38 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
       ),
     );
   }
+}
+
+/// Integer validation with the engine's accepted range.
+String? validateInt(String s, {int? min, int? max}) {
+  final v = int.tryParse(s.trim());
+  if (v == null) return 'Enter a whole number';
+  if (min != null && v < min) return 'Must be at least $min';
+  if (max != null && v > max) return 'Must be at most $max';
+  return null;
+}
+
+/// Server host (optionally host:port) must be non-empty and have no spaces.
+String? validateHost(String s) {
+  final v = s.trim();
+  if (v.isEmpty) return 'Enter a server host name or address';
+  if (RegExp(r'\s').hasMatch(v)) return 'The server cannot contain spaces';
+  if (v.contains('/') || v.contains('@')) return 'Enter only host or host:port';
+  final m = RegExp(r'^(?:\[[^\]]+\]|[^:]+):(\d+)$').firstMatch(v);
+  if (m != null) {
+    final port = int.parse(m.group(1)!);
+    if (port < 1 || port > 65535) return 'Port must be between 1 and 65535';
+  }
+  return null;
+}
+
+/// WebSocket upgrade path: starts with "/", at most 120 characters.
+String? validateWsPath(String s) {
+  final v = s.trim();
+  if (!v.startsWith('/')) return 'The path must start with "/"';
+  if (v.length > 120) return 'Use at most 120 characters';
+  if (RegExp(r'\s').hasMatch(v)) return 'The path cannot contain spaces';
+  return null;
 }
 
 Map<String, String> parseHeaders(String text) {

@@ -10,6 +10,7 @@ class FeatureCodes {
     this.dndOff = '*79',
     this.forwardOn = '*72',
     this.forwardOff = '*73',
+    this.parkRetrieve = '',
   });
 
   final String park;
@@ -19,6 +20,10 @@ class FeatureCodes {
   final String dndOff;
   final String forwardOn;
   final String forwardOff;
+
+  /// Prefix dialled before the park slot to retrieve a parked call (empty =
+  /// dial the slot number itself).
+  final String parkRetrieve;
 
   factory FeatureCodes.fromJson(Map<String, dynamic> j) {
     const d = FeatureCodes();
@@ -31,6 +36,7 @@ class FeatureCodes {
       dndOff: s('dndOff', d.dndOff),
       forwardOn: s('forwardOn', d.forwardOn),
       forwardOff: s('forwardOff', d.forwardOff),
+      parkRetrieve: s('parkRetrieve', d.parkRetrieve),
     );
   }
 
@@ -42,6 +48,7 @@ class FeatureCodes {
     'dndOff': dndOff,
     'forwardOn': forwardOn,
     'forwardOff': forwardOff,
+    'parkRetrieve': parkRetrieve,
   };
 
   FeatureCodes copyWith({
@@ -52,6 +59,7 @@ class FeatureCodes {
     String? dndOff,
     String? forwardOn,
     String? forwardOff,
+    String? parkRetrieve,
   }) => FeatureCodes(
     park: park ?? this.park,
     pickupGroup: pickupGroup ?? this.pickupGroup,
@@ -60,6 +68,7 @@ class FeatureCodes {
     dndOff: dndOff ?? this.dndOff,
     forwardOn: forwardOn ?? this.forwardOn,
     forwardOff: forwardOff ?? this.forwardOff,
+    parkRetrieve: parkRetrieve ?? this.parkRetrieve,
   );
 }
 
@@ -158,6 +167,8 @@ class AccountProfile {
     this.ringtone = 'default',
     this.dialRuleSetId = '',
     this.providerTemplateId = 'generic',
+    this.backupRegistrar = '',
+    this.autoRecord = 'inherit',
   });
 
   final String id;
@@ -174,6 +185,12 @@ class AccountProfile {
   final String ringtone;
   final String dialRuleSetId;
   final String providerTemplateId;
+
+  /// Backup registrar (`host[:port]` or sip: URI) used after repeated failures.
+  final String backupRegistrar;
+
+  /// Per-account auto-record: `inherit` (global setting), `always`, `never`.
+  final String autoRecord;
 
   /// Name shown in chips and selectors.
   String get name {
@@ -206,6 +223,8 @@ class AccountProfile {
     String? ringtone,
     String? dialRuleSetId,
     String? providerTemplateId,
+    String? backupRegistrar,
+    String? autoRecord,
   }) => AccountProfile(
     id: id,
     config: (config ?? this.config).copyWith(uid: id),
@@ -221,6 +240,8 @@ class AccountProfile {
     ringtone: ringtone ?? this.ringtone,
     dialRuleSetId: dialRuleSetId ?? this.dialRuleSetId,
     providerTemplateId: providerTemplateId ?? this.providerTemplateId,
+    backupRegistrar: backupRegistrar ?? this.backupRegistrar,
+    autoRecord: autoRecord ?? this.autoRecord,
   );
 
   /// JSON for persistence. The password is never included unless
@@ -242,6 +263,8 @@ class AccountProfile {
       'ringtone': ringtone,
       'dialRuleSetId': dialRuleSetId,
       'providerTemplateId': providerTemplateId,
+      'backupRegistrar': backupRegistrar,
+      'autoRecord': autoRecord,
       'sip': sip,
     };
   }
@@ -269,6 +292,8 @@ class AccountProfile {
       ringtone: j['ringtone'] as String? ?? 'default',
       dialRuleSetId: j['dialRuleSetId'] as String? ?? '',
       providerTemplateId: j['providerTemplateId'] as String? ?? 'generic',
+      backupRegistrar: j['backupRegistrar'] as String? ?? '',
+      autoRecord: j['autoRecord'] as String? ?? 'inherit',
     );
   }
 }

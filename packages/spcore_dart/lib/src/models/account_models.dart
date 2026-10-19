@@ -231,6 +231,8 @@ class AccountConfig {
     this.dscp = const DscpConfig(),
     this.voicemailNumber,
     this.iax = const IaxConfig(),
+    this.wsPath = '/ws',
+    this.rtcpFb = false,
   });
 
   final String uid;
@@ -292,6 +294,12 @@ class AccountConfig {
   final DscpConfig dscp;
   final String? voicemailNumber;
   final IaxConfig iax;
+
+  /// ws/wss only: HTTP path of the WebSocket upgrade (starts with "/").
+  final String wsPath;
+
+  /// Offer RTP/AVPF + rtcp-fb nack (WebRTC servers).
+  final bool rtcpFb;
 
   factory AccountConfig.fromJson(Map<String, dynamic> j) => AccountConfig(
     uid: asString(j['uid'], ''),
@@ -366,6 +374,8 @@ class AccountConfig {
     iax: j['iax'] is Map
         ? IaxConfig.fromJson(asMap(j['iax']))
         : const IaxConfig(),
+    wsPath: asString(j['wsPath'], '/ws'),
+    rtcpFb: asBool(j['rtcpFb'], false),
   );
 
   Map<String, dynamic> toJson() => {
@@ -428,6 +438,8 @@ class AccountConfig {
     'dscp': dscp.toJson(),
     'voicemailNumber': voicemailNumber,
     'iax': iax.toJson(),
+    'wsPath': wsPath,
+    'rtcpFb': rtcpFb,
   };
 
   AccountConfig copyWith({
@@ -490,6 +502,8 @@ class AccountConfig {
     DscpConfig? dscp,
     String? voicemailNumber,
     IaxConfig? iax,
+    String? wsPath,
+    bool? rtcpFb,
   }) => AccountConfig(
     uid: uid ?? this.uid,
     proto: proto ?? this.proto,
@@ -551,6 +565,8 @@ class AccountConfig {
     dscp: dscp ?? this.dscp,
     voicemailNumber: voicemailNumber ?? this.voicemailNumber,
     iax: iax ?? this.iax,
+    wsPath: wsPath ?? this.wsPath,
+    rtcpFb: rtcpFb ?? this.rtcpFb,
   );
 
   @override

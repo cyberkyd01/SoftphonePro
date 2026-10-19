@@ -14,7 +14,7 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.softphonepro.softphonepro"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36 // plugins (flutter_secure_storage, mobile_scanner) require 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -43,7 +43,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

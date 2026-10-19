@@ -63,6 +63,8 @@ dependencies:
   bonsoir: ^2.2.0+1
   lan_link:
     path: ../packages/lan_link
+  mobile_scanner: 6.0.11
+  local_auth: ^2.3.0
 
 dependency_overrides:
   # bonsoir_android 2.2.0 still uses the removed v1 plugin Registrar API and
@@ -86,7 +88,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+    - assets/sounds/
     - assets/fonts/Inter-LICENSE.txt
+    - assets/certs/cacert.pem
   fonts:
     - family: Inter
       fonts:

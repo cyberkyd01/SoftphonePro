@@ -250,6 +250,50 @@ class _HandoffOfferDialogState extends ConsumerState<HandoffOfferDialog> {
   }
 }
 
+/// "Allow intercom from X?" (auto-denied by the controller after a few seconds).
+class IntercomRequestDialog extends StatefulWidget {
+  const IntercomRequestDialog({super.key, required this.request});
+  final ll.IncomingIntercom request;
+
+  @override
+  State<IntercomRequestDialog> createState() => _IntercomRequestDialogState();
+}
+
+class _IntercomRequestDialogState extends State<IntercomRequestDialog> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer(LanController.intercomPromptTimeout, () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  void _answer(bool ok) {
+    unawaited(widget.request.respond(ok, expiresSec: LanController.intercomGrantSeconds));
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        key: const Key('intercom-request-dialog'),
+        icon: const Icon(Icons.record_voice_over_rounded, size: 32),
+        title: Text('Allow intercom from ${widget.request.peer.name}?'),
+        content: const Text('Their call will be answered automatically on speaker.'),
+        actions: [
+          TextButton(key: const Key('intercom-deny'), onPressed: () => _answer(false), child: const Text('Deny')),
+          FilledButton(key: const Key('intercom-allow'), onPressed: () => _answer(true), child: const Text('Allow')),
+        ],
+      );
+}
+
 /// Pops LAN dialogs (pairing requests, file offers, hand-off offers) above
 /// whatever page is showing, using the app's root navigator.
 final lanUiCoordinatorProvider = Provider<void>((ref) {
@@ -271,6 +315,10 @@ final lanUiCoordinatorProvider = Provider<void>((ref) {
     impl.pendingOffers.listen((h) {
       final shown = withContext((c) => showDialog<void>(context: c, barrierDismissible: false, builder: (_) => HandoffOfferDialog(offer: h)));
       if (!shown) unawaited(impl.respond(h, false));
+    }),
+    lan.intercomPrompts.listen((req) {
+      final shown = withContext((c) => showDialog<void>(context: c, barrierDismissible: false, builder: (_) => IntercomRequestDialog(request: req)));
+      if (!shown) unawaited(req.respond(false));
     }),
     lan.unpairedByPeer.listen((id) => ref.read(noticeProvider.notifier).show('${lan.nameOf(id)} removed this device from its paired list')),
   ];

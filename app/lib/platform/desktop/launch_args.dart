@@ -7,6 +7,11 @@ library;
 
 const kLinkSchemes = {'sip', 'sips', 'tel', 'callto', 'softphonepro'};
 
+/// Internal scheme for `--provision` / `--dial` command-line intents. It is
+/// not in [kLinkSchemes], so no OS-delivered URL can ever produce it: command
+/// line arguments are local user intent, web links are not.
+const kCliScheme = 'softphonepro-cli';
+
 /// Result of parsing a launch / forwarded command line.
 class LaunchArgs {
   const LaunchArgs({this.link, this.minimized = false, this.show = false});
@@ -28,10 +33,15 @@ LaunchArgs parseLaunchArgs(Iterable<String> args) {
   Uri? link;
   var minimized = false;
   var show = false;
-  for (final raw in args) {
-    final a = raw.trim();
+  final list = args.toList();
+  for (var i = 0; i < list.length; i++) {
+    final a = list[i].trim();
     if (a.isEmpty) continue;
-    if (a == '--minimized') {
+    final cli = _cliIntent(a, i + 1 < list.length ? list[i + 1].trim() : null);
+    if (cli != null) {
+      if (cli.consumed) i++;
+      link ??= cli.uri;
+    } else if (a == '--minimized') {
       minimized = true;
     } else if (a == '--show') {
       show = true;
@@ -40,6 +50,26 @@ LaunchArgs parseLaunchArgs(Iterable<String> args) {
     }
   }
   return LaunchArgs(link: link, minimized: minimized, show: show);
+}
+
+({Uri uri, bool consumed})? _cliIntent(String a, String? next) {
+  for (final flag in const ['provision', 'dial']) {
+    String? value;
+    var consumed = false;
+    if (a == '--$flag') {
+      if (next == null || next.isEmpty) return null;
+      value = next;
+      consumed = true;
+    } else if (a.startsWith('--$flag=')) {
+      value = a.substring(flag.length + 3);
+    }
+    if (value == null || value.isEmpty) continue;
+    return (
+      uri: Uri(scheme: kCliScheme, host: flag, queryParameters: {'v': value}),
+      consumed: consumed,
+    );
+  }
+  return null;
 }
 
 /// Parses a forwarded command line (arguments joined with `\n`).

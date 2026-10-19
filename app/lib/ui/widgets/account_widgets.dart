@@ -248,7 +248,8 @@ class AccountSelector extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final acc = ref.watch(accountsProvider);
     final selectedId = ref.watch(dialAccountProvider);
-    final selected = (selectedId != null ? acc.byId(selectedId) : null) ?? acc.defaultProfile;
+    final direct = selectedId == kDirectAccountId;
+    final selected = direct ? null : (selectedId != null ? acc.byId(selectedId) : null) ?? acc.defaultProfile;
     if (acc.profiles.isEmpty) {
       return TextButton.icon(
         onPressed: () => context.push('/account-wizard'),
@@ -274,10 +275,22 @@ class AccountSelector extends ConsumerWidget {
               ],
             ),
           ),
+        PopupMenuItem(
+          key: const Key('account-direct'),
+          value: kDirectAccountId,
+          child: Row(
+            children: [
+              const Icon(Icons.alt_route_rounded, size: 14),
+              const SizedBox(width: 10),
+              const Flexible(child: Text('Direct (no account)', overflow: TextOverflow.ellipsis)),
+              if (direct) ...[const SizedBox(width: 8), const Icon(Icons.check_rounded, size: 18)],
+            ],
+          ),
+        ),
       ],
       child: Semantics(
         button: true,
-        label: 'Calling from ${selected?.name ?? 'no account'}',
+        label: 'Calling from ${direct ? 'direct, no account' : (selected?.name ?? 'no account')}',
         child: Container(
           constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -290,10 +303,11 @@ class AccountSelector extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (selected != null) StatusDot(color: statusColor(context, acc.statusOf(selected.id))),
+              if (direct) const Icon(Icons.alt_route_rounded, size: 16),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  selected?.name ?? 'No account',
+                  direct ? 'Direct (no account)' : (selected?.name ?? 'No account'),
                   overflow: TextOverflow.ellipsis,
                   style: t.textTheme.labelLarge,
                 ),

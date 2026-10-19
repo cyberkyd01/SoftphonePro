@@ -209,7 +209,6 @@ class LanController extends Notifier<LanState> {
   Timer? _infoTimer;
   Set<String> _addrs = {};
   final Map<String, Timer> _typingTimers = {};
-  final Map<String, DateTime> _intercomWindow = {};
 
   final _pairing = StreamController<ll.PairingSession>.broadcast();
   final _handoffOffers = StreamController<ll.IncomingHandoff>.broadcast();
@@ -217,7 +216,7 @@ class LanController extends Notifier<LanState> {
   final _pulls = StreamController<ll.PullRequest>.broadcast();
   final _incomingFiles = StreamController<ll.FileTransfer>.broadcast();
   final _unpaired = StreamController<String>.broadcast();
-  final _intercom = StreamController<ll.IntercomEvent>.broadcast();
+  final _intercomPrompts = StreamController<ll.IncomingIntercom>.broadcast();
 
   Stream<ll.PairingSession> get pairingRequests => _pairing.stream;
   Stream<ll.IncomingHandoff> get handoffOffers => _handoffOffers.stream;
@@ -247,7 +246,7 @@ class LanController extends Notifier<LanState> {
         s.cancel();
       }
       if (l != null) unawaited(l.stop().catchError((_) {}));
-      for (final c in [_pairing, _handoffOffers, _handoffEvents, _pulls, _incomingFiles, _unpaired, _intercom]) {
+      for (final c in [_pairing, _handoffOffers, _handoffEvents, _pulls, _incomingFiles, _unpaired, _intercomPrompts]) {
         c.close();
       }
     });
@@ -433,7 +432,7 @@ class LanController extends Notifier<LanState> {
       }))
       ..add(l.callsQueries.listen(_onCallsQuery))
       ..add(l.callsLists.listen(_onCallsList))
-      ..add(l.intercomRequests.listen(_onIntercom))
+      ..add(l.intercomNegotiations.listen(_onIntercomRequest))
       ..add(l.unpairedByPeer.listen((id) {
         if (!_unpaired.isClosed) _unpaired.add(id);
       }));
@@ -512,6 +511,9 @@ class LanController extends Notifier<LanState> {
   Future<void> unpair(String peerId) async {
     await _link?.unpair(peerId);
   }
+
+  /// Handles a `softphonepro://lan?...` deep link / scanned QR payload.
+  Future<ll.LanPeer> connectFromLink(Uri link) => connectManual(link.toString());
 
   /// Connects to a device by `host:port` or QR payload. Returns the peer.
   Future<ll.LanPeer> connectManual(String raw) async {
@@ -821,40 +823,33 @@ class LanController extends Notifier<LanState> {
 
   // ---- intercom ------------------------------------------------------------
 
-  void _onIntercom(ll.IntercomEvent e) {
+  /// Intercom requests the user has to approve ("Allow intercom from X?").
+  /// Answer with [ll.IncomingIntercom.respond]; unanswered requests are denied
+  /// after [intercomPromptTimeout].
+  Stream<ll.IncomingIntercom> get intercomPrompts => _intercomPrompts.stream;
+
+  static const intercomPromptTimeout = Duration(seconds: 9);
+  static const intercomGrantSeconds = 30;
+  Duration intercomRequestTimeout = const Duration(seconds: 10);
+
+  void _onIntercomRequest(ll.IncomingIntercom req) {
     if (_disposed) return;
-    if (!_intercom.isClosed) _intercom.add(e);
-    if (e.allowed == null) {
-      final ok = e.peer.trusted && _settings.lanAllowIntercom;
-      if (ok) _intercomWindow[e.peer.deviceId] = DateTime.now().add(const Duration(seconds: 25));
-      unawaited(_link?.sendIntercomRequest(e.peer.deviceId, allowed: ok).catchError((_) {}));
+    if (!req.peer.trusted || !_settings.lanAllowIntercom) {
+      unawaited(req.respond(false).catchError((_) {}));
+      return;
     }
+    if (_settings.lanIntercomPrompt && _intercomPrompts.hasListener) {
+      _intercomPrompts.add(req);
+      Timer(intercomPromptTimeout, () {
+        if (!req.answered) unawaited(req.respond(false).catchError((_) {}));
+      });
+      return;
+    }
+    unawaited(req.respond(true, expiresSec: intercomGrantSeconds).catchError((_) {}));
   }
 
-  /// True while [peerId] has just asked (and been allowed) to intercom us.
-  bool intercomPermitted(String peerId) {
-    if (!_settings.lanAllowIntercom) return false;
-    final until = _intercomWindow[peerId];
-    final peer = _link?.peerById(peerId);
-    return until != null && until.isAfter(DateTime.now()) && (peer?.trusted ?? false);
-  }
-
-  Future<bool> _askIntercom(String peerId) async {
-    final l = _link;
-    if (l == null) return false;
-    final c = Completer<bool>();
-    final sub = _intercom.stream.where((e) => e.peer.deviceId == peerId && e.allowed != null).listen((e) {
-      if (!c.isCompleted) c.complete(e.allowed!);
-    });
-    try {
-      await l.sendIntercomRequest(peerId);
-      return await c.future.timeout(const Duration(seconds: 4), onTimeout: () => false);
-    } catch (_) {
-      return false;
-    } finally {
-      await sub.cancel();
-    }
-  }
+  /// True while [peerId] holds an unexpired intercom grant given by us.
+  bool intercomGranted(String peerId) => _settings.lanAllowIntercom && (_link?.intercomGranted(peerId) ?? false);
 
   // ---- direct calls --------------------------------------------------------
 
@@ -876,9 +871,16 @@ class LanController extends Notifier<LanState> {
       notices.error('${peer.name} is not reachable for calls right now');
       return null;
     }
-    if (intercom && !await _askIntercom(peerId)) {
-      notices.error('${peer.name} does not allow intercom (or did not answer)');
-      return null;
+    if (intercom) {
+      notices.show('Asking ${peer.name}…');
+      var allowed = false;
+      try {
+        allowed = (await l.requestIntercom(peerId, timeout: intercomRequestTimeout)).allowed;
+      } catch (_) {}
+      if (!allowed) {
+        notices.error('${peer.name} did not allow intercom (or did not answer)');
+        return null;
+      }
     }
     return ref.read(callsProvider.notifier).dialLan(
           uri,

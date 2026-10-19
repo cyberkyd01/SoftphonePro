@@ -211,7 +211,11 @@ class LanHandoffImpl implements LanCallPolicy {
       if (mode == ll.HandoffMode.refer) {
         final done = await _doRefer(session, target!, attended: attended, ringing: ringing);
         if (done) return;
-        if (!peer.hasSip) throw LanHandoffException('The phone system refused the transfer and ${peer.name} cannot take LAN calls');
+        if (!peer.hasSip) {
+          // CallsController no longer reacts to this failure: keep the call.
+          await _guard(() => _engine.unhold(cid));
+          throw LanHandoffException('The phone system refused the transfer and ${peer.name} cannot take LAN calls');
+        }
         _ref.read(noticeProvider.notifier).show('Transfer through the phone system failed. Relaying over the network instead.');
       }
       await _doRelay(session, ringing: ringing, attended: attended);
@@ -596,7 +600,7 @@ class LanHandoffImpl implements LanCallPolicy {
     final known = peerId.isEmpty ? null : st.peer(peerId);
     final name = headerValue(h, kHdrCallerName) ?? acc?.offer.caller.name ?? '';
     final number = headerValue(h, kHdrCallerNumber) ?? acc?.offer.caller.number ?? '';
-    final intercom = isLan && peer != null && peer.trusted && _lan.intercomPermitted(peer.deviceId);
+    final intercom = isLan && peer != null && peer.trusted && _lan.intercomGranted(peer.deviceId);
     return LanCallMeta(
       peerId: peerId,
       peerName: known?.name ?? '',

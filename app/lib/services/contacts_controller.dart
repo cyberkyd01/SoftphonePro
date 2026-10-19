@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../models/contact.dart';
 import 'providers.dart';
 import 'contact_io.dart';
+import 'device_contacts.dart';
 
 Contact? findContact(Iterable<Contact> contacts, String numberOrUri) {
   if (numberOrUri.trim().isEmpty) return null;
@@ -60,6 +61,19 @@ class ContactsController extends Notifier<List<Contact>> {
     state = _sorted(merged);
     await ref.read(contactsRepoProvider).putAll(state);
     return n;
+  }
+
+  /// Stores the result of [planDeviceImport]; returns how many contacts were
+  /// added or changed.
+  Future<int> applyImport(DeviceImportPlan plan) async {
+    if (plan.isEmpty) return 0;
+    final byId = {for (final c in plan.updated) c.id: c};
+    state = _sorted([
+      for (final c in state) byId[c.id] ?? c,
+      ...plan.added,
+    ]);
+    await ref.read(contactsRepoProvider).putAll(state);
+    return plan.added.length + plan.updated.length;
   }
 
   String exportVCard() => ContactIo.toVCard(state);

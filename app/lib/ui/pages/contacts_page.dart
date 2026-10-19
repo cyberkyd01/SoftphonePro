@@ -11,8 +11,10 @@ import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
 import '../../services/contact_io.dart';
 import '../../services/contacts_controller.dart';
+import '../../services/device_contacts.dart';
 import '../../services/presence_controller.dart';
 import '../../services/providers.dart';
+import '../../services/ringtones.dart';
 import '../../storage/repositories.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/settings_tiles.dart';
@@ -71,11 +73,13 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
             PopupMenuButton<String>(
               tooltip: 'Import and export',
               onSelected: (v) => _menu(v),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'import', child: Text('Import vCard / CSV file')),
-                PopupMenuItem(value: 'paste', child: Text('Import from clipboard')),
-                PopupMenuItem(value: 'vcf', child: Text('Copy as vCard')),
-                PopupMenuItem(value: 'csv', child: Text('Copy as CSV')),
+              itemBuilder: (_) => [
+                if (ref.read(deviceContactsSourceProvider) != null)
+                  const PopupMenuItem(value: 'device', child: Text('Import from device')),
+                const PopupMenuItem(value: 'import', child: Text('Import vCard / CSV file')),
+                const PopupMenuItem(value: 'paste', child: Text('Import from clipboard')),
+                const PopupMenuItem(value: 'vcf', child: Text('Copy as vCard')),
+                const PopupMenuItem(value: 'csv', child: Text('Copy as CSV')),
               ],
             ),
             IconButton(
@@ -165,6 +169,8 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
       case 'csv':
         await Clipboard.setData(ClipboardData(text: ctl.exportCsv()));
         notice.show('Contacts copied as CSV');
+      case 'device':
+        await _importDevice();
       case 'paste':
         final d = await Clipboard.getData(Clipboard.kTextPlain);
         await _import(d?.text ?? '');
@@ -173,6 +179,36 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
         final f = r?.files.single;
         if (f?.bytes != null) await _import(String.fromCharCodes(f!.bytes!), name: f.name);
     }
+  }
+
+  Future<void> _importDevice() async {
+    final src = ref.read(deviceContactsSourceProvider);
+    final notice = ref.read(noticeProvider.notifier);
+    if (src == null) return;
+    if (!await src.requestPermission()) {
+      notice.show('Contacts access was denied. Allow it in system settings to import.', isError: true);
+      return;
+    }
+    final device = await src.read();
+    final plan = planDeviceImport(ref.read(contactsProvider), device);
+    if (!mounted) return;
+    if (plan.isEmpty) {
+      notice.show(device.isEmpty ? 'No contacts found on this device' : 'Nothing new to import (${plan.skipped} already present)');
+      return;
+    }
+    final ok = await confirm(
+      context,
+      title: 'Import from device?',
+      message:
+          '${plan.added.length} new contact${plan.added.length == 1 ? '' : 's'}'
+          '${plan.updated.isEmpty ? '' : ', ${plan.updated.length} updated with extra numbers'}'
+          '${plan.skipped == 0 ? '' : ', ${plan.skipped} skipped (duplicates or no phone number)'}.',
+      confirmLabel: 'Import',
+      destructive: false,
+    );
+    if (!ok) return;
+    final n = await ref.read(contactsProvider.notifier).applyImport(plan);
+    notice.show('Imported $n contact${n == 1 ? '' : 's'}');
   }
 
   Future<void> _import(String text, {String name = ''}) async {
@@ -367,6 +403,8 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
   bool _fav = false;
   bool _blf = false;
   String _ring = 'default';
+  String? _presenceUri;
+  String _presenceAcc = '';
   late String _id;
 
   @override
@@ -388,6 +426,9 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
     _fav = existing?.favorite ?? false;
     _blf = existing?.blf ?? false;
     _ring = existing?.ringtone ?? 'default';
+    _presenceUri = existing?.presenceUri;
+    _presenceAcc = existing?.presenceAccountId ?? '';
+    if (!ref.read(accountsProvider).profiles.any((p) => p.id == _presenceAcc)) _presenceAcc = '';
   }
 
   @override
@@ -422,6 +463,8 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
         blf: _blf,
         ringtone: _ring,
         avatarColor: hashColor(name),
+        presenceUri: _presenceUri,
+        presenceAccountId: _presenceAcc.isEmpty ? null : _presenceAcc,
       ),
     );
     if (mounted) context.pop();
@@ -510,14 +553,30 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                       trailing: DropdownButton<String>(
                         value: _ring,
                         underline: const SizedBox.shrink(),
-                        items: const [
-                          DropdownMenuItem(value: 'default', child: Text('Default')),
-                          DropdownMenuItem(value: 'classic', child: Text('Classic')),
-                          DropdownMenuItem(value: 'soft', child: Text('Soft')),
+                        items: [
+                          for (final e in kRingtoneOptions.entries)
+                            DropdownMenuItem(value: e.key, child: Text(e.key == 'default' ? 'Default' : e.value)),
                         ],
                         onChanged: (v) => setState(() => _ring = v ?? 'default'),
                       ),
                     ),
+                    if (_blf && ref.watch(accountsProvider).profiles.length > 1) ...[
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.dns_rounded),
+                        title: const Text('Presence via account'),
+                        trailing: DropdownButton<String>(
+                          key: const Key('presence-account'),
+                          value: _presenceAcc,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Default account')),
+                            for (final p in ref.watch(accountsProvider).profiles) DropdownMenuItem(value: p.id, child: Text(p.name)),
+                          ],
+                          onChanged: (v) => setState(() => _presenceAcc = v ?? ''),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

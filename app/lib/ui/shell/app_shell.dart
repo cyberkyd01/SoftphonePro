@@ -77,7 +77,8 @@ class AppShell extends ConsumerWidget {
         location.startsWith('/presence') ||
         location.startsWith('/lan') ||
         location.startsWith('/settings');
-    final showStrip = location.startsWith('/keypad') || location.startsWith('/recents') || location.startsWith('/contacts');
+    // The keypad has its own account selector; no duplicate chip strip.
+    final showStrip = location.startsWith('/recents') || location.startsWith('/contacts');
     return Scaffold(
       body: SafeArea(
         bottom: false,

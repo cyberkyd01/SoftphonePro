@@ -69,6 +69,10 @@
 	<array>
 		<string>_softphonepro._tcp</string>
 	</array>
+	<key>NSContactsUsageDescription</key>
+	<string>SoftphonePro imports your contacts when you ask it to.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>SoftphonePro uses the camera to scan provisioning and pairing QR codes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SoftphonePro needs the microphone to carry your voice during calls.</string>
 </dict>

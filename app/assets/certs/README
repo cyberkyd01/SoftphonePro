@@ -1,0 +1,8 @@
+cacert.pem - Mozilla CA certificate bundle (PEM), as extracted by the curl project.
+Source:   https://curl.se/ca/cacert.pem
+SHA-256:  a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
+          (verified against https://curl.se/ca/cacert.pem.sha256)
+Fetched:  2026-10-19
+Licence:  Mozilla Public License 2.0 (MPL-2.0), https://www.mozilla.org/MPL/2.0/
+The app copies this file to its support directory at startup and hands it to
+the SIP engine as the TLS trust store (a user-provided CA file overrides it).

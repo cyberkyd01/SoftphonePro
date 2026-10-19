@@ -18,8 +18,8 @@ How to read this list:
 | A4 | Registration expiry, retry/backoff, keep-alive, contact/Via rewrite (NAT), rport | P0 | C | ☐ |
 | A5 | Default account for outgoing calls, plus choosing the account per call | P0 | D | ☐ |
 | A6 | Account templates for popular providers and PBXs (Asterisk, FreePBX, 3CX, FreeSWITCH, Twilio, Telnyx, VoIP.ms, generic) | P1 | D | ☐ |
-| A7 | Registration health monitor and automatic failover to a backup server | P2 | D | ☐ |
-| A8 | IAX2 accounts (Zoiper USP) | P1 | C | ☐ |
+| A7 | Registration health monitor and automatic failover to a backup server | P2 | D | ✅ |
+| A8 | IAX2 accounts (Zoiper USP) | P1 | C | ✅ |
 | A9 | Account import/export (JSON, QR) and remote provisioning (HTTPS URL, `${VARS}`) | P1 | D | ☐ |
 | A10 | Dedicated local port per account (needed by some providers) | P1 | C | ☐ |
 
@@ -27,7 +27,7 @@ How to read this list:
 | ID | Feature | Pri | Layer | Status |
 |---|---|---|---|---|
 | N1 | SIP over UDP, TCP, TLS (1.2/1.3), with server certificate verification option | P0 | C | ☐ |
-| N2 | SIP over WebSocket (WS/WSS, RFC 7118) for WebRTC-style servers | P1 | C | ☐ |
+| N2 | SIP over WebSocket (WS/WSS, RFC 7118) for WebRTC-style servers | P1 | C | ✅ |
 | N3 | IPv6 and dual stack | P1 | C | ☐ |
 | N4 | STUN, ICE, TURN (UDP/TCP/TLS) | P0 | C | ☐ |
 | N5 | Network change handling (Wi-Fi ↔ cellular, VPN): re-register and re-INVITE | P0 | C/D | ☐ |
@@ -42,7 +42,7 @@ How to read this list:
 | S2 | DTLS-SRTP | P1 | C | ☐ |
 | S3 | Per-call security indicator (signalling TLS plus media SRTP) | P1 | D | ☐ |
 | S4 | Passwords in the OS keystore (Keychain/Keystore/DPAPI) | P0 | D | ☐ |
-| S5 | App lock (PIN/biometric), privacy mode with no telemetry | P2 | D | ☐ |
+| S5 | App lock (PIN/biometric), privacy mode with no telemetry | P2 | D | ✅ |
 | S6 | ZRTP with SAS verification | P2 | C | ☐ (phase 2) |
 
 ## Codecs and audio
@@ -51,41 +51,41 @@ How to read this list:
 | M1 | Opus (wideband/fullband), G.722, G.711 µ/A, GSM, iLBC, Speex NB/WB/UWB, G.729 (bcg729), G.722.1, L16 | P0 | C | ☐ |
 | M2 | Codec enable and priority, globally and per account | P0 | C/D | ☐ |
 | M3 | Echo cancellation (WebRTC AEC3 / platform VPIO / speex), noise suppression, AGC | P0 | C | ☐ |
-| M4 | Choice of mic, speaker and **separate ringer device**; hot-plug refresh | P1 | C/D | ☐ |
+| M4 | Choice of mic, speaker and **separate ringer device**; hot-plug refresh | P1 | C/D | ✅ |
 | M5 | Mic/speaker volume, live VU meters, mic test loopback | P1 | C/D | ☐ |
-| M6 | Jitter buffer and VAD/CNG tuning, ptime | P1 | C | ☐ |
+| M6 | Jitter buffer and VAD/CNG tuning, ptime | P1 | C | ✅ |
 | M7 | Android audio routes (earpiece/speaker/Bluetooth/wired), proximity sensor | P0 | P | ☐ |
 | M8 | Video calls (H.264/VP8) | P1 | C/P | ☐ (phase 2) |
 
 ## Call handling
 | ID | Feature | Pri | Layer | Status |
 |---|---|---|---|---|
-| C1 | Outgoing and incoming calls, early media, ringback, busy/congestion tones | P0 | C | ☐ |
+| C1 | Outgoing and incoming calls, early media, ringback, busy/congestion tones | P0 | C | ✅ |
 | C2 | Answer, reject (busy/decline), hang up, multiple simultaneous calls (call waiting with tone) | P0 | C/D | ☐ |
 | C3 | Hold/resume, mute, swap between calls | P0 | C/D | ☐ |
 | C4 | DTMF: RFC 2833/4733, SIP INFO, in-band, and auto; in-call keypad | P0 | C | ☐ |
 | C5 | Blind transfer (REFER) | P0 | C | ☐ |
 | C6 | Attended transfer (REFER with Replaces) | P0 | C | ☐ |
 | C7 | Handling of incoming REFER and Replaces (be transferred, call pickup) | P0 | C | ☐ |
-| C8 | Local N-way conference (merge calls, split, per-party mute/volume) | P1 | C/D | ☐ |
-| C9 | Call recording (WAV) with auto-record rules and an in-app player | P1 | C/D | ☐ |
+| C8 | Local N-way conference (merge calls, split, per-party mute/volume) | P1 | C/D | ◐ |
+| C9 | Call recording (WAV) with auto-record rules and an in-app player | P1 | C/D | ◐ |
 | C10 | Auto-answer: global, per account, or by header (Call-Info answer-after, Alert-Info auto-answer, Answer-Mode) — intercom | P1 | C/D | ☐ |
 | C11 | DND (global or per account), with reject code choice | P0 | D | ☐ |
 | C12 | Call forwarding: always, busy, or no answer after N seconds (client-side 302 redirect) | P1 | D | ☐ |
-| C13 | Call park and retrieve, call pickup (group/directed) through feature codes and BLF | P1 | D | ☐ |
-| C14 | Speed dial and favourites | P0 | D | ☐ |
+| C13 | Call park and retrieve, call pickup (group/directed) through feature codes and BLF | P1 | D | ✅ |
+| C14 | Speed dial and favourites | P0 | D | ✅ |
 | C15 | Dial plan rules (regex rewrite, prefix strip/add, per-account routing, E.164) | P1 | D | ☐ |
 | C16 | Redial, call back from history, click-to-call URL handlers (sip:, sips:, tel:, callto:) | P0 | D/P | ☐ |
-| C17 | Direct IP calls without an account (sip:user@ip) | P1 | C | ☐ |
+| C17 | Direct IP calls without an account (sip:user@ip) | P1 | C | ✅ |
 | C18 | Anonymous call rejection, blocklist | P1 | D | ☐ |
-| C19 | Per-account and per-contact ringtones | P2 | D | ☐ |
+| C19 | Per-account and per-contact ringtones | P2 | D | ✅ |
 
 ## Messaging and presence
 | ID | Feature | Pri | Layer | Status |
 |---|---|---|---|---|
 | P1 | SIP MESSAGE instant messaging with threads, delivery status, typing indicator | P0 | C/D | ☐ |
 | P2 | Presence (SUBSCRIBE/NOTIFY PIDF) and publish of own status | P1 | C | ☐ |
-| P3 | BLF (dialog-info, RFC 4235) busy lamp field with one-tap call, pickup or transfer | P1 | C/D | ☐ |
+| P3 | BLF (dialog-info, RFC 4235) busy lamp field with one-tap call, pickup or transfer | P1 | C/D | ◐ |
 | P4 | MWI voicemail indicator (RFC 3842), count badge and one-tap voicemail dial | P0 | C/D | ☐ |
 
 ## Contacts and history
@@ -93,7 +93,7 @@ How to read this list:
 |---|---|---|---|---|
 | H1 | Call history (all, missed, in, out) with search, filter, per-account view, export CSV | P0 | D | ☐ |
 | H2 | Built-in contacts (several numbers or SIP URIs, favourites, notes, ringtone) | P0 | D | ☐ |
-| H3 | Device contacts integration (Android/iOS/macOS) | P1 | P | ☐ |
+| H3 | Device contacts integration (Android/iOS/macOS) | P1 | P | ◐ |
 | H4 | vCard / CSV import and export | P1 | D | ☐ |
 | H5 | T9 or smart search from the dialer | P1 | D | ☐ |
 

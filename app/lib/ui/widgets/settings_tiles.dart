@@ -117,11 +117,15 @@ class TextTile extends StatelessWidget {
     this.obscure = false,
     this.keyboardType,
     this.icon,
+    this.validator,
   });
   final String title;
   final String? subtitle;
   final String value;
   final String? hint;
+
+  /// Returns an error message for an invalid value, or null when valid.
+  final String? Function(String)? validator;
   final bool obscure;
   final TextInputType? keyboardType;
   final IconData? icon;
@@ -148,6 +152,7 @@ class TextTile extends StatelessWidget {
           obscure: obscure,
           keyboardType: keyboardType,
           helper: subtitle,
+          validator: validator,
         );
         if (r != null) onChanged(r);
       },
@@ -223,25 +228,44 @@ Future<String?> promptText(
   bool obscure = false,
   TextInputType? keyboardType,
   int maxLines = 1,
+  String? Function(String)? validator,
 }) {
   final ctl = TextEditingController(text: initial);
+  String? error;
   return showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: ctl,
-        autofocus: true,
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        maxLines: obscure ? 1 : maxLines,
-        decoration: InputDecoration(hintText: hint, helperText: helper),
-        onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Save')),
-      ],
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        void submit(String raw) {
+          final v = raw.trim();
+          final e = validator?.call(v);
+          if (e != null) {
+            setLocal(() => error = e);
+            return;
+          }
+          Navigator.pop(ctx, v);
+        }
+
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: ctl,
+            autofocus: true,
+            obscureText: obscure,
+            keyboardType: keyboardType,
+            maxLines: obscure ? 1 : maxLines,
+            decoration: InputDecoration(hintText: hint, helperText: helper, helperMaxLines: 3, errorText: error, errorMaxLines: 3),
+            onChanged: (_) {
+              if (error != null) setLocal(() => error = null);
+            },
+            onSubmitted: submit,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => submit(ctl.text), child: const Text('Save')),
+          ],
+        );
+      },
     ),
   );
 }

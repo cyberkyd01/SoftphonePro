@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../android/android_platform_services.dart' show DeviceContact;
 import '../platform_services.dart';
 
 /// iOS host services over a MethodChannel + one EventChannel implemented in
@@ -123,6 +124,30 @@ class IosPlatformServices extends NoopPlatformServices {
       contacts: parsePermission(m['contacts']),
     );
   }
+
+  // ---- device contacts
+  /// Asks for Contacts access (CNContactStore); true when granted.
+  Future<bool> requestContactsPermission() async =>
+      parsePermission(await _call<String>('requestContactsPermission')) ==
+      PermissionStatus.granted;
+
+  /// Reads name, phone numbers and emails of all device contacts.
+  Future<List<DeviceContact>> readDeviceContacts() async =>
+      parseDeviceContacts(await _call<List<Object?>>('readContacts'));
+
+  /// Decodes the list produced by the native `readContacts`.
+  static List<DeviceContact> parseDeviceContacts(List<Object?>? l) => [
+    for (final c in (l ?? const []).whereType<Map>())
+      DeviceContact(
+        id: '${c['id']}',
+        name: '${c['name'] ?? ''}',
+        numbers: [
+          for (final n in (c['numbers'] as List? ?? const []).whereType<Map>())
+            ('${n['label'] ?? ''}', '${n['number']}'),
+        ],
+        emails: [for (final e in (c['emails'] as List? ?? const [])) '$e'],
+      ),
+  ];
 
   // ---- notifications (incoming calls are shown by CallKit)
   @override

@@ -10,6 +10,7 @@
 // Behaviour: auto-confirms the pairing code, echoes every chat message, marks
 // them read, accepts every file offer and logs everything to stdout.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:lan_link/lan_link.dart';
@@ -103,6 +104,21 @@ Future<void> main(List<String> args) async {
       if (send.isNotEmpty) link.sendFile(peer.deviceId, send);
     }
   }
+
+  // Interactive commands on stdin: `intercom <peerId>`, `file <peerId> <path>`.
+  stdin.transform(const SystemEncoding().decoder).transform(const LineSplitter()).listen((line) async {
+    final a = line.trim().split(' ');
+    try {
+      if (a[0] == 'intercom' && a.length > 1) {
+        final g = await link.requestIntercom(a[1]);
+        log('intercom ${a[1]}: allowed=${g.allowed}');
+      } else if (a[0] == 'file' && a.length > 2) {
+        link.sendFile(a[1], a.sublist(2).join(' '));
+      }
+    } catch (e) {
+      log('command failed: $e');
+    }
+  });
 
   final done = Completer<void>();
   ProcessSignal.sigint.watch().listen((_) => done.complete());

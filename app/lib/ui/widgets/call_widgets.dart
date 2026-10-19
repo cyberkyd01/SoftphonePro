@@ -66,6 +66,7 @@ final audioRouteProvider = StreamProvider<AudioRoute>((ref) async* {
 
 final audioDevicesProvider = FutureProvider.autoDispose<AudioDevices?>((ref) async {
   final ctl = ref.watch(engineProvider.notifier);
+  ref.watch(deviceRevisionProvider);
   if (!ctl.hasEngine) return null;
   try {
     return await ctl.engine.audioDevices();
@@ -358,6 +359,14 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
   }
 }
 
+/// Asks for a park slot and dials it to retrieve the parked call.
+Future<void> promptRetrieveParked(BuildContext context, WidgetRef ref) async {
+  final slot = await promptText(context, title: 'Retrieve parked call', hint: 'Park slot, e.g. 701', keyboardType: TextInputType.phone);
+  if (slot == null || slot.isEmpty) return;
+  final sel = ref.read(dialAccountProvider);
+  await ref.read(callsProvider.notifier).retrieveParked(slot, accountId: sel == kDirectAccountId ? null : sel);
+}
+
 Future<void> showMoreSheet(BuildContext context, int cid) {
   return showModalBottomSheet<void>(
     context: context,
@@ -377,6 +386,16 @@ Future<void> showMoreSheet(BuildContext context, int cid) {
                 calls.park(cid);
               },
             ),
+          ListTile(
+            key: const Key('retrieve-parked'),
+            leading: const Icon(Icons.local_parking_rounded),
+            title: const Text('Retrieve parked call'),
+            subtitle: const Text('Dial a park slot'),
+            onTap: () {
+              Navigator.pop(ctx);
+              promptRetrieveParked(context, ref);
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.dialpad_rounded),
             title: const Text('Send DTMF digits'),
@@ -768,6 +787,7 @@ class _CallCardState extends ConsumerState<CallCard> {
                   mini(Icons.more_horiz_rounded, 'More', () => showMoreSheet(context, c.cid)),
                 ],
               ),
+            if (c.isConference && c.isConfirmed) const ConferenceLevels(),
             if (!c.isRingingIn) ...[
               const SizedBox(height: 10),
               SizedBox(
@@ -928,3 +948,85 @@ class IncomingBanners extends ConsumerWidget {
   }
 }
 
+
+/// Per-party volume (rx) and microphone-to-party (tx) sliders for the calls
+/// of a conference.
+class ConferenceLevels extends ConsumerWidget {
+  const ConferenceLevels({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final parties = ref.watch(callsProvider.select((s) => s.live.where((c) => c.isConference).toList()));
+    final contacts = ref.watch(contactsProvider);
+    if (parties.isEmpty) return const SizedBox.shrink();
+    final t = Theme.of(context);
+    return Container(
+      key: const Key('conference-levels'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.colors.card,
+        borderRadius: BorderRadius.circular(kRadius),
+        border: Border.all(color: t.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Conference levels', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          for (final c in parties) _PartyLevels(call: c, title: callTitle(c, contacts)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PartyLevels extends ConsumerStatefulWidget {
+  const _PartyLevels({required this.call, required this.title});
+  final UiCall call;
+  final String title;
+  @override
+  ConsumerState<_PartyLevels> createState() => _PartyLevelsState();
+}
+
+class _PartyLevelsState extends ConsumerState<_PartyLevels> {
+  late double _rx = widget.call.rxLevel;
+  late double _tx = widget.call.txLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cid = widget.call.cid;
+    final calls = ref.read(callsProvider.notifier);
+    final t = Theme.of(context);
+    Widget row(Key k, IconData icon, String label, double v, ValueChanged<double> on, ValueChanged<double> end) => Row(
+      children: [
+        Icon(icon, size: 18, color: t.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        SizedBox(width: 62, child: Text(label, style: t.textTheme.labelSmall)),
+        Expanded(
+          child: Slider(
+            key: k,
+            value: v,
+            min: 0,
+            max: 2,
+            divisions: 20,
+            label: '${(v * 100).round()}%',
+            semanticFormatterCallback: (x) => '${(x * 100).round()} percent',
+            onChanged: on,
+            onChangeEnd: end,
+          ),
+        ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+          row(Key('party-rx-$cid'), Icons.volume_up_rounded, 'Volume', _rx, (v) => setState(() => _rx = v), (v) => calls.setPartyLevels(cid, rx: v)),
+          row(Key('party-tx-$cid'), Icons.mic_rounded, 'Mic to party', _tx, (v) => setState(() => _tx = v), (v) => calls.setPartyLevels(cid, tx: v)),
+        ],
+      ),
+    );
+  }
+}

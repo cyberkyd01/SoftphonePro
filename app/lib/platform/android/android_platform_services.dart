@@ -7,9 +7,12 @@ import '../platform_services.dart';
 
 /// A device contact (name + phone numbers) read from the Android address book.
 class DeviceContact {
-  const DeviceContact({required this.id, required this.name, required this.numbers});
+  const DeviceContact({required this.id, required this.name, required this.numbers, this.emails = const []});
   final String id;
   final String name;
+
+  /// Email addresses (iOS / macOS; empty on Android).
+  final List<String> emails;
 
   /// `(label, number)` pairs.
   final List<(String, String)> numbers;

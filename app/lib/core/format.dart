@@ -115,3 +115,20 @@ String t9Digit(String ch) {
 }
 
 String t9Of(String name) => name.split('').map(t9Digit).join();
+
+/// Readable form of a bare phone number. Only unambiguous North American
+/// numbers (`+1XXXXXXXXXX`, `1XXXXXXXXXX`, 10 digits with separators) are
+/// grouped; anything else is returned unchanged.
+String formatPhone(String raw) {
+  final t = raw.trim();
+  if (!RegExp(r'^\+?[0-9\s().-]+$').hasMatch(t)) return raw;
+  final plus = t.startsWith('+');
+  final d = digitsOf(t);
+  if (plus && d.length == 11 && d.startsWith('1')) {
+    return '+1 (${d.substring(1, 4)}) ${d.substring(4, 7)}-${d.substring(7)}';
+  }
+  if (!plus && t.length >= 10 && d.length == 10 && !d.startsWith('0') && !d.startsWith('1')) {
+    return '(${d.substring(0, 3)}) ${d.substring(3, 6)}-${d.substring(6)}';
+  }
+  return raw;
+}

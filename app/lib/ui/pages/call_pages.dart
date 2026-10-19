@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../platform/platform_services.dart';
 import '../../services/accounts_controller.dart';
@@ -85,7 +86,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                         children: [
                           SizedBox(height: small ? 0 : 8),
                           Text(
-                            title,
+                            title == c.number ? formatPhone(title) : title,
                             maxLines: 2,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
@@ -197,6 +198,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                               ),
                             ],
                           ),
+                          if (c.isConference) const ConferenceLevels(),
                           const SizedBox(height: 16),
                         ],
                       ),
@@ -434,7 +436,7 @@ class IncomingCallPage extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
-                    title,
+                    title == c.number ? formatPhone(title) : title,
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
