@@ -27,7 +27,13 @@ xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
 
 START_TS="$(date '+%Y-%m-%d %H:%M:%S')"
-LAUNCH_OUT="$(xcrun simctl launch --stdout="$OUT/stdout.log" --stderr="$OUT/stderr.log" "$UDID" "$BUNDLE_ID")"
+LAUNCH_OUT=""
+for i in 1 2 3 4 5 6; do
+  if LAUNCH_OUT="$(xcrun simctl launch --stdout="$OUT/stdout.log" --stderr="$OUT/stderr.log" "$UDID" "$BUNDLE_ID" 2>"$OUT/launch-err.log")"; then break; fi
+  echo "launch attempt $i failed (SpringBoard not ready?): $(tr '\n' ' ' < "$OUT/launch-err.log" | cut -c1-200)"
+  LAUNCH_OUT=""; sleep 20
+done
+[ -n "$LAUNCH_OUT" ] || { xcrun simctl io "$UDID" screenshot "$OUT/ios-simulator.png" || true; echo "FAIL: could not launch"; exit 1; }
 echo "$LAUNCH_OUT"
 PID="${LAUNCH_OUT##*: }"
 alive() { kill -0 "$1" 2>/dev/null; }
