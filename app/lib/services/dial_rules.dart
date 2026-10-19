@@ -37,14 +37,18 @@ class DialRule {
     accountId: accountId ?? this.accountId,
   );
 
-  factory DialRule.fromJson(Map<String, dynamic> j) => DialRule(
-    id: j['id'] as String? ?? '',
-    name: j['name'] as String? ?? '',
-    enabled: j['enabled'] != false,
-    pattern: j['pattern'] as String? ?? '',
-    replacement: j['replacement'] as String? ?? r'$0',
-    accountId: j['accountId'] as String? ?? '',
-  );
+  /// Tolerant: a value of the wrong type takes its default, never throws.
+  factory DialRule.fromJson(Map<String, dynamic> j) {
+    String str(String k, String d) => j[k] is String ? j[k] as String : d;
+    return DialRule(
+      id: str('id', ''),
+      name: str('name', ''),
+      enabled: j['enabled'] != false,
+      pattern: str('pattern', ''),
+      replacement: str('replacement', r'$0'),
+      accountId: str('accountId', ''),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,

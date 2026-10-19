@@ -8,8 +8,6 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:http/http.dart' as http;
 
 import '../l10n/l10n.dart';
-import 'package:spcore_dart/spcore_dart.dart' show AccountConfig;
-
 import '../models/account_profile.dart';
 import 'accounts_controller.dart';
 import 'providers.dart';
@@ -336,9 +334,11 @@ bool _validImportValue(String k, Object? v) {
     case 'blocklist' || 'emergencyNumbers' || 'codecOrder' || 'codecsDisabled':
       return isList(256);
     case 'dialRules':
-      return v is List && v.length <= 64 && v.every((e) => e is Map);
+      return v is List && v.length <= 64 && v.every((e) => e is Map && e['pattern'] is String);
     case 'speedDial':
-      return v is Map && v.length <= 9;
+      return v is Map &&
+          v.length <= 9 &&
+          v.values.every((e) => e is Map && e['number'] is String);
     case 'ringerVolume' ||
         'micLevel' ||
         'speakerLevel' ||
@@ -351,6 +351,69 @@ bool _validImportValue(String k, Object? v) {
   }
   // Remaining keys: booleans or integers (the getter ignores a wrong type anyway).
   return v is bool || (v is num && v.isFinite && v.abs() < 1e9);
+}
+
+/// Removes invalid ENTRIES of list / map settings (wrong types, oversize),
+/// recording each as `key[i]` / `key.slot` in [ignored]. Returns [v] unchanged
+/// for other keys. A non-empty list whose entries are all invalid becomes
+/// null (the whole key is then dropped, so it cannot blank a safe default).
+Object? _cleanNested(String k, Object? v, List<String> ignored) {
+  bool str(Object? x, int max) => x is String && x.length <= max;
+  bool optStr(Map m, String f, int max) => !m.containsKey(f) || m[f] == null || str(m[f], max);
+  switch (k) {
+    case 'blocklist' || 'emergencyNumbers' || 'codecOrder' || 'codecsDisabled':
+      if (v is! List || v.length > 256) return v;
+      final out = <Object?>[];
+      for (var i = 0; i < v.length; i++) {
+        if (str(v[i], 128)) {
+          out.add(v[i]);
+        } else {
+          ignored.add('$k[$i]');
+        }
+      }
+      return out.isEmpty && v.isNotEmpty ? null : out;
+    case 'dialRules':
+      if (v is! List || v.length > 64) return v;
+      final out = <Object?>[];
+      for (var i = 0; i < v.length; i++) {
+        final r = v[i];
+        final ok = r is Map &&
+            r.keys.every((x) => x is String) &&
+            str(r['pattern'], 256) &&
+            optStr(r, 'id', 128) &&
+            optStr(r, 'name', 128) &&
+            optStr(r, 'replacement', 256) &&
+            optStr(r, 'accountId', 128) &&
+            (!r.containsKey('enabled') || r['enabled'] is bool);
+        if (ok) {
+          out.add(r);
+        } else {
+          ignored.add('$k[$i]');
+        }
+      }
+      return out.isEmpty && v.isNotEmpty ? null : out;
+    case 'speedDial':
+      if (v is! Map || v.length > 9) return v;
+      final out = <String, Object?>{};
+      for (final e in v.entries) {
+        final slot = int.tryParse('${e.key}');
+        final x = e.value;
+        final ok = slot != null &&
+            slot >= 1 &&
+            slot <= 9 &&
+            x is Map &&
+            str(x['number'], 64) &&
+            optStr(x, 'label', 128) &&
+            optStr(x, 'accountId', 128);
+        if (ok) {
+          out['${e.key}'] = x;
+        } else {
+          ignored.add('$k.${e.key}');
+        }
+      }
+      return out.isEmpty && v.isNotEmpty ? null : out;
+  }
+  return v;
 }
 
 enum ImportFlagKind {
@@ -454,6 +517,120 @@ class ImportPlan {
   }
 }
 
+// ---- per-account field policy ----------------------------------------------
+
+enum AccountFieldPolicy {
+  /// Applied as imported.
+  allowed,
+
+  /// Applied, but the dialog shows it (some only once a checkbox is ticked).
+  flagged,
+
+  /// Applied only after its value passes a check (audio refs); else reset.
+  validated,
+
+  /// Reset to the field's default and listed as "ignored".
+  dropped,
+}
+
+const _aa = AccountFieldPolicy.allowed;
+const _af = AccountFieldPolicy.flagged;
+const _av = AccountFieldPolicy.validated;
+const _ad = AccountFieldPolicy.dropped;
+
+/// Classification of EVERY `AccountProfile` field (`name`) and nested field
+/// (`parent.name`), and of every `AccountConfig` JSON key (`sip.name`).
+/// Anything not listed is [AccountFieldPolicy.dropped]
+/// (test/provisioning_trust_test.dart enforces completeness).
+const Map<String, AccountFieldPolicy> kAccountImportPolicy = {
+  'id': _aa, 'enabled': _aa, 'isDefault': _aa, 'label': _aa, 'color': _aa,
+  'voicemailNumber': _aa, 'dnd': _aa, 'dialRuleSetId': _aa,
+  'providerTemplateId': _aa, 'backupRegistrar': _aa,
+  'featureCodes': _af,
+  'featureCodes.park': _af, 'featureCodes.pickupGroup': _af,
+  'featureCodes.pickupDirectedPrefix': _af, 'featureCodes.dndOn': _af,
+  'featureCodes.dndOff': _af, 'featureCodes.forwardOn': _af,
+  'featureCodes.forwardOff': _af, 'featureCodes.parkRetrieve': _af,
+  'autoAnswer': _af,
+  'autoAnswer.enabled': _af, 'autoAnswer.delaySec': _af,
+  'autoAnswer.onlyIntercomHeaders': _af,
+  'forwarding': _af,
+  'forwarding.mode': _af, 'forwarding.target': _af,
+  'forwarding.noAnswerSec': _af,
+  'autoRecord': _af,
+  'ringtone': _av, 'holdMusic': _av, 'openingAnnouncement': _av,
+  'sip': _aa,
+  // AccountConfig: the account itself is what the user consents to (server,
+  // transport, media, NAT); only a client certificate path is a local file.
+  'sip.uid': _aa, 'sip.proto': _aa, 'sip.displayName': _aa,
+  'sip.username': _aa, 'sip.authUser': _aa, 'sip.password': _aa,
+  'sip.domain': _aa, 'sip.registrar': _aa, 'sip.proxies': _aa,
+  'sip.regUseProxy': _aa, 'sip.transport': _aa, 'sip.register': _aa,
+  'sip.regExpires': _aa, 'sip.regRetrySec': _aa, 'sip.regFirstRetrySec': _aa,
+  'sip.regRetryRandomSec': _aa, 'sip.regDelayBeforeRefreshSec': _aa,
+  'sip.unregTimeoutMs': _aa, 'sip.dropCallsOnRegFail': _aa,
+  'sip.keepAliveSec': _aa, 'sip.localPort': _aa, 'sip.contactUseSrcPort': _aa,
+  'sip.publishPresence': _aa, 'sip.mwi': _aa, 'sip.mwiExpires': _aa,
+  'sip.watcherPolicy': _aa, 'sip.referPolicy': _aa, 'sip.redirect': _aa,
+  'sip.srtp': _aa, 'sip.srtpSecureSignaling': _aa, 'sip.srtpKeying': _aa,
+  'sip.srtpCryptos': _aa, 'sip.ice': _aa, 'sip.rtcpMux': _aa, 'sip.turn': _aa,
+  'sip.useStun': _aa, 'sip.contactRewrite': _aa, 'sip.viaRewrite': _aa,
+  'sip.sdpNatRewrite': _aa, 'sip.sipOutbound': _aa, 'sip.sessionTimers': _aa,
+  'sip.timerSe': _aa, 'sip.use100rel': _aa, 'sip.holdType': _aa,
+  'sip.lockCodec': _aa, 'sip.streamKeepAlive': _aa, 'sip.dtmfMethod': _aa,
+  'sip.codecs': _aa, 'sip.callerId': _aa, 'sip.privacy': _aa,
+  'sip.headers': _aa, 'sip.userAgent': _aa, 'sip.authAlgorithm': _aa,
+  'sip.ipv6Sip': _aa, 'sip.ipv6Media': _aa, 'sip.ipChange': _aa,
+  'sip.dscp': _aa, 'sip.voicemailNumber': _aa, 'sip.iax': _aa,
+  'sip.wsPath': _aa, 'sip.rtcpFb': _aa,
+  'sip.tlsClientCert': _ad,
+};
+
+/// The class of account field [path]; unlisted fields are dropped.
+AccountFieldPolicy classifyAccountField(String path) =>
+    kAccountImportPolicy[path] ?? AccountFieldPolicy.dropped;
+
+/// Applies [kAccountImportPolicy] to an untrusted account: every `dropped`
+/// (or unlisted) field is removed and takes its default. Dropped fields that
+/// carried a non-default value are recorded in [ignored] as `prefix.field`.
+AccountProfile _applyAccountPolicy(
+  AccountProfile a,
+  String prefix,
+  List<String> ignored,
+) {
+  final j = a.toJson(includePassword: true);
+  final removed = <String>[];
+  void strip(Map<String, dynamic> m, String path) {
+    for (final k in m.keys.toList()) {
+      final p = path.isEmpty ? k : '$path.$k';
+      if (classifyAccountField(p) == AccountFieldPolicy.dropped) {
+        m.remove(k);
+        removed.add(p);
+      } else if (m[k] is Map &&
+          kAccountImportPolicy.keys.any((x) => x.startsWith('$p.'))) {
+        final child = Map<String, dynamic>.from(m[k] as Map);
+        strip(child, p);
+        m[k] = child;
+      }
+    }
+  }
+
+  strip(j, '');
+  final out = AccountProfile.fromJson(j, newId: a.id);
+  final before = a.toJson(includePassword: true);
+  final after = out.toJson(includePassword: true);
+  for (final p in removed) {
+    final parts = p.split('.');
+    Object? x = before, y = after;
+    for (final s in parts) {
+      x = x is Map ? x[s] : null;
+      y = y is Map ? y[s] : null;
+    }
+    if ('$x' != '$y') ignored.add('$prefix.${parts.last}');
+  }
+  return out;
+}
+
 /// THE gate for untrusted configuration: classifies every setting against
 /// [kSettingImportPolicy], sanitises accounts and collects the warnings the
 /// dialog must show. Pure; applies nothing.
@@ -472,11 +649,13 @@ ImportPlan prepareUntrustedImport(ProvisioningResult r) {
 
   for (final e in r.settings.entries) {
     final k = e.key;
-    final v = e.value;
     final c = classifyImportSetting(k);
-    if (c == ImportClass.forbidden ||
-        c == ImportClass.refused ||
-        !_validImportValue(k, v)) {
+    if (c == ImportClass.forbidden || c == ImportClass.refused) {
+      ignored.add(k);
+      continue;
+    }
+    final v = _cleanNested(k, e.value, ignored);
+    if (!_validImportValue(k, v)) {
       ignored.add(k);
       continue;
     }
@@ -543,15 +722,7 @@ ImportPlan prepareUntrustedImport(ProvisioningResult r) {
   const defaultCodes = FeatureCodes();
   final accounts = <AccountProfile>[];
   for (var i = 0; i < r.accounts.length; i++) {
-    var a = r.accounts[i];
-    if (a.config.tlsClientCert != null) {
-      ignored.add('accounts[$i].tlsClientCert');
-      a = a.copyWith(
-        config: AccountConfig.fromJson(
-          a.config.toJson()..remove('tlsClientCert'),
-        ),
-      );
-    }
+    var a = _applyAccountPolicy(r.accounts[i], 'accounts[$i]', ignored);
     if (!_safeAudioRef(a.ringtone, const {'default'})) {
       ignored.add('accounts[$i].ringtone');
       a = a.copyWith(ringtone: 'default');

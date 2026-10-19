@@ -98,7 +98,8 @@ class AppSettings {
   Map<String, String> get hotkeys => _m['hotkeys'] is Map
       ? {
           for (final e in (_m['hotkeys'] as Map).entries)
-            '${e.key}': '${e.value}',
+            if (e.key is String && e.value is String)
+              e.key as String: e.value as String,
         }
       : const {};
   bool get sendTyping => _b('sendTyping', true);
@@ -107,7 +108,8 @@ class AppSettings {
   List<Map<String, dynamic>> get dialRules => _m['dialRules'] is List
       ? [
           for (final r in _m['dialRules'] as List)
-            Map<String, dynamic>.from(r as Map),
+            if (r is Map && r.keys.every((k) => k is String))
+              Map<String, dynamic>.from(r),
         ]
       : const [];
 
@@ -224,8 +226,11 @@ class AppSettings {
     final out = <int, SpeedDialEntry>{};
     for (final e in raw.entries) {
       final k = int.tryParse('${e.key}');
-      if (k == null || k < 1 || k > 9 || e.value is! Map) continue;
-      final v = SpeedDialEntry.fromJson(Map<String, dynamic>.from(e.value as Map));
+      final x = e.value;
+      if (k == null || k < 1 || k > 9 || x is! Map) continue;
+      final v = SpeedDialEntry.fromJson({
+        for (final f in x.entries) '${f.key}': f.value,
+      });
       if (v.number.isNotEmpty) out[k] = v;
     }
     return out;
@@ -255,10 +260,11 @@ class SpeedDialEntry {
   final String? accountId;
 
   factory SpeedDialEntry.fromJson(Map<String, dynamic> j) {
-    final a = j['accountId'] as String?;
+    String? s(String k) => j[k] is String ? j[k] as String : null;
+    final a = s('accountId');
     return SpeedDialEntry(
-      number: j['number'] as String? ?? '',
-      label: j['label'] as String? ?? '',
+      number: s('number') ?? '',
+      label: s('label') ?? '',
       accountId: (a == null || a.isEmpty) ? null : a,
     );
   }
