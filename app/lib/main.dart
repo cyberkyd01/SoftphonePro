@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'platform/desktop_platform_services.dart';
+import 'platform/ios/ios_platform_services.dart';
 import 'platform/platform_services.dart';
 import 'services/providers.dart';
 import 'storage/app_database.dart';
@@ -44,7 +45,11 @@ Future<void> main(List<String> args) async {
   final supportDir = db.directory ?? (await getApplicationSupportDirectory()).path;
   final secrets = KeystoreSecretsStore(EncryptedFileSecretsStore(p.join(supportDir, 'secrets')));
   final boot = await loadBootData(db, secrets);
-  final PlatformServices platform = desktop ? DesktopPlatformServices() : NoopPlatformServices(mobile: true);
+  final PlatformServices platform = desktop
+      ? DesktopPlatformServices()
+      : (!kIsWeb && Platform.isIOS)
+          ? IosPlatformServices()
+          : NoopPlatformServices(mobile: true);
   await platform.init();
 
   runApp(
