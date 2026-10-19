@@ -1,0 +1,35 @@
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+*.iml
+
+# Native build outputs and fetched sources
+native/build/
+native/deps/
+native/out/
+native/.cache/
+
+# Prebuilt binaries are produced by native/scripts (and by CI) — never committed
+packages/spcore_flutter/android/src/main/jniLibs/
+packages/spcore_flutter/ios/Frameworks/
+packages/spcore_flutter/macos/Frameworks/
+packages/spcore_flutter/windows/prebuilt/
+
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+**/pubspec_overrides.yaml
+coverage/
+
+# Test artifacts
+tests/sipserver/data/
+*.log
+dist/
+
+# Secrets
+*.jks
+*.keystore
+key.properties
