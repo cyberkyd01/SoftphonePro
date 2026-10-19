@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'messages.dart';
 import 'models.dart';
@@ -26,6 +27,7 @@ class PairingSession {
     required this.timeout,
     required this.ownInfo,
     required this.persist,
+    this.onPaired,
   });
 
   final bool incoming;
@@ -34,6 +36,17 @@ class PairingSession {
   final Duration timeout;
   final DeviceInfo Function() ownInfo;
   final Future<void> Function(String id, String name, List<int> edPub) persist;
+
+  /// Called after trust was persisted, with the peer's reported info and the
+  /// address of the pairing socket.
+  final void Function(DeviceInfo? info, InternetAddress? address)? onPaired;
+
+  /// Peer info received over the secure channel (null until it arrives).
+  DeviceInfo? peerInfo;
+  InternetAddress? get peerAddress => _conn?.remoteAddress;
+  bool _finishing = false;
+  bool _sentDone = false;
+  bool _peerDone = false;
 
   PairingState state = PairingState.connecting;
 
@@ -84,7 +97,9 @@ class PairingSession {
     conn.onMessage = _onMessage;
     conn.onChunk = (_) async {};
     conn.onClosed = (_) {
-      if (!isFinished) _finish(PairingState.failed, 'disconnected');
+      // Both users confirmed: trust is being persisted, so a close from the
+      // peer (which finished first) is not a failure.
+      if (!isFinished && !_finishing) _finish(PairingState.failed, 'disconnected');
     };
     conn.start();
     conn.send(PeerInfoMsg(ownInfo())).catchError((_) {});
@@ -103,9 +118,15 @@ class PairingSession {
   void fail(String why) => _finish(PairingState.failed, why);
 
   void _onMessage(AppMessage m) {
+    if (m is PairDone) {
+      _peerDone = true;
+      _maybeCloseAfterDone();
+      return;
+    }
     if (isFinished) return;
     if (m is PeerInfoMsg) {
       if (m.info.deviceId == peerId) {
+        peerInfo = m.info;
         peerName = m.info.name.isEmpty ? peerId : m.info.name;
         _emit();
       }
@@ -163,7 +184,8 @@ class PairingSession {
   }
 
   Future<void> _maybeFinish() async {
-    if (!_localOk || !remoteConfirmed || isFinished) return;
+    if (!_localOk || !remoteConfirmed || isFinished || _finishing) return;
+    _finishing = true;
     final c = _conn!;
     try {
       await persist(
@@ -174,7 +196,18 @@ class PairingSession {
       return;
     }
     _finish(PairingState.paired);
-    _closeSoon();
+    try {
+      onPaired?.call(peerInfo, peerAddress);
+    } catch (_) {}
+    _sentDone = true;
+    c.send(const PairDone()).catchError((_) {});
+    _maybeCloseAfterDone();
+    // Safety net if the peer never acknowledges.
+    Timer(const Duration(seconds: 3), () => c.close());
+  }
+
+  void _maybeCloseAfterDone() {
+    if (_sentDone && _peerDone) _closeSoon();
   }
 
   void _closeSoon() {

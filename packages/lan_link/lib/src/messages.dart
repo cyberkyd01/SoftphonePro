@@ -57,6 +57,15 @@ class PairConfirm extends AppMessage {
       {'ok': ok, if (reason != null) 'reason': reason};
 }
 
+/// Final pairing acknowledgement: "I have persisted the trust record".
+class PairDone extends AppMessage {
+  const PairDone();
+  @override
+  String get type => 'pair.done';
+  @override
+  Map<String, dynamic> body() => {};
+}
+
 class PairRevoke extends AppMessage {
   const PairRevoke();
   @override
@@ -371,15 +380,39 @@ class CallPull extends AppMessage {
   Map<String, dynamic> body() => {'callId': callId};
 }
 
+/// Intercom request. Legacy form (no [requestId]) is kept for compatibility;
+/// the negotiated form carries a [requestId] answered by [IntercomResponse].
 class IntercomRequest extends AppMessage {
-  const IntercomRequest({this.allowed});
+  const IntercomRequest({this.allowed, this.requestId});
   final bool? allowed;
+  final String? requestId;
   @override
   String get type => 'intercom.request';
   @override
   Capability get capability => Capability.intercom;
   @override
-  Map<String, dynamic> body() => {if (allowed != null) 'allowed': allowed};
+  Map<String, dynamic> body() => {
+        if (allowed != null) 'allowed': allowed,
+        if (requestId != null) 'requestId': requestId,
+      };
+}
+
+/// Answer to a negotiated [IntercomRequest]. When [allowed], the caller may
+/// start an intercom call (`Call-Info: answer-after=0`) for [expiresSec]
+/// seconds; the callee checks the grant before auto-answering.
+class IntercomResponse extends AppMessage {
+  const IntercomResponse(
+      {required this.requestId, required this.allowed, this.expiresSec = 0});
+  final String requestId;
+  final bool allowed;
+  final int expiresSec;
+  @override
+  String get type => 'intercom.response';
+  @override
+  Capability get capability => Capability.intercom;
+  @override
+  Map<String, dynamic> body() =>
+      {'requestId': requestId, 'allowed': allowed, 'expiresSec': expiresSec};
 }
 
 /// Parses a decrypted JSON frame. Returns null for unknown types / newer
@@ -397,6 +430,8 @@ Future<AppMessage?> parseMessage(Uint8List data) async {
     case 'pair.confirm':
       return PairConfirm(
           ok: j.boolean('ok'), reason: j.optStr('reason', max: 128));
+    case 'pair.done':
+      return const PairDone();
     case 'pair.revoke':
       return const PairRevoke();
     case 'chat.message':
@@ -473,7 +508,13 @@ Future<AppMessage?> parseMessage(Uint8List data) async {
       return CallPull(j.str('callId', max: 64, allowEmpty: false));
     case 'intercom.request':
       return IntercomRequest(
-          allowed: j.has('allowed') ? j.boolean('allowed') : null);
+          allowed: j.has('allowed') ? j.boolean('allowed') : null,
+          requestId: j.has('requestId') ? _id(j, 'requestId') : null);
+    case 'intercom.response':
+      return IntercomResponse(
+          requestId: _id(j, 'requestId'),
+          allowed: j.boolean('allowed'),
+          expiresSec: j.integer('expiresSec', max: 3600));
   }
   return null;
 }

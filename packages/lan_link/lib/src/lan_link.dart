@@ -207,11 +207,47 @@ class IntercomEvent {
   final bool? allowed;
 }
 
+/// Result of [LanLink.requestIntercom].
+class IntercomGrant {
+  IntercomGrant(this.allowed, this.expiresAt);
+  final bool allowed;
+  final DateTime expiresAt;
+  bool get valid => allowed && DateTime.now().isBefore(expiresAt);
+}
+
+/// A negotiated intercom request from a peer. Call [respond] once.
+class IncomingIntercom {
+  IncomingIntercom._(this._link, this.peer, this.requestId);
+  final LanLink _link;
+  final LanPeer peer;
+  final String requestId;
+  bool answered = false;
+
+  /// Allows (for [expiresSec] seconds, 1..300) or denies. Untrusted peers are
+  /// always denied.
+  Future<void> respond(bool allowed, {int expiresSec = 30}) async {
+    if (answered) return;
+    answered = true;
+    final ok = allowed && peer.trusted;
+    final secs = expiresSec.clamp(1, 300);
+    if (ok) {
+      _link._intercomGrants[peer.deviceId] =
+          DateTime.now().add(Duration(seconds: secs));
+    }
+    await _link._send(
+        peer.deviceId,
+        IntercomResponse(
+            requestId: requestId, allowed: ok, expiresSec: ok ? secs : 0),
+        connect: false);
+  }
+}
+
 class _PeerState {
   DeviceInfo? info;
   InternetAddress? address;
   DateTime? lastSeen;
   bool online = false;
+  bool manual = false;
   int failures = 0;
   DateTime nextAttempt = DateTime.fromMillisecondsSinceEpoch(0);
 }
@@ -251,6 +287,8 @@ class LanLink {
   final Set<String> _seenChatIds = {};
   final Map<String, PeerConnection> _sentVia = {};
   final Set<String> _queueable = {};
+  final Map<String, Completer<IntercomGrant>> _intercomWaiters = {};
+  final Map<String, DateTime> _intercomGrants = {};
   final List<PairingSession> _pairings = [];
   final Map<String, RateLimiter> _pairLimits = {};
   final Map<String, RateLimiter> _connLimits = {};
@@ -267,6 +305,7 @@ class LanLink {
   final _listCtrl = StreamController<CallsListEvent>.broadcast();
   final _pullCtrl = StreamController<PullRequest>.broadcast();
   final _intercomCtrl = StreamController<IntercomEvent>.broadcast();
+  final _intercomReqCtrl = StreamController<IncomingIntercom>.broadcast();
   final _unpairedCtrl = StreamController<String>.broadcast();
 
   // ---- public streams -----------------------------------------------------
@@ -283,7 +322,11 @@ class LanLink {
   Stream<IncomingCallsQuery> get callsQueries => _queryCtrl.stream;
   Stream<CallsListEvent> get callsLists => _listCtrl.stream;
   Stream<PullRequest> get pullRequests => _pullCtrl.stream;
+  /// Legacy (non-negotiated) intercom messages.
   Stream<IntercomEvent> get intercomRequests => _intercomCtrl.stream;
+
+  /// Negotiated intercom requests awaiting `respond()`.
+  Stream<IncomingIntercom> get intercomNegotiations => _intercomReqCtrl.stream;
 
   /// deviceId of a peer that removed us (their `pair.revoke`).
   Stream<String> get unpairedByPeer => _unpairedCtrl.stream;
@@ -455,6 +498,8 @@ class LanLink {
       ?..failures = 0
       ..nextAttempt = DateTime.fromMillisecondsSinceEpoch(0);
     _applyInfo(r.info, r.address);
+    _peers[r.info.deviceId]?.manual = true;
+    _maintain();
     return _peerSnapshot(r.info.deviceId);
   }
 
@@ -467,7 +512,8 @@ class LanLink {
       if (_conns[t.deviceId]?.isClosed == false) continue;
       if (_connecting.containsKey(t.deviceId)) continue;
       // Only the lexicographically smaller id auto-connects (avoids collisions).
-      if (_identity.deviceId.compareTo(t.deviceId) >= 0) continue;
+      // (unless we hold a manual address for it: then we must dial).
+      if (!ps.manual && _identity.deviceId.compareTo(t.deviceId) >= 0) continue;
       if (now.isBefore(ps.nextAttempt)) continue;
       _ensureConn(t.deviceId).then((_) {
         ps.failures = 0;
@@ -557,6 +603,15 @@ class LanLink {
       timeout: config.pairingTimeout,
       ownInfo: () => _info,
       persist: _persistTrust,
+      onPaired: (info, addr) {
+        if (info != null && info.deviceId == peerId) {
+          _applyInfo(info, addr);
+        } else if (addr != null) {
+          // No info received: remember only that we have an address.
+          final ps = _peers.putIfAbsent(peerId, () => _PeerState());
+          ps.address ??= addr;
+        }
+      },
     );
     _pairings.add(s);
     s.done.then((_) => _pairings.remove(s));
@@ -961,6 +1016,40 @@ class LanLink {
     return _send(peerId, CallPull(callId));
   }
 
+  /// Negotiates an intercom grant with [peerId]. Completes with the callee's
+  /// decision; if allowed, [IntercomGrant.expiresAt] bounds the call setup.
+  Future<IntercomGrant> requestIntercom(String peerId,
+      {Duration timeout = const Duration(seconds: 10)}) async {
+    _requireCap(peerId, Capability.intercom);
+    final rid = hexEncode(randomBytes(8));
+    final c = Completer<IntercomGrant>();
+    _intercomWaiters['$peerId/$rid'] = c;
+    try {
+      await _send(peerId, IntercomRequest(requestId: rid));
+    } catch (e) {
+      _intercomWaiters.remove('$peerId/$rid');
+      rethrow;
+    }
+    return c.future.timeout(timeout, onTimeout: () {
+      _intercomWaiters.remove('$peerId/$rid');
+      return IntercomGrant(false, DateTime.now());
+    });
+  }
+
+  /// True while [peerId] holds an unexpired grant (given by us) to intercom
+  /// this device. The SIP layer must check this before auto-answering.
+  bool intercomGranted(String peerId) {
+    final until = _intercomGrants[peerId];
+    if (until == null) return false;
+    if (DateTime.now().isAfter(until)) {
+      _intercomGrants.remove(peerId);
+      return false;
+    }
+    return true;
+  }
+
+  void revokeIntercom(String peerId) => _intercomGrants.remove(peerId);
+
   Future<void> sendIntercomRequest(String peerId, {bool? allowed}) {
     _requireCap(peerId, Capability.intercom);
     return _send(peerId, IntercomRequest(allowed: allowed));
@@ -1079,7 +1168,16 @@ class LanLink {
       case CallPull():
         _pullCtrl.add(PullRequest(_peerSnapshot(id), m.callId));
       case IntercomRequest():
-        _intercomCtrl.add(IntercomEvent(_peerSnapshot(id), m.allowed));
+        if (m.requestId == null) {
+          _intercomCtrl.add(IntercomEvent(_peerSnapshot(id), m.allowed));
+        } else {
+          _intercomReqCtrl
+              .add(IncomingIntercom._(this, _peerSnapshot(id), m.requestId!));
+        }
+      case IntercomResponse():
+        final w = _intercomWaiters.remove('$id/${m.requestId}');
+        w?.complete(IntercomGrant(m.allowed && _peerSnapshot(id).trusted,
+            DateTime.now().add(Duration(seconds: m.expiresSec))));
       default:
         break;
     }

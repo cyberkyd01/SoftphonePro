@@ -141,11 +141,14 @@ JSON messages / s per connection.
 
 ### 4.1 Pairing (mode = pair)
 
-Only `peer.info`, `pair.confirm` are processed. Both users see the SAS. When a user
+Only `peer.info`, `pair.confirm`, `pair.done` are processed. Both users see the SAS. When a user
 confirms, that device sends `{"t":"pair.confirm","ok":true}`; reject/cancel sends
 `ok:false`. Pairing completes only when **both** confirmations are exchanged; then
-each side persists `{deviceId, name, ed25519Pub, pairedAt}` in its `TrustStore` and
-closes the channel. Timeout: 120 s after the SAS appears. Pair mode is not an
+each side persists `{deviceId, name, ed25519Pub, pairedAt}` in its `TrustStore`, records
+the peer's address (socket address + `linkPort` from its `peer.info`) so it is reachable
+immediately, reports success, and sends `pair.done`. The channel is closed only after
+`pair.done` was exchanged (or 3 s). A peer closing the channel after both users confirmed
+is not a failure; success means "trust persisted". Timeout: 120 s after the SAS appears. Pair mode is not an
 authenticated channel for anything else, and pair-mode sessions are closed after
 the outcome.
 
@@ -155,6 +158,10 @@ At most one connection per peer. If two exist (both sides dialed), the one whose
 initiator has the smaller deviceId wins; the other is closed. Auto-connect
 (`keepConnected`) is only initiated by the smaller deviceId, with exponential backoff
 (2 s … 30 s). Either side may dial lazily when sending.
+
+Dialing: a trusted online peer is auto-dialed by the side with the smaller deviceId, **or by
+any side that holds a manual address** (`connectManual`) for it. Simultaneous dials are
+resolved as above (the loser stays open 3 s so in-flight frames are not lost).
 
 Right after the handshake both sides send `peer.info` (their `DeviceInfo`; verified
 to match the authenticated key). `pair.revoke` tells the peer we removed our trust;
@@ -186,7 +193,9 @@ receiver is dropped (offers are auto-declined with reason `unsupported`).
 | `calls.query` | - | handoff |
 | `calls.list` | `calls[≤64]{callId,remoteName,remoteNumber,durationSec,accountName}` | handoff |
 | `call.pull` | `callId` | handoff |
-| `intercom.request` | `allowed?` | intercom |
+| `intercom.request` | `requestId?`, `allowed?` (legacy, no requestId) | intercom |
+| `intercom.response` | `requestId`, `allowed`, `expiresSec` (≤ 3600) | intercom |
+| `pair.done` | - | - |
 
 Chat: the receiver answers every new message with `chat.ack delivered` (de-duplicated
 by id); the user-facing "read" ack is sent explicitly. Messages to unreachable peers
@@ -212,7 +221,15 @@ fail fast (`PeerOfflineException`) unless `queue: true` (outbox ≤ 50 / peer, 1
 6. `file.cancel` from either side deletes partial data. A dropped connection fails
    the transfer but keeps the partial file (7 days) so a new offer resumes.
 
-### 5.2 Handoff
+### 5.2 Intercom negotiation
+
+Caller sends `intercom.request{requestId}`; the callee answers `intercom.response{requestId,
+allowed, expiresSec}` (untrusted peers are always denied). An allowed response records a
+short-lived grant (1-300 s) on the callee: `LanLink.intercomGranted(peerId)` must be true
+before the SIP layer auto-answers an intercom INVITE (`Call-Info: answer-after=0`). The caller
+treats a missing answer (10 s) as denied. Grants can be revoked with `revokeIntercom`.
+
+### 5.3 Handoff
 
 `offerHandoff` sends `handoff.offer` and waits (default 45 s) for `handoff.accept`/
 `handoff.decline`; on timeout it sends `handoff.cancel`. After acceptance the apps drive
