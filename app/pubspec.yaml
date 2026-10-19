@@ -41,7 +41,7 @@ dependencies:
   path: ^1.9.1
   flutter_secure_storage: ^10.3.4
   cryptography: ^2.9.0
-  connectivity_plus: ^7.3.2
+  connectivity_plus: ^6.1.4
   window_manager: ^0.5.2
   http: ^1.6.0
   qr_flutter: ^4.1.0
@@ -55,6 +55,11 @@ dependencies:
   audioplayers: ^6.6.0
   spcore_flutter:
     path: ../packages/spcore_flutter
+  tray_manager: ^0.5.3
+  local_notifier: ^0.1.6
+  launch_at_startup: ^0.5.1
+  hotkey_manager: ^0.2.3
+  screen_retriever: ^0.2.2
   bonsoir: ^2.2.0+1
   lan_link:
     path: ../packages/lan_link

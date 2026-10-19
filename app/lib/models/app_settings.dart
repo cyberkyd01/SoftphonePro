@@ -91,7 +91,7 @@ class AppSettings {
   // ---- privacy / system
   bool get appLock => _b('appLock', false);
   bool get startAtLogin => _b('startAtLogin', false);
-  bool get minimizeToTray => _b('minimizeToTray', false);
+  bool get minimizeToTray => _b('minimizeToTray', true);
   Map<String, String> get hotkeys => _m['hotkeys'] is Map
       ? {
           for (final e in (_m['hotkeys'] as Map).entries)

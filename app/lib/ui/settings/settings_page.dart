@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../widgets/basic_widgets.dart';
+import '../../platform/desktop/shortcuts_section.dart';
 import 'provisioning_section.dart';
 import 'sections.dart';
 
@@ -24,6 +25,8 @@ final List<SettingsEntry> kSettingsEntries = [
   SettingsEntry('network', 'Network', Icons.lan_rounded, () => const NetworkSection(), subtitle: 'Transports, STUN, TLS, DNS'),
   SettingsEntry('recording', 'Recording', Icons.fiber_manual_record_rounded, () => const RecordingSection()),
   SettingsEntry('notifications', 'Notifications and ringtones', Icons.notifications_rounded, () => const NotificationsSection()),
+  if (hotkeysSupported)
+    SettingsEntry('shortcuts', 'Shortcuts', Icons.keyboard_rounded, () => const ShortcutsSection(), subtitle: 'Global hotkeys, in-app keys'),
   SettingsEntry('appearance', 'Appearance', Icons.palette_rounded, () => const AppearanceSection()),
   SettingsEntry('privacy', 'Privacy and security', Icons.shield_rounded, () => const PrivacySection()),
   SettingsEntry('lan', 'LAN Link', Icons.devices_rounded, () => const LanSection()),

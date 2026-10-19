@@ -880,7 +880,7 @@ class AdvancedSection extends ConsumerWidget {
                 _s(ref).update({'startAtLogin': v});
                 ref.read(platformServicesProvider).setStartAtLogin(v);
               }),
-              SwitchTile(icon: Icons.minimize_rounded, title: 'Minimise to tray', value: s.minimizeToTray, onChanged: (v) => _s(ref).update({'minimizeToTray': v})),
+              SwitchTile(icon: Icons.minimize_rounded, title: 'Close to tray', subtitle: 'Closing the window keeps SoftphonePro running so calls can still ring. Quit from the tray / menu bar icon.', value: s.minimizeToTray, onChanged: (v) => _s(ref).update({'minimizeToTray': v})),
             ],
           ),
       ],

@@ -28,6 +28,47 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>SIP address</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sip</string>
+				<string>sips</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Telephone number</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tel</string>
+				<string>callto</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>SoftphonePro</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>softphonepro</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>SoftphonePro uses the local network to find and link with your other devices (LAN Link) and to call peers directly.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_softphonepro._tcp</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SoftphonePro needs the microphone to carry your voice during calls.</string>
 </dict>

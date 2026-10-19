@@ -2,7 +2,10 @@
 
 #include <optional>
 
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
+#include "single_instance.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -25,10 +28,38 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "softphonepro/desktop",
+      &flutter::StandardMethodCodec::GetInstance());
+  channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "ready") {
+          dart_ready_ = true;
+          flutter::EncodableList pending;
+          for (const auto& a : pending_args_) {
+            pending.push_back(flutter::EncodableValue(a));
+          }
+          pending_args_.clear();
+          flutter::EncodableMap map;
+          map[flutter::EncodableValue("pending")] =
+              flutter::EncodableValue(pending);
+          map[flutter::EncodableValue("launchedAtLogin")] =
+              flutter::EncodableValue(false);
+          result->Success(flutter::EncodableValue(map));
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (!start_hidden_) {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -40,6 +71,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -65,6 +97,19 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+    case WM_COPYDATA: {
+      std::string payload;
+      if (ReadCommandLinePayload(lparam, &payload)) {
+        if (dart_ready_ && channel_) {
+          channel_->InvokeMethod(
+              "onArgs", std::make_unique<flutter::EncodableValue>(payload));
+        } else {
+          pending_args_.push_back(payload);
+        }
+        return TRUE;
+      }
+      break;
+    }
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
