@@ -1,4 +1,7 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:lan_link/lan_link.dart' as ll;
+
+import '../l10n/l10n.dart';
 
 /// The engine's local account uid for LAN SIP calls.
 const String kLanAccountUid = '__lan__';
@@ -53,11 +56,14 @@ class LanCallMeta {
   String get callerLabel => callerName.isNotEmpty ? callerName : callerNumber;
 
   /// "Transferred call from Kitchen iPad: Alice (1002)".
-  String get handoffText {
-    final who = peerName.isNotEmpty ? peerName : 'another device';
+  String handoffTextFor(AppLocalizations l) {
+    final who = peerName.isNotEmpty ? peerName : l.lanHandoffAnotherDevice;
     final c = callerLabel;
-    return 'Transferred call from $who${c.isEmpty ? '' : ': $c'}';
+    return c.isEmpty ? l.lanHandoffTransferredFrom(who) : l.lanHandoffTransferredFromCaller(who, c);
   }
+
+  /// English text (tests / non-UI callers); the UI uses [handoffTextFor].
+  String get handoffText => handoffTextFor(lookupAppLocalizations(const Locale('en')));
 }
 
 /// A call that is being relayed through this device to a LAN peer.

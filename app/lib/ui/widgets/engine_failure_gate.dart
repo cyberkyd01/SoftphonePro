@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/engine_controller.dart';
 import '../router.dart';
 
@@ -34,8 +35,8 @@ class _EngineFailureGateState extends ConsumerState<EngineFailureGate> {
               child: ListTile(
                 dense: true,
                 leading: Icon(Icons.error_outline_rounded, color: scheme.onErrorContainer),
-                title: Text('The calling engine is not running', style: TextStyle(color: scheme.onErrorContainer)),
-                trailing: TextButton(key: const Key('engine-banner-retry'), onPressed: ctl.retry, child: const Text('Retry')),
+                title: Text(context.l10n.appEngineNotRunning, style: TextStyle(color: scheme.onErrorContainer)),
+                trailing: TextButton(key: const Key('engine-banner-retry'), onPressed: ctl.retry, child: Text(context.l10n.actionRetry)),
               ),
             ),
           ),
@@ -57,11 +58,10 @@ class _EngineFailureGateState extends ConsumerState<EngineFailureGate> {
                 children: [
                   Icon(Icons.phonelink_erase_rounded, size: 56, color: scheme.error),
                   const SizedBox(height: 16),
-                  Text("Couldn't start the calling engine", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+                  Text(context.l10n.appEngineFailedTitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
-                    'Calls and registration will not work until this is fixed. '
-                    'A bad network or certificate setting is the usual cause.',
+context.l10n.appEngineFailedBody,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -70,7 +70,7 @@ class _EngineFailureGateState extends ConsumerState<EngineFailureGate> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(12)),
                     child: SelectableText(
-                      st.error ?? 'Unknown error',
+                      st.error ?? context.l10n.appUnknownError,
                       key: const Key('engine-failure-message'),
                       style: TextStyle(color: scheme.onErrorContainer),
                     ),
@@ -80,7 +80,7 @@ class _EngineFailureGateState extends ConsumerState<EngineFailureGate> {
                     key: const Key('engine-retry'),
                     onPressed: ctl.retry,
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Retry'),
+                    label: Text(context.l10n.actionRetry),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
@@ -90,13 +90,13 @@ class _EngineFailureGateState extends ConsumerState<EngineFailureGate> {
                       ref.read(routerProvider).go('/settings/network');
                     },
                     icon: const Icon(Icons.settings_ethernet_rounded),
-                    label: const Text('Open network settings'),
+                    label: Text(context.l10n.appEngineOpenNetworkSettings),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
                     key: const Key('engine-use-simulator'),
                     onPressed: ctl.startSimulator,
-                    child: const Text('Use simulator (demo)'),
+                    child: Text(context.l10n.appEngineUseSimulator),
                   ),
                 ],
               ),

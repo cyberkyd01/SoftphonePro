@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lan_link/lan_link.dart' as ll;
 
+import '../l10n/l10n.dart';
 import '../lan/lan_controller.dart';
 import '../ui/router.dart';
 import 'app_services.dart';
@@ -41,10 +42,11 @@ Future<BuildContext?> _rootContext() async {
 /// Routes an incoming link / CLI intent (see [classifyLink]).
 Future<void> handleIncomingLink(Ref ref, Uri uri) async {
   final notices = ref.read(noticeProvider.notifier);
+  final l = ref.read(l10nProvider);
   final action = classifyLink(uri);
   switch (action) {
     case RejectedLinkAction(:final reason):
-      notices.error(reason);
+      notices.error(linkRejectionText(l, reason));
     case ProvisionCliAction(:final source):
       await _trackProvisioning(ref, () async {
         try {
@@ -62,12 +64,12 @@ Future<void> handleIncomingLink(Ref ref, Uri uri) async {
     case LanLinkAction(:final raw):
       try {
         final peer = await ref.read(lanControllerProvider.notifier).connectManual(raw);
-        notices.show('Connected to ${peer.name}');
+        notices.show(l.callLinkConnectedTo(peer.name));
         ref.read(routerProvider).go('/lan');
       } on ll.LanLinkException catch (e) {
         notices.error(e.message);
       } catch (e) {
-        notices.error('Could not connect to that device', details: '$e');
+        notices.error(l.callLinkConnectFailed, details: '$e');
       }
     case DialCliAction(:final target):
       await _dial(ref, target, immediately: true);
@@ -107,7 +109,7 @@ Future<void> _dial(Ref ref, String target, {required bool immediately}) async {
   // At launch the engine is still starting and the account still registering.
   final ready = await waitForDialReady(ref, target);
   if (!ready.ok) {
-    ref.read(noticeProvider.notifier).error("Could not place the call to $target", details: ready.message);
+    ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callLinkCallFailed(target), details: ready.message);
     return;
   }
   await ref.read(callsProvider.notifier).dial(target);
@@ -115,6 +117,7 @@ Future<void> _dial(Ref ref, String target, {required bool immediately}) async {
 
 Future<void> _provisionFromLink(Ref ref, Uri url) async {
   final notices = ref.read(noticeProvider.notifier);
+  final l = ref.read(l10nProvider);
   try {
     final vars = await provisioningVars(
       settings: ref.read(settingsProvider).toJson(),
@@ -124,19 +127,19 @@ Future<void> _provisionFromLink(Ref ref, Uri url) async {
     final r = await Provisioning.fetch(url, vars: vars, client: client);
     final ctx = await _rootContext();
     if (ctx == null || !ctx.mounted) return;
-    final n = r.accounts.length;
     final ok = await showDialog<bool>(
       context: ctx,
       builder: (c) => AlertDialog(
         key: const Key('link-import-confirm'),
-        title: const Text('Import configuration'),
+        title: Text(l.callLinkImportTitle),
         content: Text(
-          'Import configuration from ${url.host}? It will add $n account${n == 1 ? '' : 's'}'
-          '${r.settings.isEmpty ? '' : ' and ${r.settings.length} setting(s)'}.',
+          r.settings.isEmpty
+              ? l.callLinkImportBody(url.host, r.accounts.length)
+              : l.callLinkImportBodyWithSettings(url.host, r.accounts.length, r.settings.length),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(key: const Key('link-import-yes'), onPressed: () => Navigator.pop(c, true), child: const Text('Import')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(l.actionCancel)),
+          FilledButton(key: const Key('link-import-yes'), onPressed: () => Navigator.pop(c, true), child: Text(l.actionImport)),
         ],
       ),
     );

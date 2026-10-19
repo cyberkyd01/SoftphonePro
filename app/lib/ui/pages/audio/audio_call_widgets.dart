@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../audio/announcement_service.dart';
 import '../../../audio/voice_isolation.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/settings_controller.dart';
 
 /// "Playing announcement..." with a Skip button, shown while an opening,
@@ -17,18 +18,19 @@ class AnnouncementChip extends ConsumerWidget {
     final play = ref.watch(activeAnnouncementsProvider)[cid];
     if (play == null) return const SizedBox.shrink();
     final t = Theme.of(context);
+    final l = context.l10n;
     final label = switch (play.kind) {
-      AnnouncementKind.opening => 'Playing announcement…',
-      AnnouncementKind.transfer => 'Playing transfer notice…',
-      AnnouncementKind.recordingNotice => 'Playing recording notice…',
+      AnnouncementKind.opening => l.callAnnouncementOpening,
+      AnnouncementKind.transfer => l.callAnnouncementTransfer,
+      AnnouncementKind.recordingNotice => l.callAnnouncementRecording,
     };
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Align(
-        alignment: center ? Alignment.center : Alignment.centerLeft,
+        alignment: center ? Alignment.center : AlignmentDirectional.centerStart,
         child: Container(
           key: Key('announcement-chip-$cid'),
-          padding: const EdgeInsets.only(left: 12, right: 4),
+          padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
           decoration: BoxDecoration(
             color: t.colorScheme.primary.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(20),
@@ -43,7 +45,7 @@ class AnnouncementChip extends ConsumerWidget {
                 key: Key('skip-announcement-$cid'),
                 style: TextButton.styleFrom(minimumSize: const Size(44, 32), padding: const EdgeInsets.symmetric(horizontal: 10)),
                 onPressed: () => ref.read(announcementServiceProvider).skip(cid),
-                child: const Text('Skip'),
+                child: Text(l.callAnnouncementSkip),
               ),
             ],
           ),
@@ -63,7 +65,11 @@ class NoiseCancellationChip extends ConsumerWidget {
     if (!(s.viMicOn || s.viInOn) || avail == false) return const SizedBox.shrink();
     final t = Theme.of(context);
     return Tooltip(
-      message: 'AI noise cancellation: ${[if (s.viMicOn) 'your microphone', if (s.viInOn) 'other participants'].join(' and ')}',
+      message: s.viMicOn && s.viInOn
+          ? context.l10n.callNoiseTooltipBoth
+          : s.viMicOn
+              ? context.l10n.callNoiseTooltipMic
+              : context.l10n.callNoiseTooltipIncoming,
       child: Container(
         key: const Key('noise-cancellation-chip'),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -76,7 +82,7 @@ class NoiseCancellationChip extends ConsumerWidget {
           children: [
             Icon(Icons.noise_control_off_rounded, size: 13, color: t.colorScheme.primary),
             const SizedBox(width: 4),
-            Text('Noise cancellation on', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600)),
+            Text(context.l10n.callNoiseOn, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -99,19 +105,19 @@ class NoiseCancellationTile extends ConsumerWidget {
         SwitchListTile(
           key: const Key('incall-noise-switch'),
           secondary: const Icon(Icons.noise_control_off_rounded),
-          title: const Text('Noise cancellation'),
-          subtitle: Text(s.viMicOn ? 'My microphone: ${strengthText(s.viMicStrength)}' : 'Remove background noise from my microphone'),
+          title: Text(context.l10n.callNoiseTitle),
+          subtitle: Text(s.viMicOn ? context.l10n.callNoiseMicStrength(strengthText(context.l10n, s.viMicStrength)) : context.l10n.callNoiseMicOffHint),
           value: s.viMicOn,
           onChanged: (v) => set({'viMicOn': v}),
         ),
         if (s.viMicOn)
           Padding(
-            padding: const EdgeInsets.only(left: 56, right: 16),
+            padding: const EdgeInsetsDirectional.only(start: 56, end: 16),
             child: Slider(
               key: const Key('incall-noise-strength'),
               value: s.viMicStrength.clamp(0.0, 1.0),
               divisions: 20,
-              label: strengthText(s.viMicStrength),
+              label: strengthText(context.l10n, s.viMicStrength),
               onChanged: (v) => set({'viMicStrength': v}),
             ),
           ),

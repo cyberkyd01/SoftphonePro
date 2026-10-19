@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../core/theme.dart';
 import '../../models/account_profile.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
+import '../../l10n/l10n.dart';
 import 'basic_widgets.dart';
 
 /// Horizontal strip of account chips (mobile) or wrap (desktop top bar).
@@ -23,10 +24,10 @@ class AccountStrip extends ConsumerWidget {
       return Padding(
         padding: padding,
         child: Align(
-          alignment: Alignment.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: ActionChip(
             avatar: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add account'),
+            label: Text(context.l10n.acctAddAccount),
             onPressed: () => context.push('/account-wizard'),
           ),
         ),
@@ -95,13 +96,13 @@ class AccountSheet extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(p.name, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                      Text(p.address, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                      Text(p.address, textDirection: TextDirection.ltr, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
                 StatusDot(color: statusColor(context, status), size: 12),
                 const SizedBox(width: 6),
-                Text(statusLabel(status), style: t.textTheme.labelLarge),
+                Text(statusLabel(status, context.l10n), style: t.textTheme.labelLarge),
               ],
             ),
             if (err != null) ...[
@@ -118,16 +119,16 @@ class AccountSheet extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(child: Text(err)),
                     TextButton(
-                      onPressed: () => showErrorDetails(context, 'Registration error', err, info == null ? null : 'SIP ${info.regCode} ${info.regReason}\n${info.statusText}\nTransport: ${info.transport}'),
-                      child: const Text('Details'),
+                      onPressed: () => showErrorDetails(context, context.l10n.acctRegistrationError, err, info == null ? null : context.l10n.acctRegistrationDetails(info.regCode, info.regReason, info.statusText, info.transport)),
+                      child: Text(context.l10n.actionDetails),
                     ),
                   ],
                 ),
               ),
               if (retry != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 6, left: 4),
-                  child: Text('Retrying at ${DateFormat.Hms().format(retry)}', style: t.textTheme.bodySmall),
+                  padding: const EdgeInsetsDirectional.only(top: 6, start: 4),
+                  child: Text(context.l10n.acctRetryingAt(DateFormat.Hms(Localizations.localeOf(context).toString()).format(retry)), style: t.textTheme.bodySmall),
                 ),
             ],
             const SizedBox(height: 12),
@@ -139,13 +140,13 @@ class AccountSheet extends ConsumerWidget {
                   OutlinedButton.icon(
                     onPressed: () => ctl.register(p.id, false),
                     icon: const Icon(Icons.cloud_off_rounded),
-                    label: const Text('Unregister'),
+                    label: Text(context.l10n.acctUnregister),
                   )
                 else
                   FilledButton.icon(
                     onPressed: p.enabled ? () => ctl.register(p.id, true) : null,
                     icon: const Icon(Icons.cloud_done_rounded),
-                    label: const Text('Register'),
+                    label: Text(context.l10n.acctFieldRegister),
                   ),
                 OutlinedButton.icon(
                   onPressed: () {
@@ -153,7 +154,7 @@ class AccountSheet extends ConsumerWidget {
                     context.push('/settings/accounts/${p.id}');
                   },
                   icon: const Icon(Icons.tune_rounded),
-                  label: const Text('Edit'),
+                  label: Text(context.l10n.actionEdit),
                 ),
               ],
             ),
@@ -161,30 +162,30 @@ class AccountSheet extends ConsumerWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               secondary: const Icon(Icons.do_not_disturb_on_rounded),
-              title: const Text('Do not disturb'),
-              subtitle: const Text('Reject incoming calls on this account'),
+              title: Text(context.l10n.acctFieldDnd),
+              subtitle: Text(context.l10n.acctSheetDndSub),
               value: p.dnd,
               onChanged: (v) => ctl.setDnd(p.id, v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               secondary: const Icon(Icons.power_settings_new_rounded),
-              title: const Text('Enabled'),
+              title: Text(context.l10n.acctFieldEnabled),
               value: p.enabled,
               onChanged: (v) => ctl.setEnabled(p.id, v),
             ),
             if (info != null) ...[
               const Divider(),
-              _kv(context, 'Server', p.config.domain),
-              _kv(context, 'Transport', info.transport.isEmpty ? p.config.transport.wire : info.transport.toUpperCase()),
+              _kv(context, context.l10n.acctKvServer, p.config.domain),
+              _kv(context, context.l10n.acctFieldTransport, info.transport.isEmpty ? p.config.transport.wire : info.transport.toUpperCase()),
               if ((info.resolvedServer ?? '').isNotEmpty)
-                KeyedSubtree(key: const Key('acc-resolved-server'), child: _kv(context, 'Resolved server', info.resolvedServer!)),
+                KeyedSubtree(key: const Key('acc-resolved-server'), child: _kv(context, context.l10n.acctKvResolvedServer, info.resolvedServer!)),
               if (p.config.tlsClientCert != null && p.config.tlsClientCert!.certFile.isNotEmpty)
-                _kv(context, 'Client cert', 'Presented to the server (mutual TLS)'),
-              if (info.contact.isNotEmpty) _kv(context, 'Contact', info.contact),
-              if (info.expires > 0) _kv(context, 'Expires in', '${info.expires} s'),
+                _kv(context, context.l10n.acctKvClientCert, context.l10n.acctKvClientCertValue),
+              if (info.contact.isNotEmpty) _kv(context, context.l10n.acctKvContact, info.contact),
+              if (info.expires > 0) _kv(context, context.l10n.acctKvExpiresIn, context.l10n.acctSecondsShort(info.expires)),
               if (acc.mwi[p.id] != null)
-                _kv(context, 'Voicemail', '${acc.mwi[p.id]!.newMsgs} new, ${acc.mwi[p.id]!.oldMsgs} old'),
+                _kv(context, context.l10n.acctKvVoicemail, context.l10n.acctVoicemailCounts(acc.mwi[p.id]!.newMsgs, acc.mwi[p.id]!.oldMsgs)),
             ],
           ],
         ),
@@ -198,7 +199,7 @@ class AccountSheet extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(width: 100, child: Text(k, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
-        Expanded(child: SelectableText(v, style: Theme.of(context).textTheme.bodyMedium)),
+        Expanded(child: SelectableText(v, textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.bodyMedium)),
       ],
     ),
   );
@@ -235,9 +236,9 @@ Future<void> showErrorDetails(BuildContext context, String title, String message
             Navigator.pop(ctx);
             context.push('/settings/diagnostics');
           },
-          child: const Text('Open SIP trace'),
+          child: Text(context.l10n.acctOpenSipTrace),
         ),
-        FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l10n.actionClose)),
       ],
     ),
   );
@@ -258,12 +259,12 @@ class AccountSelector extends ConsumerWidget {
       return TextButton.icon(
         onPressed: () => context.push('/account-wizard'),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add an account'),
+        label: Text(context.l10n.acctAddAnAccount),
       );
     }
     final t = Theme.of(context);
     return PopupMenuButton<String>(
-      tooltip: 'Choose the account to call from',
+      tooltip: context.l10n.acctChooseAccountTooltip,
       position: PopupMenuPosition.under,
       onSelected: (id) => ref.read(dialAccountProvider.notifier).select(id),
       itemBuilder: (_) => [
@@ -286,7 +287,7 @@ class AccountSelector extends ConsumerWidget {
             children: [
               const Icon(Icons.alt_route_rounded, size: 14),
               const SizedBox(width: 10),
-              const Flexible(child: Text('Direct (no account)', overflow: TextOverflow.ellipsis)),
+              Flexible(child: Text(context.l10n.acctDirectNoAccount, overflow: TextOverflow.ellipsis)),
               if (direct) ...[const SizedBox(width: 8), const Icon(Icons.check_rounded, size: 18)],
             ],
           ),
@@ -294,7 +295,7 @@ class AccountSelector extends ConsumerWidget {
       ],
       child: Semantics(
         button: true,
-        label: 'Calling from ${direct ? 'direct, no account' : (selected?.name ?? 'no account')}',
+        label: direct ? context.l10n.acctCallingFromDirect : (selected != null ? context.l10n.acctCallingFromAccount(selected.name) : context.l10n.acctCallingFromNone),
         child: Container(
           constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -311,7 +312,7 @@ class AccountSelector extends ConsumerWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  direct ? 'Direct (no account)' : (selected?.name ?? 'No account'),
+                  direct ? context.l10n.acctDirectNoAccount : (selected?.name ?? context.l10n.acctNoAccount),
                   overflow: TextOverflow.ellipsis,
                   style: t.textTheme.labelLarge,
                 ),

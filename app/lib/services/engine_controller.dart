@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
 import '../audio/voice_isolation.dart';
 import '../platform/android/android_platform_services.dart';
@@ -282,7 +283,7 @@ class EngineController extends Notifier<EngineState> {
       demo: handle.demo,
       generation: state.generation + 1,
       version: res.version,
-      note: handle.note,
+      note: handle.loadError != null ? ref.read(l10nProvider).appEngineNativeUnavailable(handle.loadError!) : handle.note,
       startResult: res,
     );
     await _applyLive(settings, initial: true);

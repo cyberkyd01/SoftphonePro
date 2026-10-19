@@ -5,6 +5,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 import '../../../audio/audio_platform.dart';
 import '../../../audio/voice_isolation.dart';
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/providers.dart';
 import '../../../services/settings_controller.dart';
 import '../../widgets/settings_tiles.dart';
@@ -14,7 +15,7 @@ class VoiceIsolationPage extends StatelessWidget {
   const VoiceIsolationPage({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Voice isolation')),
+    appBar: AppBar(title: Text(context.l10n.voiceTitle)),
     body: const VoiceIsolationBody(),
   );
 }
@@ -52,7 +53,7 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
     try {
       await _vi.setEchoTest(on);
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Echo test failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).voiceEchoFailed, details: '$e');
     }
   }
 
@@ -61,6 +62,7 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
     final s = ref.watch(settingsProvider);
     final vi = ref.watch(voiceIsolationProvider);
     final platform = ref.watch(audioPlatformProvider);
+    final l = context.l10n;
     final available = vi.available != false;
     final t = Theme.of(context);
     return ListView(
@@ -68,7 +70,7 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
       children: [
         if (!available)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
             child: Container(
               key: const Key('vi-unavailable'),
               padding: const EdgeInsets.all(12),
@@ -80,20 +82,20 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
                 children: [
                   Icon(Icons.info_outline_rounded, color: t.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text('AI noise cancellation is not available in this build of the call engine. The standard noise suppression under Processing still works.')),
+                  Expanded(child: Text(l.voiceUnavailable)),
                 ],
               ),
             ),
           ),
         SettingsGroup(
-          title: 'AI noise cancellation',
-          footer: 'Removes keyboard clicks, fans and background voices from the call using an on-device neural network (RNNoise). Nothing leaves your device. Higher strength removes more noise but can clip the start of words.',
+          title: l.voiceGroupAi,
+          footer: l.voiceAiFooter,
           children: [
             SwitchTile(
               key: const Key('vi-mic-switch'),
               icon: Icons.mic_rounded,
-              title: 'My microphone',
-              subtitle: 'Clean up what the other person hears',
+              title: l.voiceMic,
+              subtitle: l.voiceMicHint,
               value: s.viMicOn,
               onChanged: available ? (v) => _set({'viMicOn': v}) : null,
             ),
@@ -106,8 +108,8 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
             SwitchTile(
               key: const Key('vi-in-switch'),
               icon: Icons.record_voice_over_rounded,
-              title: 'Other participants',
-              subtitle: 'Clean up noisy callers you hear',
+              title: l.voiceOthers,
+              subtitle: l.voiceOthersHint,
               value: s.viInOn,
               onChanged: available ? (v) => _set({'viInOn': v}) : null,
             ),
@@ -120,15 +122,15 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
           ],
         ),
         SettingsGroup(
-          title: 'Try it',
-          footer: 'Use headphones for the echo test, or you will hear feedback.',
+          title: l.voiceGroupTry,
+          footer: l.voiceTryFooter,
           children: [
             _SpeechMeter(value: vi.vad, active: s.viMicOn && available),
             SwitchTile(
               key: const Key('vi-echo-test'),
               icon: Icons.hearing_rounded,
-              title: 'Test with echo',
-              subtitle: 'Plays your processed microphone back to you',
+              title: l.voiceEchoTest,
+              subtitle: l.voiceEchoTestHint,
               value: vi.echoTest,
               onChanged: _echo,
             ),
@@ -136,17 +138,17 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
         ),
         if (platform.hasSystemMicrophoneModes)
           SettingsGroup(
-            title: 'System',
-            footer: 'macOS and iOS can also isolate your voice for every app. Choose Voice Isolation in the system microphone mode.',
+            title: l.voiceGroupSystem,
+            footer: l.voiceSystemFooter,
             children: [
               ListTile(
                 key: const Key('vi-system-mode'),
                 leading: const Icon(Icons.settings_voice_rounded),
-                title: const Text('System microphone mode (Voice Isolation)…'),
+                title: Text(l.voiceSystemMode),
                 onTap: () async {
                   final ok = await platform.showSystemMicrophoneModes();
                   if (!ok && context.mounted) {
-                    ref.read(noticeProvider.notifier).show('Microphone modes need macOS 12 or iOS 15 or later.');
+                    ref.read(noticeProvider.notifier).show(l.voiceSystemModeUnsupported);
                   }
                 },
               ),
@@ -167,12 +169,12 @@ class _StrengthTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       enabled: enabled,
-      contentPadding: const EdgeInsets.only(left: 72, right: 16),
-      title: Text('Strength: ${strengthText(value)}', style: Theme.of(context).textTheme.bodyMedium),
+      contentPadding: const EdgeInsetsDirectional.only(start: 72, end: 16),
+      title: Text(context.l10n.voiceStrength(strengthText(context.l10n, value)), style: Theme.of(context).textTheme.bodyMedium),
       subtitle: Slider(
         value: value.clamp(0.0, 1.0),
         divisions: 20,
-        label: strengthText(value),
+        label: strengthText(context.l10n, value),
         onChanged: enabled ? onChanged : null,
       ),
     );
@@ -185,14 +187,15 @@ class _SpeechMeter extends StatelessWidget {
   final bool active;
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final c = context.colors;
     final v = active ? value.clamp(0.0, 1.0) : 0.0;
     return Semantics(
-      label: 'Speech detection',
-      value: '${(v * 100).round()} percent',
+      label: l.voiceSpeechDetection,
+      value: l.voiceSpeechPercent((v * 100).round()),
       child: ListTile(
         leading: const Icon(Icons.graphic_eq_rounded),
-        title: const Text('Speech detection'),
+        title: Text(l.voiceSpeechDetection),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: ClipRRect(
@@ -206,7 +209,7 @@ class _SpeechMeter extends StatelessWidget {
             ),
           ),
         ),
-        trailing: Text(active ? '${(v * 100).round()}%' : 'Off'),
+        trailing: Text(active ? l.voicePercent((v * 100).round()) : l.commonOff),
       ),
     );
   }
@@ -221,13 +224,14 @@ class _AndroidEffectsGroup extends ConsumerWidget {
       builder: (context, snap) {
         final e = snap.data;
         if (e == null) return const SizedBox.shrink();
-        String yn(bool b) => b ? 'Available' : 'Not available on this device';
+        final l = context.l10n;
+        String yn(bool b) => b ? l.statusAvailable : l.voiceNotAvailableDevice;
         return SettingsGroup(
-          title: 'Android audio effects',
-          footer: 'The phone may also clean up the microphone itself. These are reported by Android and are separate from the setting above.',
+          title: l.voiceGroupAndroid,
+          footer: l.voiceAndroidFooter,
           children: [
-            ListTile(key: const Key('android-ns'), leading: const Icon(Icons.noise_aware_rounded), title: const Text('Noise suppressor'), subtitle: Text(yn(e.noiseSuppressor))),
-            ListTile(key: const Key('android-aec'), leading: const Icon(Icons.surround_sound_rounded), title: const Text('Echo canceller'), subtitle: Text(yn(e.echoCanceler))),
+            ListTile(key: const Key('android-ns'), leading: const Icon(Icons.noise_aware_rounded), title: Text(l.voiceAndroidNs), subtitle: Text(yn(e.noiseSuppressor))),
+            ListTile(key: const Key('android-aec'), leading: const Icon(Icons.surround_sound_rounded), title: Text(l.voiceAndroidAec), subtitle: Text(yn(e.echoCanceler))),
           ],
         );
       },

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lan_link/lan_link.dart' as ll;
 
+import '../../../l10n/l10n.dart';
 import '../../../lan/lan_controller.dart';
 import '../../../lan/lan_handoff_impl.dart';
 import '../../../services/providers.dart';
@@ -52,26 +53,27 @@ class _PairingDialogState extends State<PairingDialog> {
     super.dispose();
   }
 
-  String _failText(ll.PairingSession s) => switch (s.state) {
-        ll.PairingState.rejected => s.failure == 'rejected by peer' ? '${s.peerName} rejected the pairing.' : 'Pairing rejected.',
-        ll.PairingState.cancelled => 'Pairing cancelled.',
-        ll.PairingState.timedOut => 'Pairing timed out. Try again.',
-        _ => 'Pairing failed${s.failure == null ? '' : ': ${s.failure}'}',
+  String _failText(AppLocalizations l, ll.PairingSession s) => switch (s.state) {
+        ll.PairingState.rejected => s.failure == 'rejected by peer' ? l.lanPairRejectedBy(s.peerName) : l.lanPairRejected,
+        ll.PairingState.cancelled => l.lanPairCancelled,
+        ll.PairingState.timedOut => l.lanPairTimedOut,
+        _ => s.failure == null ? l.lanPairFailed : l.lanPairFailedReason(s.failure!),
       };
 
   @override
   Widget build(BuildContext context) {
     final s = widget.session;
     final t = Theme.of(context);
-    final name = s.peerName.isEmpty ? 'this device' : s.peerName;
+    final l = context.l10n;
+    final name = s.peerName.isEmpty ? l.lanPairThisDevice : s.peerName;
     final paired = s.state == ll.PairingState.paired ||
         (s.isFinished && s.state == ll.PairingState.failed && (widget.isTrusted?.call(s.peerId) ?? false));
     Widget body;
     List<Widget> actions;
     switch (paired ? ll.PairingState.paired : s.state) {
       case ll.PairingState.connecting:
-        body = const Row(children: [SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)), SizedBox(width: 14), Expanded(child: Text('Connecting securely...'))]);
-        actions = [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))];
+        body = Row(children: [const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)), const SizedBox(width: 14), Expanded(child: Text(l.lanPairConnecting))]);
+        actions = [TextButton(onPressed: () => Navigator.pop(context), child: Text(l.actionCancel))];
       case ll.PairingState.awaitingConfirm || ll.PairingState.confirmedLocally:
         final code = s.sas ?? '------';
         final spaced = '${code.substring(0, 3)} ${code.substring(3)}';
@@ -80,44 +82,44 @@ class _PairingDialogState extends State<PairingDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              s.incoming ? '$name wants to pair with this device.' : 'Pairing with $name.',
+              s.incoming ? l.lanPairWantsToPair(name) : l.lanPairPairingWith(name),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
-            Text('Check that this code is the same on both screens.', textAlign: TextAlign.center, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+            Text(l.lanPairCheckCode, textAlign: TextAlign.center, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
             const SizedBox(height: 16),
             Semantics(
-              label: 'Pairing code $code',
-              child: Text(spaced, key: const Key('pair-sas'), style: t.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 4, fontFeatures: const [FontFeature.tabularFigures()])),
+              label: l.lanPairCodeSemantics(code),
+              child: Text(spaced, textDirection: TextDirection.ltr, key: const Key('pair-sas'), style: t.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 4, fontFeatures: const [FontFeature.tabularFigures()])),
             ),
             const SizedBox(height: 14),
             if (waiting)
               Row(mainAxisSize: MainAxisSize.min, children: [
                 const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                 const SizedBox(width: 10),
-                Flexible(child: Text('Waiting for $name to confirm...', style: t.textTheme.bodyMedium)),
+                Flexible(child: Text(l.lanPairWaitingConfirm(name), style: t.textTheme.bodyMedium)),
               ])
             else if (s.remoteConfirmed)
-              Text('$name has confirmed.', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.primary)),
+              Text(l.lanPairRemoteConfirmed(name), style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.primary)),
           ],
         );
         actions = [
           TextButton(key: const Key('pair-reject'), onPressed: () async {
             await s.reject();
             if (context.mounted) Navigator.pop(context);
-          }, child: const Text('Reject')),
-          FilledButton(key: const Key('pair-confirm'), onPressed: waiting ? null : () => s.confirm(), child: const Text('Codes match')),
+          }, child: Text(l.lanPairReject)),
+          FilledButton(key: const Key('pair-confirm'), onPressed: waiting ? null : () => s.confirm(), child: Text(l.lanPairCodesMatch)),
         ];
       case ll.PairingState.paired:
-        body = Row(children: [Icon(Icons.check_circle_rounded, color: t.colorScheme.primary), const SizedBox(width: 12), Expanded(child: Text('Paired with $name.'))]);
-        actions = [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done'))];
+        body = Row(children: [Icon(Icons.check_circle_rounded, color: t.colorScheme.primary), const SizedBox(width: 12), Expanded(child: Text(l.lanPairPairedWith(name)))]);
+        actions = [TextButton(onPressed: () => Navigator.pop(context), child: Text(l.actionDone))];
       default:
-        body = Row(children: [Icon(Icons.error_outline_rounded, color: t.colorScheme.error), const SizedBox(width: 12), Expanded(child: Text(_failText(s)))]);
-        actions = [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))];
+        body = Row(children: [Icon(Icons.error_outline_rounded, color: t.colorScheme.error), const SizedBox(width: 12), Expanded(child: Text(_failText(l, s)))]);
+        actions = [TextButton(onPressed: () => Navigator.pop(context), child: Text(l.actionClose))];
     }
     return AlertDialog(
       key: const Key('pairing-dialog'),
-      title: Text(s.incoming ? 'Pairing request' : 'Pair with $name'),
+      title: Text(s.incoming ? l.lanPairRequestTitle : l.lanPairTitle(name)),
       content: ConstrainedBox(constraints: const BoxConstraints(minWidth: 280, maxWidth: 360), child: body),
       actions: actions,
     );
@@ -158,9 +160,10 @@ class _FileOfferDialogState extends ConsumerState<FileOfferDialog> {
     final t = widget.transfer;
     final lan = ref.read(lanControllerProvider.notifier);
     final from = lan.nameOf(t.peerId);
+    final l = context.l10n;
     return AlertDialog(
       key: const Key('file-offer-dialog'),
-      title: const Text('Incoming file'),
+      title: Text(l.lanFileIncomingTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,7 +174,7 @@ class _FileOfferDialogState extends ConsumerState<FileOfferDialog> {
             Expanded(child: Text(t.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis)),
           ]),
           const SizedBox(height: 8),
-          Text('${formatBytes(t.size)} from $from'),
+          Text(l.lanFileSizeFrom(formatBytes(t.size), from)),
         ],
       ),
       actions: [
@@ -181,7 +184,7 @@ class _FileOfferDialogState extends ConsumerState<FileOfferDialog> {
             lan.declineFile(t);
             Navigator.pop(context);
           },
-          child: const Text('Decline'),
+          child: Text(l.lanActionDecline),
         ),
         FilledButton(
           key: const Key('file-accept'),
@@ -189,7 +192,7 @@ class _FileOfferDialogState extends ConsumerState<FileOfferDialog> {
             lan.acceptFile(t);
             Navigator.pop(context);
           },
-          child: const Text('Accept'),
+          child: Text(l.lanActionAccept),
         ),
       ],
     );
@@ -236,15 +239,16 @@ class _HandoffOfferDialogState extends ConsumerState<HandoffOfferDialog> {
     final o = widget.offer.offer;
     final from = widget.offer.peer.name;
     final who = o.caller.name.isNotEmpty ? '${o.caller.name} (${o.caller.number})' : o.caller.number;
+    final l = context.l10n;
     return AlertDialog(
       key: const Key('handoff-offer-dialog'),
       icon: const Icon(Icons.swap_horiz_rounded, size: 32),
-      title: const Text('Transfer a call here?'),
-      content: Text('$from wants to hand you a call${who.isEmpty ? '' : ' from $who'}${o.accountName.isEmpty ? '' : ' on ${o.accountName}'}.'
-          '${o.attended ? ' They will talk to you first.' : ''}'),
+      title: Text(l.lanHandoffOfferTitle),
+      content: Text('${l.lanHandoffOfferBody(from, who.isEmpty ? 'none' : who, o.accountName.isEmpty ? 'none' : o.accountName)}'
+          '${o.attended ? ' ${l.lanHandoffOfferAttended}' : ''}'),
       actions: [
-        TextButton(key: const Key('handoff-decline'), onPressed: () => _answer(false), child: const Text('Decline')),
-        FilledButton(key: const Key('handoff-accept'), onPressed: () => _answer(true), child: const Text('Take call')),
+        TextButton(key: const Key('handoff-decline'), onPressed: () => _answer(false), child: Text(l.lanActionDecline)),
+        FilledButton(key: const Key('handoff-accept'), onPressed: () => _answer(true), child: Text(l.lanHandoffTakeCall)),
       ],
     );
   }
@@ -282,16 +286,19 @@ class _IntercomRequestDialogState extends State<IntercomRequestDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        key: const Key('intercom-request-dialog'),
-        icon: const Icon(Icons.record_voice_over_rounded, size: 32),
-        title: Text('Allow intercom from ${widget.request.peer.name}?'),
-        content: const Text('Their call will be answered automatically on speaker.'),
-        actions: [
-          TextButton(key: const Key('intercom-deny'), onPressed: () => _answer(false), child: const Text('Deny')),
-          FilledButton(key: const Key('intercom-allow'), onPressed: () => _answer(true), child: const Text('Allow')),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    return AlertDialog(
+      key: const Key('intercom-request-dialog'),
+      icon: const Icon(Icons.record_voice_over_rounded, size: 32),
+      title: Text(l.lanIntercomRequestTitle(widget.request.peer.name)),
+      content: Text(l.lanIntercomRequestBody),
+      actions: [
+        TextButton(key: const Key('intercom-deny'), onPressed: () => _answer(false), child: Text(l.lanIntercomDeny)),
+        FilledButton(key: const Key('intercom-allow'), onPressed: () => _answer(true), child: Text(l.lanIntercomAllow)),
+      ],
+    );
+  }
 }
 
 /// Pops LAN dialogs (pairing requests, file offers, hand-off offers) above
@@ -320,7 +327,7 @@ final lanUiCoordinatorProvider = Provider<void>((ref) {
       final shown = withContext((c) => showDialog<void>(context: c, barrierDismissible: false, builder: (_) => IntercomRequestDialog(request: req)));
       if (!shown) unawaited(req.respond(false));
     }),
-    lan.unpairedByPeer.listen((id) => ref.read(noticeProvider.notifier).show('${lan.nameOf(id)} removed this device from its paired list')),
+    lan.unpairedByPeer.listen((id) => ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).lanNoticeUnpairedByPeer(lan.nameOf(id)))),
   ];
   ref.onDispose(() {
     for (final s in subs) {

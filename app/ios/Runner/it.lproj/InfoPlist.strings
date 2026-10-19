@@ -1,0 +1,5 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro ha bisogno del microfono per trasmettere la tua voce durante le chiamate.";
+"NSContactsUsageDescription" = "SoftphonePro può mostrare i contatti del dispositivo quando cerchi o componi un numero e importarli su richiesta.";
+"NSCameraUsageDescription" = "SoftphonePro usa la fotocamera per scansionare i codici QR di configurazione e abbinamento.";
+"NSFaceIDUsageDescription" = "SoftphonePro usa Face ID per sbloccare l’app.";
+"NSLocalNetworkUsageDescription" = "SoftphonePro rileva gli altri dispositivi SoftphonePro sulla tua rete locale.";

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 
 const _letters = {
   '1': '',
@@ -46,33 +47,42 @@ class DialPad extends StatelessWidget {
       ['7', '8', '9'],
       ['*', '0', '#'],
     ];
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final r in rows)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  for (final d in r)
-                    DialKey(
-                      digit: d,
-                      compact: compact,
-                      onTap: () => onDigit(d),
-                      speedDial: onLongPressDigit != null && RegExp(r'[1-9]').hasMatch(d),
-                      onLongPress: d == '0'
-                          ? () => onDigit('+')
-                          : (onLongPressDigit != null && RegExp(r'[1-9]').hasMatch(d)
-                                ? () => onLongPressDigit!(d)
-                                : (d == '1' && onVoicemail != null ? onVoicemail : null)),
-                    ),
-                ],
+    // The 1-2-3 layout never mirrors, even in right-to-left languages.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final r in rows)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final d in r)
+                      DialKey(
+                        digit: d,
+                        compact: compact,
+                        onTap: () => onDigit(d),
+                        speedDial:
+                            onLongPressDigit != null &&
+                            RegExp(r'[1-9]').hasMatch(d),
+                        onLongPress: d == '0'
+                            ? () => onDigit('+')
+                            : (onLongPressDigit != null &&
+                                      RegExp(r'[1-9]').hasMatch(d)
+                                  ? () => onLongPressDigit!(d)
+                                  : (d == '1' && onVoicemail != null
+                                        ? onVoicemail
+                                        : null)),
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -98,16 +108,27 @@ class DialKey extends StatelessWidget {
     final t = Theme.of(context);
     final size = compact ? 64.0 : 76.0;
     final letters = _letters[digit] ?? '';
+    final l = context.l10n;
     return Semantics(
       button: true,
-      label: digit == '*' ? 'Star' : (digit == '#' ? 'Pound' : digit),
+      label: digit == '*'
+          ? l.dialKeyStar
+          : (digit == '#' ? l.dialKeyPound : digit),
       hint: digit == '0'
-          ? 'Long press for plus'
-          : (speedDial ? 'Long press for speed dial' : (digit == '1' && onLongPress != null ? 'Long press for voicemail' : null)),
+          ? l.dialKeyLongPressPlus
+          : (speedDial
+                ? l.dialKeyLongPressSpeedDial
+                : (digit == '1' && onLongPress != null
+                      ? l.dialKeyLongPressVoicemail
+                      : null)),
       excludeSemantics: true,
       child: Material(
         color: context.colors.card,
-        shape: CircleBorder(side: BorderSide(color: t.colorScheme.outlineVariant.withValues(alpha: 0.7))),
+        shape: CircleBorder(
+          side: BorderSide(
+            color: t.colorScheme.outlineVariant.withValues(alpha: 0.7),
+          ),
+        ),
         child: InkResponse(
           onTap: () {
             HapticFeedback.selectionClick();
@@ -129,11 +150,13 @@ class DialKey extends StatelessWidget {
               children: [
                 Text(
                   digit,
-                  style: tabular(t.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    height: 1.0,
-                    fontSize: digit == '*' ? 30 : 26,
-                  )),
+                  style: tabular(
+                    t.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      height: 1.0,
+                      fontSize: digit == '*' ? 30 : 26,
+                    ),
+                  ),
                 ),
                 SizedBox(
                   height: 12,
@@ -205,7 +228,12 @@ class CallActionButton extends StatelessWidget {
                   child: Icon(icon, color: fg, size: 26),
                 ),
                 const SizedBox(height: 6),
-                Text(label, style: t.textTheme.labelMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  label,
+                  style: t.textTheme.labelMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -251,7 +279,11 @@ class RoundCallButton extends StatelessWidget {
                 onTap: onPressed,
                 customBorder: const CircleBorder(),
                 radius: size / 2 + 8,
-                child: SizedBox(width: size, height: size, child: Icon(icon, color: Colors.white, size: size * 0.44)),
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Icon(icon, color: Colors.white, size: size * 0.44),
+                ),
               ),
             ),
             if (showLabel) ...[

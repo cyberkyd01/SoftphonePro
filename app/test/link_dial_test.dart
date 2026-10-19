@@ -23,6 +23,7 @@ import 'package:softphonepro/storage/secrets_store.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import 'harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 /// Engine that records dialled URIs and registers only when told to.
 class _SlowRegEngine extends FakeSipEngine {
@@ -245,7 +246,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
       overrides: [...env.overrides, defaultHandlerServiceProvider.overrideWithValue(fake)],
-      child: const MaterialApp(home: Scaffold(body: CallsSection())),
+      child: const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: CallsSection())),
     ));
     await tester.pump();
     await tester.pump();

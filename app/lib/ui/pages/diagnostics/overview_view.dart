@@ -7,6 +7,7 @@ import '../../../diagnostics/network_wizard.dart';
 import '../../../diagnostics/sip_trace_controller.dart';
 import '../../../diagnostics/system_info.dart';
 import '../../../diagnostics/trace_export.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/engine_controller.dart';
 import '../../widgets/settings_tiles.dart';
 import 'logs_view.dart';
@@ -19,18 +20,19 @@ class OverviewView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final info = ref.watch(systemInfoProvider);
     final t = Theme.of(context);
+    final l = context.l10n;
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         info.when(
           loading: () => const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Padding(padding: const EdgeInsets.all(16), child: Text('Could not read system information: $e')),
+          error: (e, _) => Padding(padding: const EdgeInsets.all(16), child: Text(l.diagSysReadError('$e'))),
           data: (i) => Column(
             children: [
               SettingsGroup(
-                title: 'System',
+                title: l.diagTabSystem,
                 children: [
-                  for (final r in i.rows)
+                  for (final r in i.localizedRows(l))
                     ListTile(
                       dense: true,
                       title: Text(r.$1),
@@ -42,23 +44,23 @@ class OverviewView extends ConsumerWidget {
                 ],
               ),
               SettingsGroup(
-                title: 'Transports',
+                title: l.diagSysTransports,
                 children: [
-                  if (i.transports.isEmpty) const ListTile(dense: true, title: Text('None reported')),
+                  if (i.transports.isEmpty) ListTile(dense: true, title: Text(l.diagSysNoneReported)),
                   for (final tr in i.transports) ListTile(dense: true, leading: const Icon(Icons.settings_ethernet_rounded), title: Text(tr)),
                 ],
               ),
               SettingsGroup(
-                title: 'Codecs',
-                footer: i.codecs.isEmpty ? null : 'Enabled codecs, highest priority first.',
+                title: l.diagSysCodecs,
+                footer: i.codecs.isEmpty ? null : l.diagSysCodecsFooter,
                 children: [
-                  if (i.codecs.isEmpty) const ListTile(dense: true, title: Text('Engine not running')),
+                  if (i.codecs.isEmpty) ListTile(dense: true, title: Text(l.diagSysEngineNotRunning)),
                   for (final c in ([...i.codecs]..sort((a, b) => b.priority.compareTo(a.priority))))
                     ListTile(
                       dense: true,
                       leading: Icon(c.enabled ? Icons.check_circle_outline_rounded : Icons.block_rounded, size: 20),
                       title: Text(c.id),
-                      trailing: Text(c.enabled ? 'priority ${c.priority}' : 'disabled', style: t.textTheme.bodySmall),
+                      trailing: Text(c.enabled ? l.diagSysCodecPriority(c.priority) : l.diagSysCodecDisabled, style: t.textTheme.bodySmall),
                     ),
                 ],
               ),
@@ -66,27 +68,27 @@ class OverviewView extends ConsumerWidget {
           ),
         ),
         SettingsGroup(
-          title: 'Export',
-          footer: 'The bundle holds system info, network check results, recent logs and the SIP trace, with credentials redacted.',
+          title: l.diagSysExport,
+          footer: l.diagSysExportFooter,
           children: [
             NavTile(
               key: const Key('bundle-copy'),
               icon: Icons.copy_all_rounded,
-              title: 'Copy diagnostic bundle',
-              onTap: () => ref.read(diagnosticsExporterProvider).copy(_bundle(ref), what: 'Diagnostic bundle'),
+              title: l.diagSysCopyBundle,
+              onTap: () => ref.read(diagnosticsExporterProvider).copy(_bundle(ref), confirmation: l.diagCopiedBundle),
               trailing: const SizedBox.shrink(),
             ),
             NavTile(
               key: const Key('bundle-save'),
               icon: Icons.ios_share_rounded,
-              title: 'Save diagnostic bundle',
+              title: l.diagSysSaveBundle,
               onTap: () => ref.read(diagnosticsExporterProvider).saveText('softphonepro-diagnostics-${stamp()}.txt', _bundle(ref)),
               trailing: const SizedBox.shrink(),
             ),
             NavTile(
               key: const Key('info-refresh'),
               icon: Icons.refresh_rounded,
-              title: 'Refresh',
+              title: l.actionRefresh,
               onTap: () => ref.invalidate(systemInfoProvider),
               trailing: const SizedBox.shrink(),
             ),

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../../l10n/l10n.dart';
 import '../widgets/settings_tiles.dart';
 
 /// Chooses a certificate / key file. Replaceable in tests.
@@ -52,6 +53,7 @@ class TlsClientCertGroup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
     final cert = config.tlsClientCert ?? const TlsClientCert();
     final pick = ref.read(tlsFilePickerProvider);
     final incomplete = !tlsClientCertComplete(config.tlsClientCert) && config.tlsClientCert != null;
@@ -59,38 +61,38 @@ class TlsClientCertGroup extends ConsumerWidget {
       key: key,
       leading: const Icon(Icons.description_outlined),
       title: Text(title),
-      subtitle: Text(value.isEmpty ? 'Not set' : p.basename(value), maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(value.isEmpty ? l.commonNotSet : p.basename(value), maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (value.isNotEmpty)
-            IconButton(tooltip: 'Clear $title', icon: const Icon(Icons.close_rounded), onPressed: () => set('')),
+            IconButton(tooltip: l.tlsClearField(title), icon: const Icon(Icons.close_rounded), onPressed: () => set('')),
           TextButton(
             onPressed: () async {
               final path = await pick(title);
               if (path != null) set(path);
             },
-            child: Text(value.isEmpty ? 'Choose...' : 'Change...'),
+            child: Text(value.isEmpty ? l.tlsChoose : l.tlsChange),
           ),
         ],
       ),
     );
     return SettingsGroup(
-      title: 'Client certificate (mutual TLS)',
+      title: l.tlsClientCertTitle,
       footer: incomplete
-          ? 'Choose both a certificate and its private key. The certificate is only presented once both are set.'
-          : 'For servers that ask the app to identify itself with a certificate. PEM files. Used for TLS and secure WebSocket.',
+          ? l.tlsIncomplete
+          : l.tlsFooter,
       children: [
-        fileTile(const Key('acc-tls-cert'), 'Certificate file', cert.certFile, (v) => onChanged(withTlsClientCert(config, cert.copyWith(certFile: v)))),
-        fileTile(const Key('acc-tls-key'), 'Private key file', cert.keyFile, (v) => onChanged(withTlsClientCert(config, cert.copyWith(keyFile: v)))),
+        fileTile(const Key('acc-tls-cert'), l.tlsCertFile, cert.certFile, (v) => onChanged(withTlsClientCert(config, cert.copyWith(certFile: v)))),
+        fileTile(const Key('acc-tls-key'), l.tlsKeyFile, cert.keyFile, (v) => onChanged(withTlsClientCert(config, cert.copyWith(keyFile: v)))),
         TextTile(
           key: const Key('acc-tls-key-password'),
           icon: Icons.key_rounded,
-          title: 'Key password',
-          subtitle: 'Only if the key is encrypted',
+          title: l.tlsKeyPassword,
+          subtitle: l.tlsKeyPasswordHint,
           value: cert.password ?? '',
           obscure: true,
-          hint: 'None',
+          hint: l.commonNone,
           onChanged: (v) => onChanged(withTlsClientCert(config, v.isEmpty ? TlsClientCert(certFile: cert.certFile, keyFile: cert.keyFile) : cert.copyWith(password: v))),
         ),
       ],

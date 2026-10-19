@@ -8,6 +8,7 @@ import 'package:softphonepro/services/providers.dart';
 import 'package:softphonepro/storage/app_database.dart';
 import 'package:softphonepro/ui/pages/db_recovery.dart';
 import 'package:softphonepro/ui/settings/encryption_settings.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 void main() {
   testWidgets('recovery screen explains a missing key and offers retry / start fresh', (tester) async {
@@ -30,7 +31,7 @@ void main() {
     final db = AppDatabase(mem, directory: dir.path);
     await tester.pumpWidget(ProviderScope(
       overrides: [appDatabaseProvider.overrideWithValue(db)],
-      child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: EncryptionSettingsGroup()))),
+      child: const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SingleChildScrollView(child: EncryptionSettingsGroup()))),
     ));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump();

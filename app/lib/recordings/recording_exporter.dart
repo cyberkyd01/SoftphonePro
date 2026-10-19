@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/l10n.dart';
 import '../models/chat.dart';
 
 /// Getting recordings out of the app: save a copy, share, reveal in the
@@ -31,20 +32,23 @@ abstract class RecordingExporter {
 bool get _isDesktop => !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
 class PlatformRecordingExporter implements RecordingExporter {
-  const PlatformRecordingExporter();
+  const PlatformRecordingExporter(this._l10n);
+
+  /// Current strings (dialog titles, share subject).
+  final AppLocalizations Function() _l10n;
 
   @override
   Future<String?> saveAs(RecordingMeta m, {String? suggestedName}) async {
     final name = suggestedName ?? p.basename(m.path);
     if (_isDesktop) {
-      final dest = await FilePicker.platform.saveFile(dialogTitle: 'Save recording', fileName: name);
+      final dest = await FilePicker.platform.saveFile(dialogTitle: _l10n().recSaveDialogTitle, fileName: name);
       if (dest == null) return null;
       await File(m.path).copy(dest);
       return dest;
     }
     // Android / iOS: the picker writes the bytes itself.
     final bytes = await File(m.path).readAsBytes();
-    return FilePicker.platform.saveFile(dialogTitle: 'Save recording', fileName: name, bytes: bytes);
+    return FilePicker.platform.saveFile(dialogTitle: _l10n().recSaveDialogTitle, fileName: name, bytes: bytes);
   }
 
   @override
@@ -52,7 +56,7 @@ class PlatformRecordingExporter implements RecordingExporter {
     await SharePlus.instance.share(
       ShareParams(
         files: [for (final m in items) XFile(m.path)],
-        subject: items.length == 1 ? p.basename(items.first.path) : 'Call recordings',
+        subject: items.length == 1 ? p.basename(items.first.path) : _l10n().recShareSubject,
       ),
     );
   }
@@ -93,7 +97,7 @@ class PlatformRecordingExporter implements RecordingExporter {
   }
 }
 
-final recordingExporterProvider = Provider<RecordingExporter>((ref) => const PlatformRecordingExporter());
+final recordingExporterProvider = Provider<RecordingExporter>((ref) => PlatformRecordingExporter(() => ref.read(l10nProvider)));
 
 /// Desktop platforms get "Save as..." / "Show in folder"; others share.
 bool get recordingsUseDesktopExport => _isDesktop;

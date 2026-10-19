@@ -173,7 +173,7 @@ Device testing is narrower than the automated tests: the macOS app was driven en
 * **iOS background calls:** iOS only gets incoming calls while the app is running. Background calls would need VoIP push notifications (PushKit) plus a push server, and the PBX has to support it. Android keeps accounts registered in the background with a foreground service instead.
 * **Not yet supported:** video calls and ZRTP. These are planned for a later version.
 * **Unsigned builds:** builds aren't code-signed or notarised yet, so expect a one-time security prompt on Windows and macOS, and sideloading on iOS.
-* **English only:** the interface is in English for now. Localisation support is planned.
+* **Languages:** English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية (right-to-left), 简体中文 and 日本語. The language follows the system by default and can be changed in Settings > Appearance > Language. Log and trace contents, SIP tokens and codec names stay in English.
 * **Hold music through Asterisk:** when the PBX answers a hold request itself, the caller hears the PBX's own music, not yours. Your music plays on direct calls and on PBXs that relay the held party's audio.
 * **Ogg Opus recordings** play inside the app on Android and Linux only. On iPhone, Mac and Windows use *Open with…* or export the file.
 * **Partly tested areas:** see the ◐ rows in [docs/FEATURES.md](docs/FEATURES.md), for example STUN/TURN against real servers, IPv6, session timers, 100rel, SIP Outbound, camera QR scanning, device contacts, CallKit and the Android Telecom integration.

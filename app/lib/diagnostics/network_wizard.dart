@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../services/accounts_controller.dart';
 import '../services/engine_controller.dart';
@@ -122,6 +124,9 @@ class NetworkWizard extends Notifier<WizardState> {
 
   EngineController get _ctl => ref.read(engineProvider.notifier);
 
+  /// Strings in the language currently in effect.
+  AppLocalizations get _l => ref.read(l10nProvider);
+
   @override
   WizardState build() => const WizardState();
 
@@ -138,14 +143,15 @@ class NetworkWizard extends Notifier<WizardState> {
     _cancel = false;
     _udpPing.clear();
     final accounts = _accounts;
+    final l = _l;
     final defs = <(String, String, Future<_R> Function())>[
-      ('net', 'Network connectivity', _stepNet),
-      for (final a in accounts) ('dns:${a.id}', 'DNS and SRV: ${a.name}', () => _stepDns(a)),
-      ('nat', 'NAT type', _stepNat),
-      for (final a in accounts) ('options:${a.id}', 'Server reachability: ${a.name}', () => _stepOptions(a)),
-      for (final a in accounts.where(_isTls)) ('tls:${a.id}', 'TLS certificate: ${a.name}', () => _stepTls(a)),
-      for (final a in accounts) ('reg:${a.id}', 'Registration: ${a.name}', () => _stepReg(a)),
-      if (accounts.isNotEmpty) ('alg', 'SIP ALG check', _stepAlg),
+      ('net', l.diagWizStepNet, _stepNet),
+      for (final a in accounts) ('dns:${a.id}', l.diagWizStepDns(a.name), () => _stepDns(a)),
+      ('nat', l.diagWizStepNat, _stepNat),
+      for (final a in accounts) ('options:${a.id}', l.diagWizStepOptions(a.name), () => _stepOptions(a)),
+      for (final a in accounts.where(_isTls)) ('tls:${a.id}', l.diagWizStepTls(a.name), () => _stepTls(a)),
+      for (final a in accounts) ('reg:${a.id}', l.diagWizStepReg(a.name), () => _stepReg(a)),
+      if (accounts.isNotEmpty) ('alg', l.diagWizStepAlg, _stepAlg),
     ];
     state = WizardState(
       steps: [for (final d in defs) WizardStep(id: d.$1, title: d.$2)],
@@ -176,14 +182,14 @@ class NetworkWizard extends Notifier<WizardState> {
   }
 
   Future<void> _exec(String id, Future<_R> Function() f) async {
-    _set(id, (s) => s.copyWith(status: StepStatus.running, summary: 'Checking...', details: const [], suggestion: '', clearAction: true));
+    _set(id, (s) => s.copyWith(status: StepStatus.running, summary: _l.diagWizChecking, details: const [], suggestion: '', clearAction: true));
     _R r;
     try {
       r = await f();
     } on EngineException catch (e) {
-      r = _R(StepStatus.fail, 'Engine error: ${e.error.message}');
+      r = _R(StepStatus.fail, _l.diagWizEngineError(e.error.message));
     } catch (e) {
-      r = _R(StepStatus.fail, 'Check failed: $e');
+      r = _R(StepStatus.fail, _l.diagWizCheckFailed('$e'));
     }
     _set(id, (s) => s.copyWith(status: r.status, summary: r.summary, details: r.details, suggestion: r.suggestion, action: r.action, clearAction: r.action == null));
   }
@@ -205,10 +211,10 @@ class NetworkWizard extends Notifier<WizardState> {
 
   bool get _engineUp => _ctl.hasEngine;
 
-  _R _noEngine() => const _R(
+  _R _noEngine() => _R(
     StepStatus.skipped,
-    'The SIP engine is not running',
-    suggestion: 'Wait for the engine to start (or restart the app), then run the checks again.',
+    _l.diagWizNoEngine,
+    suggestion: _l.diagWizNoEngineFix,
   );
 
   /// Waits for an engine event matching [test] after calling [trigger].
@@ -240,31 +246,33 @@ class NetworkWizard extends Notifier<WizardState> {
       for (final i in ifaces)
         for (final a in i.addresses) (i.name, a),
     ];
-    final details = [for (final a in addrs) '${a.$1}: ${a.$2}${_isPrivate(a.$2) ? ' (private)' : ''}'];
+    final l = _l;
+    final details = [for (final a in addrs) _isPrivate(a.$2) ? l.diagWizNetAddrPrivate(a.$1, a.$2) : '${a.$1}: ${a.$2}'];
     if (addrs.isEmpty) {
-      return const _R(
+      return _R(
         StepStatus.fail,
-        'No active network interface with an IP address',
-        suggestion: 'Connect to Wi-Fi, Ethernet or mobile data, then run the checks again.',
+        l.diagWizNetNone,
+        suggestion: l.diagWizNetNoneFix,
       );
     }
     final v4 = addrs.where((a) => InternetAddress.tryParse(a.$2)?.type == InternetAddressType.IPv4).toList();
     if (v4.isEmpty) {
-      return _R(StepStatus.warn, 'Only IPv6 addresses found', details: details, suggestion: 'Many SIP providers are IPv4 only. Enable IPv4 on this network or use a provider with IPv6 support.');
+      return _R(StepStatus.warn, l.diagWizNetIpv6Only, details: details, suggestion: l.diagWizNetIpv6OnlyFix);
     }
     final vpn = ifaces.any((i) => RegExp(r'^(tun|tap|utun|wg|ppp|ipsec)', caseSensitive: false).hasMatch(i.name));
     return _R(
       vpn ? StepStatus.warn : StepStatus.pass,
-      '${v4.length} IPv4 address${v4.length == 1 ? '' : 'es'} on ${ifaces.length} interface${ifaces.length == 1 ? '' : 's'}',
+      l.diagWizNetSummary(v4.length, ifaces.length),
       details: details,
-      suggestion: vpn ? 'A VPN-style interface is active. VPNs can add latency or block UDP; disable it if calls misbehave.' : '',
+      suggestion: vpn ? l.diagWizNetVpnFix : '',
     );
   }
 
   Future<_R> _stepDns(AccountProfile a) async {
+    final l = _l;
     final host = _hostFor(a);
-    if (host.isEmpty) return const _R(StepStatus.fail, 'The account has no server address', suggestion: 'Edit the account and enter the SIP domain.');
-    if (isIpLiteral(host)) return _R(StepStatus.pass, '$host is an IP address, no DNS needed');
+    if (host.isEmpty) return _R(StepStatus.fail, l.diagWizDnsNoServer, suggestion: l.diagWizDnsNoServerFix);
+    if (isIpLiteral(host)) return _R(StepStatus.pass, l.diagWizDnsIpLiteral(host));
     if (!_engineUp) return _noEngine();
     final e = _ctl.engine;
     final details = <String>[];
@@ -275,77 +283,78 @@ class NetworkWizard extends Notifier<WizardState> {
     } on EngineException catch (x) {
       addrErr = x.error.message;
     }
-    details.add(addrs.isEmpty ? 'A/AAAA: none${addrErr == null ? '' : ' ($addrErr)'}' : 'A/AAAA: ${addrs.join(', ')}');
+    details.add(addrs.isEmpty ? (addrErr == null ? l.diagWizDnsANone : l.diagWizDnsANoneError(addrErr)) : 'A/AAAA: ${addrs.join(', ')}');
     var srvCount = 0;
     for (final t in const ['udp', 'tcp', 'tls']) {
       try {
         final r = await e.resolve(host, srv: true, transport: t);
         final proto = t == 'tls' ? '_sips._tcp' : '_sip._$t';
         if (r.srv.isEmpty) {
-          details.add('SRV $proto.$host: none');
+          details.add(l.diagWizDnsSrvNone('$proto.$host'));
         } else {
           srvCount += r.srv.length;
           for (final s in r.srv) {
-            details.add('SRV $proto.$host: ${s.target}:${s.port} (priority ${s.priority}, weight ${s.weight})');
+            details.add(l.diagWizDnsSrvRecord('$proto.$host', s.target, s.port, s.priority, s.weight));
           }
         }
       } on EngineException catch (x) {
-        details.add('SRV $t: lookup failed (${x.error.message})');
+        details.add(l.diagWizDnsSrvFailed(t, x.error.message));
       }
     }
     if (addrs.isEmpty && srvCount == 0) {
       return _R(
         StepStatus.fail,
-        '$host does not resolve',
+        l.diagWizDnsNotResolved(host),
         details: details,
-        suggestion: 'Check the domain for typos, and that your DNS server works. You can set a custom DNS server in Settings > Network (e.g. 8.8.8.8).',
+        suggestion: l.diagWizDnsNotResolvedFix,
       );
     }
     if (addrs.isEmpty) {
-      return _R(StepStatus.warn, '$host has SRV records but no address record', details: details, suggestion: 'SRV targets will be used. If calls fail, ask the provider to check the A record.');
+      return _R(StepStatus.warn, l.diagWizDnsSrvOnly(host), details: details, suggestion: l.diagWizDnsSrvOnlyFix);
     }
-    return _R(StepStatus.pass, '$host resolves to ${addrs.first}${addrs.length > 1 ? ' (+${addrs.length - 1})' : ''}${srvCount > 0 ? ', $srvCount SRV record${srvCount == 1 ? '' : 's'}' : ''}', details: details);
+    return _R(StepStatus.pass, l.diagWizDnsResolves(host, addrs.first, addrs.length - 1, srvCount), details: details);
   }
 
   Future<_R> _stepNat() async {
     if (!_engineUp) return _noEngine();
+    final l = _l;
     final ev = await _await<DiagNatTypeEvent>(() => _ctl.engine.natType(), (_) => true);
     if (ev == null) {
-      return const _R(
+      return _R(
         StepStatus.warn,
-        'NAT detection timed out',
-        suggestion: 'The STUN server may be unreachable (UDP blocked?). Check Settings > Network > STUN servers.',
+        l.diagWizNatTimeout,
+        suggestion: l.diagWizNatTimeoutFix,
       );
     }
     final i = ev.info;
-    final desc = friendlyNatDescription(i.description);
-    final d = <String>[if (desc.isNotEmpty) desc, if (i.stun.isNotEmpty) 'STUN server: ${i.stun}'];
+    final desc = friendlyNatDescription(i.description, l);
+    final d = <String>[if (desc.isNotEmpty) desc, if (i.stun.isNotEmpty) l.diagWizNatStun(i.stun)];
     switch (i.natType) {
       case NatType.open:
-        return _R(StepStatus.pass, 'No NAT: this device has a public address', details: d);
+        return _R(StepStatus.pass, l.diagWizNatOpen, details: d);
       case NatType.fullCone:
-        return _R(StepStatus.pass, 'Full cone NAT: friendly to VoIP', details: d);
+        return _R(StepStatus.pass, l.diagWizNatFullCone, details: d);
       case NatType.restricted:
-        return _R(StepStatus.pass, 'Restricted cone NAT: works with STUN and keep-alives', details: d);
+        return _R(StepStatus.pass, l.diagWizNatRestricted, details: d);
       case NatType.portRestricted:
-        return _R(StepStatus.pass, 'Port-restricted cone NAT: works with STUN and keep-alives', details: d);
+        return _R(StepStatus.pass, l.diagWizNatPortRestricted, details: d);
       case NatType.symmetric:
       case NatType.symmetricUdp:
         return _R(
           StepStatus.warn,
-          'Symmetric NAT: STUN alone cannot predict the media port',
+          l.diagWizNatSymmetric,
           details: d,
-          suggestion: 'One-way audio or no audio is likely on some calls. Enable ICE and a TURN relay in the account settings (Account > NAT), or use a provider/PBX with media relay (rtpengine).',
+          suggestion: l.diagWizNatSymmetricFix,
         );
       case NatType.blocked:
         return _R(
           StepStatus.fail,
-          'UDP appears to be blocked',
+          l.diagWizNatBlocked,
           details: d,
-          suggestion: 'Use TCP or TLS transport for the account. If the network filters all but web traffic, try TLS on port 443 if your provider supports it.',
+          suggestion: l.diagWizNatBlockedFix,
         );
       case NatType.unknown:
-        return _R(StepStatus.warn, 'NAT type could not be determined', details: d, suggestion: 'The STUN server did not answer. Try another STUN server in Settings > Network.');
+        return _R(StepStatus.warn, l.diagWizNatUnknown, details: d, suggestion: l.diagWizNatUnknownFix);
     }
   }
 
@@ -361,36 +370,38 @@ class NetworkWizard extends Notifier<WizardState> {
 
   Future<_R> _stepOptions(AccountProfile a) async {
     if (!_engineUp) return _noEngine();
-    if (!_engineHas(a)) return const _R(StepStatus.skipped, 'The account is not loaded in the engine');
+    final l = _l;
+    if (!_engineHas(a)) return _R(StepStatus.skipped, l.diagWizOptionsNotLoaded);
     final r = await _ping(a);
     _udpPing[a.id] = r;
     final t = a.config.transport.wire;
     if (r == null) {
       return _R(
         StepStatus.fail,
-        'No answer to OPTIONS within ${eventTimeout.inSeconds} s (transport: $t)',
-        suggestion: 'The server is not reachable. Check the address and port, that a firewall is not dropping SIP, and try another transport (TCP/TLS).',
+        l.diagWizOptionsNoAnswer(eventTimeout.inSeconds, t),
+        suggestion: l.diagWizOptionsNoAnswerFix,
       );
     }
     final rtt = r.rttMs.round();
-    final help = r.code >= 400 ? explainSipCode(r.code) : null;
+    final help = r.code >= 400 ? explainSipCode(r.code, l) : null;
     // Any SIP answer proves reachability. 408/5xx indicate trouble.
     if (r.code == 408 || r.code == 0) {
-      return _R(StepStatus.fail, 'Request timed out (${r.code} ${r.reason})', suggestion: explainSipCode(408).suggestion);
+      return _R(StepStatus.fail, l.diagWizOptionsTimedOut(r.code, r.reason), suggestion: explainSipCode(408, l).suggestion);
     }
     if (r.code >= 500) {
-      return _R(StepStatus.warn, 'Server answered ${r.code} ${r.reason} after $rtt ms', details: ['${help!.title}: ${help.explanation}'], suggestion: help.suggestion);
+      return _R(StepStatus.warn, l.diagWizOptionsAnsweredAfter(r.code, r.reason, rtt), details: ['${help!.title}: ${help.explanation}'], suggestion: help.suggestion);
     }
     final slow = rtt > 300;
     return _R(
       slow ? StepStatus.warn : StepStatus.pass,
-      'Server answered ${r.code} ${r.reason} in $rtt ms',
-      details: [if (r.code >= 400) 'A ${r.code} to OPTIONS is normal: the server is reachable but does not allow anonymous probes.'],
-      suggestion: slow ? 'Round-trip time above 300 ms adds noticeable delay to conversations. A closer server or wired connection helps.' : '',
+      l.diagWizOptionsAnsweredIn(r.code, r.reason, rtt),
+      details: [if (r.code >= 400) l.diagWizOptionsNormalError(r.code)],
+      suggestion: slow ? l.diagWizOptionsSlowFix : '',
     );
   }
 
   Future<_R> _stepTls(AccountProfile a) async {
+    final l = _l;
     final host = _hostFor(a);
     final hub = ref.read(diagnosticsHubProvider);
     final rejects = hub.rejectsFor(host);
@@ -398,42 +409,42 @@ class NetworkWizard extends Notifier<WizardState> {
       final r = rejects.last;
       return _R(
         StepStatus.fail,
-        'The server certificate was rejected',
+        l.diagWizTlsRejected,
         details: [
-          'Subject: ${r.subject}',
-          'Issuer: ${r.issuer}',
+          l.diagWizTlsSubject(r.subject),
+          l.diagWizTlsIssuer(r.issuer),
           'SHA-256: ${r.sha256}',
-          'Problems: ${r.verifyStatus.join(', ')}',
+          l.diagWizTlsProblems(r.verifyStatus.join(', ')),
         ],
-        suggestion: 'If this is your own PBX with a self-signed certificate and the fingerprint above matches, you can trust it. Otherwise ask the provider for a certificate from a public CA.',
-        action: WizardAction('Trust this certificate', () => trustCertificate(a, r)),
+        suggestion: l.diagWizTlsRejectedFix,
+        action: WizardAction(l.diagWizTlsTrust, () => trustCertificate(a, r)),
       );
     }
     final t = hub.tlsFor(host);
     if (t?.tls?.remoteCert != null) {
       final c = t!.tls!.remoteCert!;
-      final d = ['Subject: ${c.subject}', 'Issuer: ${c.issuer}', 'Expires: ${c.notAfter}', 'SHA-256: ${c.sha256}', if (t.tls!.cipher.isNotEmpty) 'Cipher: ${t.tls!.cipher}'];
+      final d = [l.diagWizTlsSubject(c.subject), l.diagWizTlsIssuer(c.issuer), l.diagWizTlsExpires(c.notAfter), 'SHA-256: ${c.sha256}', if (t.tls!.cipher.isNotEmpty) l.diagWizTlsCipher(t.tls!.cipher)];
       final exp = _parseDate(c.notAfter);
       if (exp != null) {
         final left = exp.difference(DateTime.now());
         if (left.isNegative) {
-          return _R(StepStatus.fail, 'The certificate expired on ${c.notAfter}', details: d, suggestion: 'Ask the server administrator to renew the certificate.');
+          return _R(StepStatus.fail, l.diagWizTlsExpired(c.notAfter), details: d, suggestion: l.diagWizTlsExpiredFix);
         }
         if (left.inDays < 30) {
-          return _R(StepStatus.warn, 'The certificate expires in ${left.inDays} days', details: d, suggestion: 'Tell the server administrator to renew it soon.');
+          return _R(StepStatus.warn, l.diagWizTlsExpiresSoon(left.inDays), details: d, suggestion: l.diagWizTlsExpiresSoonFix);
         }
       }
       final bad = t.tls!.verifyStatus.where((s) => s.toLowerCase() != 'ok' && s.toLowerCase() != 'verified').toList();
       if (bad.isNotEmpty) {
-        return _R(StepStatus.warn, 'Connected, but verification reported: ${bad.join(', ')}', details: d);
+        return _R(StepStatus.warn, l.diagWizTlsVerifyReported(bad.join(', ')), details: d);
       }
-      return _R(StepStatus.pass, 'TLS connection established, certificate valid', details: d);
+      return _R(StepStatus.pass, l.diagWizTlsOk, details: d);
     }
     final status = ref.read(accountsProvider).statusOf(a.id);
     if (status == AccountStatus.registered) {
-      return const _R(StepStatus.pass, 'Registered over TLS (no certificate details reported)');
+      return _R(StepStatus.pass, l.diagWizTlsRegistered);
     }
-    return const _R(StepStatus.warn, 'No TLS connection has been observed yet', suggestion: 'Check the TLS port (usually 5061) and that the server accepts TLS 1.2 or newer.');
+    return _R(StepStatus.warn, l.diagWizTlsNone, suggestion: l.diagWizTlsNoneFix);
   }
 
   DateTime? _parseDate(String s) {
@@ -470,38 +481,40 @@ class NetworkWizard extends Notifier<WizardState> {
   }
 
   Future<_R> _stepReg(AccountProfile a) async {
+    final l = _l;
     final acc = ref.read(accountsProvider);
     final st = acc.statusOf(a.id);
     final i = acc.infos[a.id];
     switch (st) {
       case AccountStatus.registered:
-        if (!a.config.register) return const _R(StepStatus.pass, 'Registration is disabled for this account (peer-to-peer use)');
-        return _R(StepStatus.pass, 'Registered${i != null && i.expires > 0 ? ' (expires in ${i.expires} s)' : ''}', details: [if (i != null && i.transport.isNotEmpty) 'Transport: ${i.transport}', if (i != null && i.contact.isNotEmpty) 'Contact: ${i.contact}']);
+        if (!a.config.register) return _R(StepStatus.pass, l.diagWizRegDisabledByConfig);
+        return _R(StepStatus.pass, i != null && i.expires > 0 ? l.diagWizRegRegisteredExpires(i.expires) : l.diagWizRegRegistered, details: [if (i != null && i.transport.isNotEmpty) l.diagWizRegTransport(i.transport), if (i != null && i.contact.isNotEmpty) 'Contact: ${i.contact}']);
       case AccountStatus.registering:
-        return const _R(StepStatus.warn, 'Registration is still in progress', suggestion: 'Wait a few seconds. If it never completes, the server is not answering; see the reachability check above.');
+        return _R(StepStatus.warn, l.diagWizRegInProgress, suggestion: l.diagWizRegInProgressFix);
       case AccountStatus.failed:
         final code = i?.regCode ?? 0;
-        final help = explainSipCode(code);
+        final help = explainSipCode(code, l);
         return _R(
           StepStatus.fail,
-          i == null ? 'Registration failed' : describeRegistrationFailure(i),
+          i == null ? l.diagWizRegFailed : describeRegistrationFailure(i, l),
           details: ['${help.title}: ${help.explanation}'],
           suggestion: help.suggestion,
         );
       case AccountStatus.offline:
-        return const _R(StepStatus.warn, 'The account is offline', suggestion: 'Check the network connection. The app retries automatically.');
+        return _R(StepStatus.warn, l.diagWizRegOffline, suggestion: l.diagWizRegOfflineFix);
       case AccountStatus.disabled:
-        return const _R(StepStatus.skipped, 'The account is disabled');
+        return _R(StepStatus.skipped, l.diagWizRegDisabled);
     }
   }
 
   Future<_R> _stepAlg() async {
     if (!_engineUp) return _noEngine();
+    final l = _l;
     final details = <String>[];
     final suspects = <String>[];
     final udp = _accounts.where((a) => a.config.transport == AccTransport.udp || a.config.transport == AccTransport.auto).toList();
     if (udp.isEmpty) {
-      return const _R(StepStatus.skipped, 'No account uses UDP, so SIP ALG is not a concern');
+      return _R(StepStatus.skipped, l.diagWizAlgNoUdp);
     }
     final acc = ref.read(accountsProvider);
     for (final a in udp) {
@@ -513,15 +526,15 @@ class NetworkWizard extends Notifier<WizardState> {
         final tcp = await _ping(a, target: 'sip:$host;transport=tcp');
         if (tcp != null && tcp.code != 408 && tcp.code != 0) {
           suspects.add(a.name);
-          details.add('${a.name}: no answer over UDP, but TCP answered (${tcp.code}, ${tcp.rttMs.round()} ms)');
+          details.add(l.diagWizAlgTcpOnly(a.name, tcp.code, tcp.rttMs.round()));
         } else {
-          details.add('${a.name}: no answer over UDP or TCP (server or firewall problem rather than ALG)');
+          details.add(l.diagWizAlgNoAnswer(a.name));
         }
       } else {
         final i = acc.infos[a.id];
         if (i != null && i.regState == RegState.failed && (i.regCode == 408 || i.regCode == 0)) {
           suspects.add(a.name);
-          details.add('${a.name}: OPTIONS is answered but REGISTER times out, which is typical of a router rewriting SIP');
+          details.add(l.diagWizAlgRegisterTimeout(a.name));
         }
       }
     }
@@ -530,20 +543,20 @@ class NetworkWizard extends Notifier<WizardState> {
     if (suspects.isNotEmpty) {
       return _R(
         StepStatus.fail,
-        'SIP ALG suspected on your router',
+        l.diagWizAlgSuspected,
         details: details,
-        suggestion: 'Disable "SIP ALG" / "SIP helper" in the router settings, or switch the account to TCP or TLS, or change the SIP port (e.g. 5080) so the router stops mangling packets.',
+        suggestion: l.diagWizAlgSuspectedFix,
       );
     }
     if (rewrite != null) {
       return _R(
         StepStatus.warn,
-        'The Contact address changed between request and reply',
+        l.diagWizAlgContactChanged,
         details: details,
-        suggestion: 'This can be a SIP ALG or a server that rewrites contacts. If calls ring but have no audio or drop after a while, disable SIP ALG on the router or use TCP/TLS or port 5080.',
+        suggestion: l.diagWizAlgContactChangedFix,
       );
     }
-    return _R(StepStatus.pass, 'No sign of SIP ALG interference', details: details);
+    return _R(StepStatus.pass, l.diagWizAlgOk, details: details);
   }
 
   /// Compares Contact in our latest REGISTER with the one echoed in the 2xx.
@@ -557,7 +570,7 @@ class NetworkWizard extends Notifier<WizardState> {
         if (p.isResponse && p.callId == r.callId && p.cseqNum == r.cseqNum && p.status >= 200 && p.status < 300) {
           final a = _hostPort(r.header('contact'));
           final b = _hostPort(p.header('contact'));
-          if (a != null && b != null && a != b) return 'REGISTER Contact $a came back as $b';
+          if (a != null && b != null && a != b) return _l.diagWizAlgContactRewritten(a, b);
           return null;
         }
       }
@@ -604,12 +617,13 @@ final networkWizardProvider = NotifierProvider<NetworkWizard, WizardState>(Netwo
 
 /// Plain-language version of the raw NAT detection text from the engine
 /// (for example `ErrUnknown` when the STUN server did not answer).
-String friendlyNatDescription(String raw) {
+String friendlyNatDescription(String raw, [AppLocalizations? l]) {
+  l ??= lookupAppLocalizations(const Locale('en'));
   final t = raw.trim();
   if (t.isEmpty) return '';
   if (RegExp(r'^err', caseSensitive: false).hasMatch(t)) {
-    return 'The STUN server did not answer, so the NAT type could not be determined.';
+    return l.diagWizNatErr;
   }
-  if (t.toLowerCase() == 'unknown') return 'The NAT type could not be determined.';
+  if (t.toLowerCase() == 'unknown') return l.diagWizNatUnknownRaw;
   return t;
 }

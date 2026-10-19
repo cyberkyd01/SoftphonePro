@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../l10n/l10n.dart';
 import '../../models/call_record.dart';
 import '../../services/caller_identity.dart';
 import '../../services/calls_controller.dart';
@@ -51,14 +52,15 @@ class CallerIdentityBlock extends ConsumerWidget {
             who.number,
             key: const Key('identity-number'),
             textAlign: ta,
+            textDirection: TextDirection.ltr,
             style: numberStyle ?? tabular(dense ? small : t.textTheme.bodyLarge?.copyWith(color: muted)),
           ),
         if (showNumber && who.secondaryNumber.isNotEmpty)
-          Text('From ${who.secondaryNumber}', key: const Key('identity-from'), textAlign: ta, style: small),
+          Text(context.l10n.callIdentityFrom(who.secondaryNumber), key: const Key('identity-from'), textAlign: ta, style: small),
         if (who.forwardedFrom.isNotEmpty)
-          _Tag(key: const Key('identity-forwarded'), icon: Icons.phone_forwarded_rounded, text: who.forwardedText, center: center),
+          _Tag(key: const Key('identity-forwarded'), icon: Icons.phone_forwarded_rounded, text: who.forwardedLabel(context.l10n), center: center),
         if (who.transferredBy.isNotEmpty)
-          _Tag(key: const Key('identity-transferred'), icon: Icons.swap_calls_rounded, text: who.transferredText, center: center),
+          _Tag(key: const Key('identity-transferred'), icon: Icons.swap_calls_rounded, text: who.transferredLabel(context.l10n), center: center),
       ],
     );
   }
@@ -73,7 +75,7 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsetsDirectional.only(top: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -95,25 +97,26 @@ class RecordIdentityLines extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = record;
+    final l = context.l10n;
     final t = Theme.of(context);
     final lines = <(Key, IconData, String)>[
       if (r.assertedNumber.isNotEmpty && !sameNumber(r.assertedNumber, r.remoteNumber))
-        (const Key('hist-asserted'), Icons.verified_user_outlined, 'Caller ID ${r.assertedName.isEmpty ? '' : '${r.assertedName} '}${r.assertedNumber}'),
+        (const Key('hist-asserted'), Icons.verified_user_outlined, r.assertedName.isEmpty ? l.callIdentityCallerId(r.assertedNumber) : l.callIdentityCallerIdWithName(r.assertedName, r.assertedNumber)),
       if (r.divertedFrom.isNotEmpty)
-        (const Key('hist-forwarded'), Icons.phone_forwarded_rounded, 'Forwarded from ${r.divertedFrom}${r.divertReason.isEmpty ? '' : ' (${r.divertReason})'}'),
-      if (r.referredBy.isNotEmpty) (const Key('hist-transferred'), Icons.swap_calls_rounded, 'Transferred by ${r.referredBy}'),
+        (const Key('hist-forwarded'), Icons.phone_forwarded_rounded, r.divertReason.isEmpty ? l.callIdentityForwardedFrom(r.divertedFrom) : l.callIdentityForwardedFromReason(r.divertedFrom, r.divertReason)),
+      if (r.referredBy.isNotEmpty) (const Key('hist-transferred'), Icons.swap_calls_rounded, l.callIdentityTransferredBy(r.referredBy)),
     ];
     if (lines.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final l in lines)
+        for (final ln in lines)
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Row(children: [
-              Icon(l.$2, size: 14, color: t.colorScheme.primary),
+              Icon(ln.$2, size: 14, color: t.colorScheme.primary),
               const SizedBox(width: 6),
-              Expanded(child: Text(l.$3, key: l.$1, style: t.textTheme.bodySmall)),
+              Expanded(child: Text(ln.$3, key: ln.$1, style: t.textTheme.bodySmall)),
             ]),
           ),
       ],

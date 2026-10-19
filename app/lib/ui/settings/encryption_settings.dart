@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/providers.dart';
 import '../../storage/app_database.dart';
 import '../widgets/settings_tiles.dart';
@@ -41,20 +42,20 @@ class _EncryptionSettingsGroupState extends ConsumerState<EncryptionSettingsGrou
     final db = ref.watch(appDatabaseProvider);
     final dir = db.directory;
     final target = _pending ?? db.encrypted;
+    final l = context.l10n;
     return SettingsGroup(
-      title: 'Encryption',
-      footer:
-          'Encrypts the local database with AES-256-GCM. The key is kept in the system keychain / keystore; if it is lost the data cannot be recovered. Call recordings and exported files are not encrypted. The change takes effect the next time SoftphonePro starts (quit it completely first); the previous file is kept as a backup until the start after that.',
+      title: l.encryptionTitle,
+      footer: l.encryptionFooter,
       children: [
         SwitchTile(
           key: const Key('encrypt-data'),
           icon: Icons.enhanced_encryption_rounded,
-          title: 'Encrypt call history, contacts and messages on this device',
+          title: l.encryptionSwitchTitle,
           subtitle: !_loaded
               ? null
               : _pending != null
-              ? 'Will ${_pending! ? 'be encrypted' : 'be decrypted'} at the next start'
-              : (db.encrypted ? 'On' : 'Off'),
+              ? (_pending! ? l.encryptionWillEncrypt : l.encryptionWillDecrypt)
+              : (db.encrypted ? l.commonOn : l.commonOff),
           value: target,
           onChanged: dir == null || !_loaded
               ? null
@@ -63,7 +64,7 @@ class _EncryptionSettingsGroupState extends ConsumerState<EncryptionSettingsGrou
                     await AppDatabase.cancelRequest(dir);
                   } else {
                     await AppDatabase.requestMode(dir, encrypt: v);
-                    ref.read(noticeProvider.notifier).show('Quit and restart SoftphonePro to ${v ? 'encrypt' : 'decrypt'} your data.');
+                    ref.read(noticeProvider.notifier).show(v ? l.encryptionRestartToEncrypt : l.encryptionRestartToDecrypt);
                   }
                   await _refresh();
                 },

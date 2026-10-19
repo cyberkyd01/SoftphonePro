@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
+import '../../l10n/l10n.dart';
 import '../../core/theme.dart';
 import '../../security/app_lock_settings.dart';
 import '../../platform/android/android_reliability_group.dart';
@@ -55,14 +56,14 @@ class AccountsSection extends ConsumerWidget {
             height: 360,
             child: EmptyState(
               icon: Icons.dns_rounded,
-              title: 'Add your first account',
-              subtitle: 'Connect to your PBX or SIP provider to start calling.',
-              actionLabel: 'Add account',
+              title: context.l10n.settingsAccountsEmptyTitle,
+              subtitle: context.l10n.settingsAccountsEmptySubtitle,
+              actionLabel: context.l10n.settingsAccountsAdd,
               onAction: () => context.push('/account-wizard'),
             ),
           )
         else ...[
-          const SectionHeader('Your accounts'),
+          SectionHeader(context.l10n.settingsAccountsYourAccounts),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
@@ -81,12 +82,12 @@ class AccountsSection extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: FilledButton.icon(
                 key: const Key('add-account'),
                 onPressed: () => context.push('/account-wizard'),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Add account'),
+                label: Text(context.l10n.settingsAccountsAdd),
               ),
             ),
           ),
@@ -109,8 +110,8 @@ class _AccountTile extends ConsumerWidget {
         clipBehavior: Clip.none,
         children: [
           Avatar(name: p.name, color: Color(p.color)),
-          Positioned(
-            right: -2,
+          PositionedDirectional(
+            end: -2,
             bottom: -2,
             child: Container(
               padding: const EdgeInsets.all(2),
@@ -128,12 +129,12 @@ class _AccountTile extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-              child: Text('Default', style: Theme.of(context).textTheme.labelSmall),
+              child: Text(context.l10n.commonDefault, style: Theme.of(context).textTheme.labelSmall),
             ),
           ],
         ],
       ),
-      subtitle: Text(acc.errorOf(id) ?? '${p.address}  ·  ${statusLabel(st)}${acc.usingBackup.contains(id) ? '  ·  using backup server' : ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(acc.errorOf(id) ?? (acc.usingBackup.contains(id) ? context.l10n.settingsAccountSubtitleBackup(p.address, statusLabel(st, context.l10n)) : context.l10n.settingsAccountSubtitle(p.address, statusLabel(st, context.l10n))), maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: Switch(value: p.enabled, onChanged: (v) => ref.read(accountsProvider.notifier).setEnabled(id, v)),
       onTap: () => context.push('/settings/accounts/$id'),
     );
@@ -187,7 +188,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
       await ctl.engine.loopback(v);
       setState(() => _loop = v);
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Echo test failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).settingsAudioEchoTestFailed, details: '$e');
     }
   }
 
@@ -198,7 +199,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
     final desktop = !isMobilePlatform;
     Map<String, String> opts(List<AudioDevice>? l) {
       return {
-        'default': systemDefaultLabel(l),
+        'default': systemDefaultLabel(context.l10n, l),
         for (final d in l ?? <AudioDevice>[])
           if (d.devId != 'default') d.devId: d.name,
       };
@@ -208,14 +209,14 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Devices',
+          title: context.l10n.settingsAudioDevices,
           children: [
-            SelectTile<String>(icon: Icons.mic_rounded, title: 'Microphone', value: s.captureDev, options: opts(dev?.capture), onChanged: (v) => _s(ref).update({'captureDev': v})),
-            SelectTile<String>(icon: Icons.speaker_rounded, title: 'Speaker', value: s.playbackDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'playbackDev': v})),
-            if (desktop) SelectTile<String>(icon: Icons.notifications_active_rounded, title: 'Ringer', subtitle: 'Play the ringtone on a separate device', value: s.ringerDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'ringerDev': v})),
+            SelectTile<String>(icon: Icons.mic_rounded, title: context.l10n.settingsAudioMicrophone, value: s.captureDev, options: opts(dev?.capture), onChanged: (v) => _s(ref).update({'captureDev': v})),
+            SelectTile<String>(icon: Icons.speaker_rounded, title: context.l10n.settingsAudioSpeaker, value: s.playbackDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'playbackDev': v})),
+            if (desktop) SelectTile<String>(icon: Icons.notifications_active_rounded, title: context.l10n.settingsAudioRinger, subtitle: context.l10n.settingsAudioRingerSub, value: s.ringerDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'ringerDev': v})),
             ListTile(
               leading: const Icon(Icons.refresh_rounded),
-              title: const Text('Refresh devices'),
+              title: Text(context.l10n.settingsAudioRefreshDevices),
               onTap: () async {
                 final ctl = ref.read(engineProvider.notifier);
                 if (ctl.hasEngine) await ctl.engine.refreshDevices();
@@ -225,75 +226,75 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
           ],
         ),
         SettingsGroup(
-          title: 'Levels and test',
+          title: context.l10n.settingsAudioLevelsAndTest,
           children: [
-            SliderTile(icon: Icons.mic_none_rounded, title: 'Microphone volume', value: s.micLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'micLevel': v})),
-            _Vu(label: 'Mic level', value: _levels.mic / 255),
-            SliderTile(icon: Icons.volume_up_rounded, title: 'Speaker volume', value: s.speakerLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'speakerLevel': v})),
-            _Vu(label: 'Speaker level', value: _levels.speaker / 255),
+            SliderTile(icon: Icons.mic_none_rounded, title: context.l10n.settingsAudioMicVolume, value: s.micLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'micLevel': v})),
+            _Vu(label: context.l10n.settingsAudioMicLevel, value: _levels.mic / 255),
+            SliderTile(icon: Icons.volume_up_rounded, title: context.l10n.settingsAudioSpeakerVolume, value: s.speakerLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'speakerLevel': v})),
+            _Vu(label: context.l10n.settingsAudioSpeakerLevel, value: _levels.speaker / 255),
             ListTile(
               key: const Key('test-speaker'),
               leading: const Icon(Icons.volume_up_rounded),
-              title: const Text('Test speaker'),
-              subtitle: const Text('Plays a short tone through the selected speaker'),
+              title: Text(context.l10n.settingsAudioTestSpeaker),
+              subtitle: Text(context.l10n.settingsAudioTestSpeakerSub),
               onTap: () async {
                 final ctl = ref.read(engineProvider.notifier);
                 if (!ctl.hasEngine) return;
                 try {
                   await ctl.engine.playTone(ToneKind.dtmf, digits: '1357');
                 } on EngineException catch (e) {
-                  ref.read(noticeProvider.notifier).error('Could not play the test tone', details: '$e');
+                  ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).settingsAudioTestToneFailed, details: '$e');
                 }
               },
             ),
-            SwitchTile(icon: Icons.hearing_rounded, title: 'Echo test', subtitle: 'Plays your microphone back through the speaker. Use headphones to avoid feedback.', value: _loop, onChanged: _toggleLoop),
+            SwitchTile(icon: Icons.hearing_rounded, title: context.l10n.settingsAudioEchoTest, subtitle: context.l10n.settingsAudioEchoTestSub, value: _loop, onChanged: _toggleLoop),
           ],
         ),
         SettingsGroup(
-          title: 'Voice and files',
+          title: context.l10n.settingsAudioVoiceAndFiles,
           children: [
             NavTile(
               key: const Key('voice-isolation-entry'),
               icon: Icons.noise_control_off_rounded,
-              title: 'Voice isolation (AI noise cancellation)',
+              title: context.l10n.settingsAudioVoiceIsolation,
               subtitle: s.viMicOn || s.viInOn
-                  ? [if (s.viMicOn) 'Microphone ${strengthLabel(s.viMicStrength)}', if (s.viInOn) 'Others ${strengthLabel(s.viInStrength)}'].join('  ·  ')
-                  : 'Off',
+                  ? [if (s.viMicOn) context.l10n.settingsAudioVoiceIsolationMic(strengthLabel(context.l10n, s.viMicStrength)), if (s.viInOn) context.l10n.settingsAudioVoiceIsolationOthers(strengthLabel(context.l10n, s.viInStrength))].join('  ·  ')
+                  : context.l10n.commonOff,
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const VoiceIsolationPage())),
             ),
             NavTile(
               key: const Key('audio-files-entry'),
               icon: Icons.library_music_rounded,
-              title: 'Audio files',
-              subtitle: 'Hold music and announcements',
+              title: context.l10n.settingsAudioAudioFiles,
+              subtitle: context.l10n.settingsAudioAudioFilesSub,
               onTap: () => openAudioFiles(context),
             ),
           ],
         ),
         SettingsGroup(
-          title: 'Processing',
+          title: context.l10n.settingsAudioProcessing,
           children: [
             SelectTile<String>(
-              title: 'Echo cancellation',
+              title: context.l10n.settingsAudioEchoCancellation,
               value: s.ecAlgo,
-              options: {for (final a in EcAlgo.values) a.wire: switch (a) { EcAlgo.auto => 'Automatic', EcAlgo.aec3 => 'WebRTC AEC3', EcAlgo.webrtc => 'WebRTC', EcAlgo.speex => 'Speex', EcAlgo.simple => 'Simple', EcAlgo.platform => 'Platform', EcAlgo.none => 'Off' }},
+              options: {for (final a in EcAlgo.values) a.wire: switch (a) { EcAlgo.auto => context.l10n.commonAutomatic, EcAlgo.aec3 => 'WebRTC AEC3', EcAlgo.webrtc => 'WebRTC', EcAlgo.speex => 'Speex', EcAlgo.simple => context.l10n.settingsAudioEcSimple, EcAlgo.platform => context.l10n.settingsAudioEcPlatform, EcAlgo.none => context.l10n.commonOff }},
               onChanged: (v) => _s(ref).update({'ecAlgo': v}),
             ),
-            SelectTile<int>(title: 'Echo tail', value: s.ecTailMs, options: const {64: '64 ms', 128: '128 ms', 200: '200 ms', 256: '256 ms', 400: '400 ms'}, onChanged: (v) => _s(ref).update({'ecTailMs': v})),
-            SwitchTile(title: 'Noise suppression', value: s.noiseSuppression, onChanged: (v) => _s(ref).update({'noiseSuppression': v})),
-            SwitchTile(title: 'Automatic gain control', value: s.agc, onChanged: (v) => _s(ref).update({'agc': v})),
-            SwitchTile(title: 'Voice activity detection', subtitle: 'Saves bandwidth during silence', value: s.vad, onChanged: (v) => _s(ref).update({'vad': v})),
+            SelectTile<int>(title: context.l10n.settingsAudioEchoTail, value: s.ecTailMs, options: {for (final v in const [64, 128, 200, 256, 400]) v: context.l10n.settingsUnitMs(v)}, onChanged: (v) => _s(ref).update({'ecTailMs': v})),
+            SwitchTile(title: context.l10n.settingsAudioNoiseSuppression, value: s.noiseSuppression, onChanged: (v) => _s(ref).update({'noiseSuppression': v})),
+            SwitchTile(title: context.l10n.settingsAudioAgc, value: s.agc, onChanged: (v) => _s(ref).update({'agc': v})),
+            SwitchTile(title: context.l10n.settingsAudioVad, subtitle: context.l10n.settingsAudioVadSub, value: s.vad, onChanged: (v) => _s(ref).update({'vad': v})),
           ],
         ),
         SettingsGroup(
-          title: 'Advanced',
-          footer: 'Jitter buffer values are in milliseconds; -1 uses the engine default. Changing these restarts the call engine.',
+          title: context.l10n.settingsAudioAdvanced,
+          footer: context.l10n.settingsAudioAdvancedFooter,
           children: [
-            SelectTile<int>(title: 'Packet time (ptime)', value: const {10, 20, 30, 40, 60}.contains(s.ptime) ? s.ptime : 20, options: const {10: '10 ms', 20: '20 ms', 30: '30 ms', 40: '40 ms', 60: '60 ms'}, onChanged: (v) => _s(ref).update({'ptime': v})),
-            TextTile(key: const Key('jb-init'), title: 'Jitter buffer: initial', value: '${s.jbInitMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbInitMs': int.tryParse(v.trim()) ?? -1})),
-            TextTile(key: const Key('jb-min'), title: 'Jitter buffer: minimum prefetch', value: '${s.jbMinPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMinPreMs': int.tryParse(v.trim()) ?? -1})),
-            TextTile(key: const Key('jb-max-pre'), title: 'Jitter buffer: maximum prefetch', value: '${s.jbMaxPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxPreMs': int.tryParse(v.trim()) ?? -1})),
-            TextTile(key: const Key('jb-max'), title: 'Jitter buffer: maximum size', value: '${s.jbMaxMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxMs': int.tryParse(v.trim()) ?? -1})),
+            SelectTile<int>(title: context.l10n.settingsAudioPtime, value: const {10, 20, 30, 40, 60}.contains(s.ptime) ? s.ptime : 20, options: {for (final v in const [10, 20, 30, 40, 60]) v: context.l10n.settingsUnitMs(v)}, onChanged: (v) => _s(ref).update({'ptime': v})),
+            TextTile(key: const Key('jb-init'), title: context.l10n.settingsAudioJbInitial, value: '${s.jbInitMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbInitMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-min'), title: context.l10n.settingsAudioJbMinPrefetch, value: '${s.jbMinPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMinPreMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-max-pre'), title: context.l10n.settingsAudioJbMaxPrefetch, value: '${s.jbMaxPreMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxPreMs': int.tryParse(v.trim()) ?? -1})),
+            TextTile(key: const Key('jb-max'), title: context.l10n.settingsAudioJbMaxSize, value: '${s.jbMaxMs}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'jbMaxMs': int.tryParse(v.trim()) ?? -1})),
           ],
         ),
       ],
@@ -311,9 +312,9 @@ class _Vu extends StatelessWidget {
     final v = value.clamp(0.0, 1.0);
     return Semantics(
       label: label,
-      value: '${(v * 100).round()} percent',
+      value: context.l10n.settingsAudioPercentValue((v * 100).round()),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(72, 0, 16, 12),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
@@ -361,7 +362,7 @@ class CodecsSection extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
-        const SectionHeader('Order and availability'),
+        SectionHeader(context.l10n.settingsCodecsOrder),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Card(
@@ -393,15 +394,15 @@ class CodecsSection extends ConsumerWidget {
             ),
           ),
         ),
-        const Padding(padding: EdgeInsets.fromLTRB(20, 8, 20, 0), child: Text('Drag to reorder. Accounts can override this list in their own settings.')),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 0), child: Text(context.l10n.settingsCodecsDragHint)),
         SettingsGroup(
           title: 'Opus',
           children: [
-            SelectTile<int>(title: 'Bitrate', value: s.opusBitrate, options: const {16000: '16 kbps', 24000: '24 kbps', 32000: '32 kbps', 48000: '48 kbps', 64000: '64 kbps'}, onChanged: (v) => _s(ref).update({'opusBitrate': v})),
-            SwitchTile(title: 'In-band FEC', subtitle: 'Recovers from packet loss', value: s.opusFec, onChanged: (v) => _s(ref).update({'opusFec': v})),
-            SwitchTile(title: 'DTX', subtitle: 'Stop sending during silence', value: s.opusDtx, onChanged: (v) => _s(ref).update({'opusDtx': v})),
-            SwitchTile(title: 'Constant bitrate', value: s.opusCbr, onChanged: (v) => _s(ref).update({'opusCbr': v})),
-            SliderTile(title: 'Complexity', value: s.opusComplexity.toDouble(), min: 0, max: 10, divisions: 10, format: (v) => v.round().toString(), onChanged: (v) => _s(ref).update({'opusComplexity': v.round()})),
+            SelectTile<int>(title: context.l10n.settingsCodecsBitrate, value: s.opusBitrate, options: {for (final v in const [16, 24, 32, 48, 64]) v * 1000: context.l10n.settingsUnitKbps(v)}, onChanged: (v) => _s(ref).update({'opusBitrate': v})),
+            SwitchTile(title: context.l10n.settingsCodecsFec, subtitle: context.l10n.settingsCodecsFecSub, value: s.opusFec, onChanged: (v) => _s(ref).update({'opusFec': v})),
+            SwitchTile(title: 'DTX', subtitle: context.l10n.settingsCodecsDtxSub, value: s.opusDtx, onChanged: (v) => _s(ref).update({'opusDtx': v})),
+            SwitchTile(title: context.l10n.settingsCodecsCbr, value: s.opusCbr, onChanged: (v) => _s(ref).update({'opusCbr': v})),
+            SliderTile(title: context.l10n.settingsCodecsComplexity, value: s.opusComplexity.toDouble(), min: 0, max: 10, divisions: 10, format: (v) => v.round().toString(), onChanged: (v) => _s(ref).update({'opusComplexity': v.round()})),
           ],
         ),
       ],
@@ -421,66 +422,66 @@ class CallsSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Incoming',
+          title: context.l10n.settingsCallsIncoming,
           children: [
-            SwitchTile(icon: Icons.do_not_disturb_on_rounded, title: 'Do not disturb', subtitle: 'Reject all incoming calls', value: s.dnd, onChanged: (v) => _s(ref).update({'dnd': v})),
-            SelectTile<int>(title: 'Reject with', value: s.dndRejectCode, options: const {486: 'Busy Here (486)', 480: 'Temporarily Unavailable (480)', 603: 'Decline (603)'}, onChanged: (v) => _s(ref).update({'dndRejectCode': v})),
-            SwitchTile(icon: Icons.phone_callback_rounded, title: 'Call waiting', subtitle: 'Allow a second incoming call during a call', value: s.callWaiting, onChanged: (v) => _s(ref).update({'callWaiting': v})),
-            SelectTile<int>(title: 'When busy and waiting is off', value: s.busyRejectCode, options: const {486: 'Busy Here (486)', 603: 'Decline (603)'}, onChanged: (v) => _s(ref).update({'busyRejectCode': v})),
-            SwitchTile(icon: Icons.person_off_rounded, title: 'Reject anonymous calls', value: s.rejectAnonymous, onChanged: (v) => _s(ref).update({'rejectAnonymous': v})),
-            SwitchTile(key: const Key('call-links-immediately'), icon: Icons.link_rounded, title: 'Call links immediately', subtitle: 'tel:, sip: and callto: links place the call without waiting in the dialer', value: s.callLinksImmediately, onChanged: (v) => _s(ref).update({'callLinksImmediately': v})),
-            SwitchTile(key: const Key('sync-feature-codes'), icon: Icons.sync_alt_rounded, title: 'Sync DND / forwarding to PBX via feature codes', subtitle: 'Dials the account\'s star codes (for example *78) briefly when you change DND or forwarding', value: s.syncFeatureCodes, onChanged: (v) => _s(ref).update({'syncFeatureCodes': v})),
+            SwitchTile(icon: Icons.do_not_disturb_on_rounded, title: context.l10n.statusDoNotDisturb, subtitle: context.l10n.settingsCallsDndSub, value: s.dnd, onChanged: (v) => _s(ref).update({'dnd': v})),
+            SelectTile<int>(title: context.l10n.settingsCallsRejectWith, value: s.dndRejectCode, options: {486: context.l10n.settingsCallsReasonBusy, 480: context.l10n.settingsCallsReasonUnavailable, 603: context.l10n.settingsCallsReasonDecline}, onChanged: (v) => _s(ref).update({'dndRejectCode': v})),
+            SwitchTile(icon: Icons.phone_callback_rounded, title: context.l10n.settingsCallsWaiting, subtitle: context.l10n.settingsCallsWaitingSub, value: s.callWaiting, onChanged: (v) => _s(ref).update({'callWaiting': v})),
+            SelectTile<int>(title: context.l10n.settingsCallsWhenBusy, value: s.busyRejectCode, options: {486: context.l10n.settingsCallsReasonBusy, 603: context.l10n.settingsCallsReasonDecline}, onChanged: (v) => _s(ref).update({'busyRejectCode': v})),
+            SwitchTile(icon: Icons.person_off_rounded, title: context.l10n.settingsCallsRejectAnonymous, value: s.rejectAnonymous, onChanged: (v) => _s(ref).update({'rejectAnonymous': v})),
+            SwitchTile(key: const Key('call-links-immediately'), icon: Icons.link_rounded, title: context.l10n.settingsCallsLinksImmediately, subtitle: context.l10n.settingsCallsLinksImmediatelySub, value: s.callLinksImmediately, onChanged: (v) => _s(ref).update({'callLinksImmediately': v})),
+            SwitchTile(key: const Key('sync-feature-codes'), icon: Icons.sync_alt_rounded, title: context.l10n.settingsCallsSyncFeatureCodes, subtitle: context.l10n.settingsCallsSyncFeatureCodesSub, value: s.syncFeatureCodes, onChanged: (v) => _s(ref).update({'syncFeatureCodes': v})),
           ],
         ),
         if (ref.watch(defaultHandlerServiceProvider).supported)
-          const SettingsGroup(
-            title: 'System',
-            children: [DefaultHandlerTile()],
+          SettingsGroup(
+            title: context.l10n.commonSystem,
+            children: const [DefaultHandlerTile()],
           ),
         const HoldMusicGroup(),
         const AnnouncementsGroup(),
         SettingsGroup(
-          title: 'Auto-answer',
-          footer: 'Call forwarding and per-account auto-answer are set in each account.',
+          title: context.l10n.settingsCallsAutoAnswerGroup,
+          footer: context.l10n.settingsCallsAutoAnswerFooter,
           children: [
-            SwitchTile(icon: Icons.auto_mode_rounded, title: 'Auto-answer all calls', value: s.autoAnswer, onChanged: (v) => _s(ref).update({'autoAnswer': v})),
-            SelectTile<int>(title: 'Answer after', value: s.autoAnswerDelay, options: const {0: 'Immediately', 3: '3 seconds', 5: '5 seconds', 10: '10 seconds'}, onChanged: (v) => _s(ref).update({'autoAnswerDelay': v})),
-            SwitchTile(title: 'Honour intercom headers', subtitle: 'Call-Info, Alert-Info and Answer-Mode auto-answer hints', value: s.allowAutoAnswerHeaders, onChanged: (v) => _s(ref).update({'allowAutoAnswerHeaders': v})),
+            SwitchTile(icon: Icons.auto_mode_rounded, title: context.l10n.settingsCallsAutoAnswerAll, value: s.autoAnswer, onChanged: (v) => _s(ref).update({'autoAnswer': v})),
+            SelectTile<int>(title: context.l10n.settingsCallsAnswerAfter, value: s.autoAnswerDelay, options: {0: context.l10n.settingsCallsAnswerImmediately, 3: context.l10n.settingsUnitSeconds(3), 5: context.l10n.settingsUnitSeconds(5), 10: context.l10n.settingsUnitSeconds(10)}, onChanged: (v) => _s(ref).update({'autoAnswerDelay': v})),
+            SwitchTile(title: context.l10n.settingsCallsIntercomHeaders, subtitle: context.l10n.settingsCallsIntercomHeadersSub, value: s.allowAutoAnswerHeaders, onChanged: (v) => _s(ref).update({'allowAutoAnswerHeaders': v})),
           ],
         ),
         SettingsGroup(
-          title: 'Blocked numbers',
+          title: context.l10n.settingsCallsBlocked,
           children: [
             for (final b in s.blocklist)
               ListTile(
                 leading: const Icon(Icons.block_rounded),
                 title: Text(b),
-                trailing: IconButton(tooltip: 'Unblock $b', icon: const Icon(Icons.close_rounded), onPressed: () => _s(ref).update({'blocklist': s.blocklist.where((e) => e != b).toList()})),
+                trailing: IconButton(tooltip: context.l10n.settingsCallsUnblock(b), icon: const Icon(Icons.close_rounded), onPressed: () => _s(ref).update({'blocklist': s.blocklist.where((e) => e != b).toList()})),
               ),
             ListTile(
               leading: const Icon(Icons.add_rounded),
-              title: const Text('Block a number'),
+              title: Text(context.l10n.settingsCallsBlockNumber),
               onTap: () async {
-                final n = await promptText(context, title: 'Block number', hint: 'Number or SIP address', keyboardType: TextInputType.phone);
+                final n = await promptText(context, title: context.l10n.settingsCallsBlockNumberTitle, hint: context.l10n.settingsCallsBlockNumberHint, keyboardType: TextInputType.phone);
                 if (n != null && n.isNotEmpty) _s(ref).update({'blocklist': [...s.blocklist, n]});
               },
             ),
           ],
         ),
         SettingsGroup(
-          title: 'Speed dial',
+          title: context.l10n.settingsCallsSpeedDial,
           children: [
-            NavTile(key: const Key('speed-dial-entry'), icon: Icons.speed_rounded, title: 'Speed dial', subtitle: '${s.speedDial.length} of 9 assigned', onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SpeedDialPage()))),
+            NavTile(key: const Key('speed-dial-entry'), icon: Icons.speed_rounded, title: context.l10n.settingsCallsSpeedDial, subtitle: context.l10n.settingsCallsSpeedDialAssigned(s.speedDial.length), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SpeedDialPage()))),
           ],
         ),
         SettingsGroup(
-          title: 'Dial plan',
+          title: context.l10n.settingsCallsDialPlan,
           children: [
-            NavTile(icon: Icons.rule_rounded, title: 'Dial rules', subtitle: '${s.dialRules.length} rule(s)', onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DialRulesEditor()))),
-            TextTile(key: const Key('strip-prefix'), icon: Icons.content_cut_rounded, title: 'Outside-line prefix to strip', subtitle: 'For example 9, removed from the start of dialled numbers', hint: 'None', value: s.stripPrefix, onChanged: (v) => _s(ref).update({'stripPrefix': v.trim()})),
-            TextTile(key: const Key('plus-replacement'), icon: Icons.add_rounded, title: 'Replace leading + with', subtitle: 'For example 00 for international access', hint: 'Keep +', value: s.plusReplacement, onChanged: (v) => _s(ref).update({'plusReplacement': v.trim()})),
-            TextTile(key: const Key('default-country-prefix'), icon: Icons.flag_rounded, title: 'Default country prefix', subtitle: 'National numbers starting with 0 get this prefix, for example +44', hint: 'None', value: s.defaultCountryPrefix, onChanged: (v) => _s(ref).update({'defaultCountryPrefix': v.trim()})),
-            TextTile(icon: Icons.emergency_rounded, title: 'Emergency numbers', subtitle: 'Comma separated. These bypass dial rules.', value: s.emergencyNumbers.join(', '), onChanged: (v) => _s(ref).update({'emergencyNumbers': v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList()})),
+            NavTile(icon: Icons.rule_rounded, title: context.l10n.settingsCallsDialRules, subtitle: context.l10n.settingsCallsDialRulesCount(s.dialRules.length), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DialRulesEditor()))),
+            TextTile(key: const Key('strip-prefix'), icon: Icons.content_cut_rounded, title: context.l10n.settingsCallsStripPrefix, subtitle: context.l10n.settingsCallsStripPrefixSub, hint: context.l10n.commonNone, value: s.stripPrefix, onChanged: (v) => _s(ref).update({'stripPrefix': v.trim()})),
+            TextTile(key: const Key('plus-replacement'), icon: Icons.add_rounded, title: context.l10n.settingsCallsPlusReplacement, subtitle: context.l10n.settingsCallsPlusReplacementSub, hint: context.l10n.settingsCallsPlusReplacementHint, value: s.plusReplacement, onChanged: (v) => _s(ref).update({'plusReplacement': v.trim()})),
+            TextTile(key: const Key('default-country-prefix'), icon: Icons.flag_rounded, title: context.l10n.settingsCallsCountryPrefix, subtitle: context.l10n.settingsCallsCountryPrefixSub, hint: context.l10n.commonNone, value: s.defaultCountryPrefix, onChanged: (v) => _s(ref).update({'defaultCountryPrefix': v.trim()})),
+            TextTile(icon: Icons.emergency_rounded, title: context.l10n.settingsCallsEmergency, subtitle: context.l10n.settingsCallsEmergencySub, value: s.emergencyNumbers.join(', '), onChanged: (v) => _s(ref).update({'emergencyNumbers': v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList()})),
           ],
         ),
       ],
@@ -512,31 +513,31 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
         builder: (ctx, set) {
           final err = DialRules.validatePattern(pat.text);
           return AlertDialog(
-            title: Text(r == null ? 'New dial rule' : 'Edit dial rule'),
+            title: Text(r == null ? context.l10n.settingsDialRulesNew : context.l10n.settingsDialRulesEdit),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                  TextField(controller: name, decoration: InputDecoration(labelText: context.l10n.settingsDialRulesName)),
                   const SizedBox(height: 10),
-                  TextField(key: const Key('rule-pattern'), controller: pat, onChanged: (_) => set(() {}), decoration: InputDecoration(labelText: 'Pattern (regex)', helperText: r'e.g. 0(\d{9})', errorText: err)),
+                  TextField(key: const Key('rule-pattern'), controller: pat, textDirection: TextDirection.ltr, onChanged: (_) => set(() {}), decoration: InputDecoration(labelText: context.l10n.settingsDialRulesPattern, helperText: r'e.g. 0(\d{9})', errorText: err)),
                   const SizedBox(height: 10),
-                  TextField(key: const Key('rule-replacement'), controller: rep, decoration: const InputDecoration(labelText: 'Replacement', helperText: r'Use $1, $2 for groups')),
+                  TextField(key: const Key('rule-replacement'), controller: rep, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: context.l10n.settingsDialRulesReplacement, helperText: context.l10n.settingsDialRulesReplacementHelp)),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: acc,
-                    decoration: const InputDecoration(labelText: 'Route through account'),
-                    items: [const DropdownMenuItem(value: '', child: Text('Default')), for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
+                    decoration: InputDecoration(labelText: context.l10n.settingsDialRulesRoute),
+                    items: [DropdownMenuItem(value: '', child: Text(context.l10n.commonDefault)), for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
                     onChanged: (v) => acc = v ?? '',
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l10n.actionCancel)),
               FilledButton(
                 onPressed: err != null || pat.text.isEmpty ? null : () => Navigator.pop(ctx, DialRule(id: r?.id ?? newId(), name: name.text, pattern: pat.text, replacement: rep.text, accountId: acc, enabled: r?.enabled ?? true)),
-                child: const Text('Save'),
+                child: Text(context.l10n.actionSave),
               ),
             ],
           );
@@ -568,9 +569,9 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
           children: [
             // Same header as the other settings pages.
             PageHeader(
-              title: 'Dial rules',
-              leading: IconButton(tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back_rounded)),
-              actions: [IconButton(tooltip: 'Add rule', onPressed: () => _edit(null), icon: const Icon(Icons.add_rounded))],
+              title: context.l10n.settingsCallsDialRules,
+              leading: IconButton(tooltip: context.l10n.actionBack, onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.arrow_back_rounded)),
+              actions: [IconButton(tooltip: context.l10n.settingsDialRulesAdd, onPressed: () => _edit(null), icon: const Icon(Icons.add_rounded))],
             ),
             Expanded(
               child: Center(
@@ -585,24 +586,24 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Live test', style: Theme.of(context).textTheme.titleSmall),
+                      Text(context.l10n.settingsDialRulesLiveTest, style: Theme.of(context).textTheme.titleSmall),
                       const SizedBox(height: 8),
-                      TextField(key: const Key('rule-test'), controller: _test, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Typed number')),
+                      TextField(key: const Key('rule-test'), controller: _test, textDirection: TextDirection.ltr, onChanged: (_) => setState(() {}), decoration: InputDecoration(labelText: context.l10n.settingsDialRulesTyped)),
                       const SizedBox(height: 10),
                       Row(children: [
                         const Icon(Icons.arrow_forward_rounded, size: 18),
                         const SizedBox(width: 8),
-                        Expanded(child: SelectableText(result.target.isEmpty ? '(nothing)' : result.target, key: const Key('rule-result'), style: tabular(Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)))),
+                        Expanded(child: SelectableText(result.target.isEmpty ? context.l10n.settingsDialRulesNothing : result.target, key: const Key('rule-result'), textDirection: TextDirection.ltr, style: tabular(Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)))),
                       ]),
-                      if (result.emergency) const Text('Emergency number: dialled as typed'),
-                      if (result.accountId != null) Text('via ${accounts.byId(result.accountId!)?.name ?? 'account'}'),
+                      if (result.emergency) Text(context.l10n.settingsDialRulesEmergency),
+                      if (result.accountId != null) Text(context.l10n.settingsDialRulesVia(accounts.byId(result.accountId!)?.name ?? context.l10n.settingsDialRulesAccountFallback)),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 12),
               if (rules.isEmpty)
-                const Padding(padding: EdgeInsets.all(24), child: Text('No rules. Numbers are cleaned (spaces, dashes, brackets removed) and dialled as typed. Rules run top to bottom; the first match wins.', textAlign: TextAlign.center))
+                Padding(padding: const EdgeInsets.all(24), child: Text(context.l10n.settingsDialRulesEmpty, textAlign: TextAlign.center))
               else
                 Card(
                   child: ReorderableListView(
@@ -619,13 +620,13 @@ class _DialRulesEditorState extends ConsumerState<DialRulesEditor> {
                         ListTile(
                           key: ValueKey(r.id),
                           title: Text(r.name.isEmpty ? r.pattern : r.name),
-                          subtitle: Text('${r.pattern}  →  ${r.replacement}'),
+                          subtitle: Text('${r.pattern}  →  ${r.replacement}', textDirection: TextDirection.ltr),
                           leading: Switch(value: r.enabled, onChanged: (v) => _save([for (final e in rules) e.id == r.id ? e.copyWith(enabled: v) : e])),
                           trailing: IconButton(
-                            tooltip: 'Delete rule',
+                            tooltip: context.l10n.settingsDialRulesDelete,
                             icon: const Icon(Icons.delete_outline_rounded),
                             onPressed: () async {
-                              if (await confirm(context, title: 'Delete rule?', message: r.name.isEmpty ? r.pattern : r.name)) _save(rules.where((e) => e.id != r.id).toList());
+                              if (await confirm(context, title: context.l10n.settingsDialRulesDeleteTitle, message: r.name.isEmpty ? r.pattern : r.name)) _save(rules.where((e) => e.id != r.id).toList());
                             },
                           ),
                           onTap: () => _edit(r),
@@ -659,35 +660,35 @@ class NetworkSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Transports',
-          footer: 'Port 0 picks a random free port. Changing transports restarts the call engine.',
+          title: context.l10n.settingsNetworkTransports,
+          footer: context.l10n.settingsNetworkTransportsFooter,
           children: [
             SwitchTile(title: 'UDP', value: s.udpEnabled, onChanged: (v) => _s(ref).update({'udpEnabled': v})),
-            TextTile(title: 'UDP port', value: '${s.udpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'udpPort': port(v)})),
+            TextTile(title: context.l10n.settingsNetworkUdpPort, value: '${s.udpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'udpPort': port(v)})),
             SwitchTile(title: 'TCP', value: s.tcpEnabled, onChanged: (v) => _s(ref).update({'tcpEnabled': v})),
-            TextTile(title: 'TCP port', value: '${s.tcpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'tcpPort': port(v)})),
+            TextTile(title: context.l10n.settingsNetworkTcpPort, value: '${s.tcpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'tcpPort': port(v)})),
             SwitchTile(title: 'TLS', value: s.tlsEnabled, onChanged: (v) => _s(ref).update({'tlsEnabled': v})),
-            TextTile(title: 'TLS port', value: '${s.tlsPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'tlsPort': port(v)})),
-            SwitchTile(icon: Icons.verified_rounded, title: 'Verify server certificates', subtitle: 'Turn off only for self-signed PBXs, or pin the certificate below', value: s.tlsVerify, onChanged: (v) => _s(ref).update({'tlsVerify': v})),
-            TextTile(key: const Key('custom-ca-file'), icon: Icons.security_rounded, title: 'Custom CA file', subtitle: 'PEM bundle used instead of the built-in list (private PBX CA)', hint: 'Built-in Mozilla list', value: s.customCaFile, onChanged: (v) => _s(ref).update({'customCaFile': v.trim()})),
-            TextTile(icon: Icons.push_pin_rounded, title: 'Pinned certificates', subtitle: 'host=SHA256 fingerprint, comma separated', value: s.tlsPins.join(', '), onChanged: (v) => _s(ref).update({'tlsPins': list(v)})),
+            TextTile(title: context.l10n.settingsNetworkTlsPort, value: '${s.tlsPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'tlsPort': port(v)})),
+            SwitchTile(icon: Icons.verified_rounded, title: context.l10n.settingsNetworkVerifyCerts, subtitle: context.l10n.settingsNetworkVerifyCertsSub, value: s.tlsVerify, onChanged: (v) => _s(ref).update({'tlsVerify': v})),
+            TextTile(key: const Key('custom-ca-file'), icon: Icons.security_rounded, title: context.l10n.settingsNetworkCustomCa, subtitle: context.l10n.settingsNetworkCustomCaSub, hint: context.l10n.settingsNetworkCustomCaHint, value: s.customCaFile, onChanged: (v) => _s(ref).update({'customCaFile': v.trim()})),
+            TextTile(icon: Icons.push_pin_rounded, title: context.l10n.settingsNetworkPins, subtitle: context.l10n.settingsNetworkPinsSub, value: s.tlsPins.join(', '), onChanged: (v) => _s(ref).update({'tlsPins': list(v)})),
           ],
         ),
         SettingsGroup(
-          title: 'NAT traversal',
+          title: context.l10n.settingsNetworkNat,
           children: [
-            TextTile(icon: Icons.public_rounded, title: 'STUN servers', subtitle: 'host:port, comma separated', value: s.stunServers.join(', '), onChanged: (v) => _s(ref).update({'stunServers': list(v)})),
-            const ListTile(leading: Icon(Icons.info_outline_rounded), title: Text('ICE and TURN'), subtitle: Text('Configured per account under NAT')),
+            TextTile(icon: Icons.public_rounded, title: context.l10n.settingsNetworkStun, subtitle: context.l10n.settingsNetworkStunSub, value: s.stunServers.join(', '), onChanged: (v) => _s(ref).update({'stunServers': list(v)})),
+            ListTile(leading: const Icon(Icons.info_outline_rounded), title: Text(context.l10n.settingsNetworkIceTurn), subtitle: Text(context.l10n.settingsNetworkIceTurnSub)),
           ],
         ),
         SettingsGroup(
-          title: 'Advanced',
+          title: context.l10n.settingsNetworkAdvanced,
           children: [
             SwitchTile(title: 'IPv6', value: s.ipv6, onChanged: (v) => _s(ref).update({'ipv6': v})),
-            SwitchTile(title: 'QoS (DSCP marking)', subtitle: 'Mark SIP and voice packets for priority', value: s.qos, onChanged: (v) => _s(ref).update({'qos': v})),
-            TextTile(icon: Icons.dns_rounded, title: 'DNS servers', subtitle: 'Leave empty for automatic', hint: 'Automatic', value: s.dnsServers.join(', '), onChanged: (v) => _s(ref).update({'dnsServers': list(v)})),
-            TextTile(title: 'RTP port start', value: '${s.rtpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'rtpPort': port(v)})),
-            TextTile(title: 'RTP port range', subtitle: '0 uses the default', value: '${s.rtpPortRange}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'rtpPortRange': port(v)})),
+            SwitchTile(title: context.l10n.settingsNetworkQos, subtitle: context.l10n.settingsNetworkQosSub, value: s.qos, onChanged: (v) => _s(ref).update({'qos': v})),
+            TextTile(icon: Icons.dns_rounded, title: context.l10n.settingsNetworkDns, subtitle: context.l10n.settingsNetworkDnsSub, hint: context.l10n.commonAutomatic, value: s.dnsServers.join(', '), onChanged: (v) => _s(ref).update({'dnsServers': list(v)})),
+            TextTile(title: context.l10n.settingsNetworkRtpStart, value: '${s.rtpPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'rtpPort': port(v)})),
+            TextTile(title: context.l10n.settingsNetworkRtpRange, subtitle: context.l10n.settingsNetworkRtpRangeSub, value: '${s.rtpPortRange}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'rtpPortRange': port(v)})),
           ],
         ),
       ],
@@ -717,27 +718,27 @@ class NotificationsSection extends ConsumerWidget {
       children: [
         if (defaultTargetPlatform == TargetPlatform.android && !kIsWeb) const AndroidReliabilityGroup(),
         SettingsGroup(
-          title: 'Ringtone',
+          title: context.l10n.settingsNotifRingtone,
           children: [
-            SelectTile<String>(icon: Icons.music_note_rounded, title: 'Default ringtone', value: s.ringtone, options: kRingtoneOptions, onChanged: (v) => _s(ref).update({'ringtone': v})),
-            SwitchTile(key: const Key('progress-tones'), icon: Icons.volume_up_rounded, title: 'Call progress tones', subtitle: 'Ringback, busy and congestion tones while dialling', value: s.progressTones, onChanged: (v) => _s(ref).update({'progressTones': v})),
-            SliderTile(icon: Icons.volume_up_rounded, title: 'Ringer volume', value: s.ringerVolume, divisions: 10, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'ringerVolume': v})),
-            TextTile(icon: Icons.audio_file_rounded, title: 'Custom ringtone file', subtitle: 'Path to a WAV file (desktop)', value: s.ringtone.contains('/') ? s.ringtone : '', hint: 'None', onChanged: (v) => _s(ref).update({'ringtone': v.isEmpty ? 'default' : v})),
+            SelectTile<String>(icon: Icons.music_note_rounded, title: context.l10n.settingsNotifDefaultRingtone, value: s.ringtone, options: ringtoneOptions(context.l10n), onChanged: (v) => _s(ref).update({'ringtone': v})),
+            SwitchTile(key: const Key('progress-tones'), icon: Icons.volume_up_rounded, title: context.l10n.settingsNotifProgressTones, subtitle: context.l10n.settingsNotifProgressTonesSub, value: s.progressTones, onChanged: (v) => _s(ref).update({'progressTones': v})),
+            SliderTile(icon: Icons.volume_up_rounded, title: context.l10n.settingsNotifRingerVolume, value: s.ringerVolume, divisions: 10, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'ringerVolume': v})),
+            TextTile(icon: Icons.audio_file_rounded, title: context.l10n.settingsNotifCustomRingtone, subtitle: context.l10n.settingsNotifCustomRingtoneSub, value: s.ringtone.contains('/') ? s.ringtone : '', hint: context.l10n.commonNone, onChanged: (v) => _s(ref).update({'ringtone': v.isEmpty ? 'default' : v})),
           ],
         ),
         SettingsGroup(
-          title: 'Notifications',
+          title: context.l10n.settingsNotifGroup,
           children: [
             ListTile(
               leading: const Icon(Icons.notifications_rounded),
-              title: const Text('Request permissions'),
-              subtitle: const Text('Microphone and notifications'),
+              title: Text(context.l10n.settingsNotifRequestPermissions),
+              subtitle: Text(context.l10n.settingsNotifRequestPermissionsSub),
               onTap: () async {
                 final r = await ref.read(platformServicesProvider).requestPermissions();
-                ref.read(noticeProvider.notifier).show('Microphone: ${r.microphone.name}, notifications: ${r.notifications.name}');
+                ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).settingsNotifPermissionResult(r.microphone.name, r.notifications.name));
               },
             ),
-            SwitchTile(icon: Icons.keyboard_rounded, title: 'Send typing indicators', value: s.sendTyping, onChanged: (v) => _s(ref).update({'sendTyping': v})),
+            SwitchTile(icon: Icons.keyboard_rounded, title: context.l10n.settingsNotifTyping, value: s.sendTyping, onChanged: (v) => _s(ref).update({'sendTyping': v})),
           ],
         ),
       ],
@@ -754,15 +755,15 @@ class AppearanceSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Theme',
+          title: context.l10n.settingsAppearanceTheme,
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
               child: SegmentedButton<ThemeMode>(
-                segments: const [
-                  ButtonSegment(value: ThemeMode.system, label: Text('System'), icon: Icon(Icons.brightness_auto_rounded)),
-                  ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_rounded)),
-                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_rounded)),
+                segments: [
+                  ButtonSegment(value: ThemeMode.system, label: Text(context.l10n.commonSystem), icon: const Icon(Icons.brightness_auto_rounded)),
+                  ButtonSegment(value: ThemeMode.light, label: Text(context.l10n.settingsAppearanceLight), icon: const Icon(Icons.light_mode_rounded)),
+                  ButtonSegment(value: ThemeMode.dark, label: Text(context.l10n.settingsAppearanceDark), icon: const Icon(Icons.dark_mode_rounded)),
                 ],
                 selected: {s.themeMode},
                 onSelectionChanged: (v) => _s(ref).update({'themeMode': v.first.name}),
@@ -775,7 +776,7 @@ class AppearanceSection extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(width: double.infinity),
-                  Text('Accent colour', style: Theme.of(context).textTheme.bodyMedium),
+                  Text(context.l10n.settingsAppearanceAccent, style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 12,
@@ -785,7 +786,7 @@ class AppearanceSection extends ConsumerWidget {
                         Semantics(
                           button: true,
                           selected: s.accent == c,
-                          label: 'Accent colour option',
+                          label: context.l10n.settingsAppearanceAccentOption,
                           child: InkResponse(
                             onTap: () => _s(ref).update({'accent': c}),
                             child: Container(
@@ -801,10 +802,68 @@ class AppearanceSection extends ConsumerWidget {
                 ],
               ),
             ),
-            SwitchTile(icon: Icons.density_small_rounded, title: 'Compact density', value: s.compactDensity, onChanged: (v) => _s(ref).update({'compactDensity': v})),
+            SwitchTile(icon: Icons.density_small_rounded, title: context.l10n.settingsAppearanceCompact, value: s.compactDensity, onChanged: (v) => _s(ref).update({'compactDensity': v})),
           ],
         ),
+        SettingsGroup(
+          title: context.l10n.settingsLanguage,
+          footer: context.l10n.languagePickerHint,
+          children: [LanguageTile(current: s.language, onChanged: (v) => _s(ref).update({'language': v}))],
+        ),
       ],
+    );
+  }
+}
+
+/// Language row: shows the current language's native name; opens a picker
+/// listing every supported language by its own name.
+class LanguageTile extends StatelessWidget {
+  const LanguageTile({super.key, required this.current, required this.onChanged});
+  final String current;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    String nameOf(String code) {
+      for (final x in kAppLanguages) {
+        if (x.code == code) return x.nativeName;
+      }
+      return l.languageSystemDefault;
+    }
+
+    return ListTile(
+      key: const Key('language-tile'),
+      leading: const Icon(Icons.language_rounded),
+      title: Text(l.settingsLanguage),
+      subtitle: Text(nameOf(current)),
+      trailing: const Icon(Icons.arrow_drop_down_rounded),
+      onTap: () async {
+        final picked = await showDialog<String>(
+          context: context,
+          builder: (dctx) => SimpleDialog(
+            title: Text(l.settingsLanguage),
+            children: [
+              SizedBox(
+                width: 320,
+                height: 420,
+                child: ListView(
+                  children: [
+                    for (final code in [kSystemLanguage, ...kAppLanguages.map((e) => e.code)])
+                      ListTile(
+                        key: Key('language-$code'),
+                        title: Text(nameOf(code)),
+                        trailing: code == current ? const Icon(Icons.check_rounded) : null,
+                        onTap: () => Navigator.pop(dctx, code),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+        if (picked != null) onChanged(picked);
+      },
     );
   }
 }
@@ -813,10 +872,10 @@ class PrivacySection extends ConsumerWidget {
   const PrivacySection({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    Future<void> wipe(String what, Future<void> Function() f) async {
-      if (await confirm(context, title: 'Delete $what?', message: 'This cannot be undone.', confirmLabel: 'Delete')) {
+    Future<void> wipe(String confirmTitle, String done, Future<void> Function() f) async {
+      if (await confirm(context, title: confirmTitle, message: context.l10n.settingsPrivacyCannotUndo, confirmLabel: context.l10n.actionDelete)) {
         await f();
-        ref.read(noticeProvider.notifier).show('Deleted $what');
+        ref.read(noticeProvider.notifier).show(done);
       }
     }
 
@@ -824,26 +883,26 @@ class PrivacySection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Security',
+          title: context.l10n.settingsPrivacySecurity,
           children: [
-            const ListTile(leading: Icon(Icons.shield_rounded), title: Text('Passwords'), subtitle: Text('Stored in the system keychain / keystore (encrypted file fallback)')),
+            ListTile(leading: const Icon(Icons.shield_rounded), title: Text(context.l10n.settingsPrivacyPasswords), subtitle: Text(context.l10n.settingsPrivacyPasswordsSub)),
           ],
         ),
         const AppLockSettingsGroup(),
         const EncryptionSettingsGroup(),
-        const SettingsGroup(
-          title: 'Privacy',
-          children: [ListTile(leading: Icon(Icons.visibility_off_rounded), title: Text('No telemetry'), subtitle: Text('SoftphonePro sends no analytics. Network traffic goes only to your SIP servers.'))],
+        SettingsGroup(
+          title: context.l10n.settingsPrivacyGroup,
+          children: [ListTile(leading: const Icon(Icons.visibility_off_rounded), title: Text(context.l10n.settingsPrivacyNoTelemetry), subtitle: Text(context.l10n.settingsPrivacyNoTelemetrySub))],
         ),
         SettingsGroup(
-          title: 'Your data',
+          title: context.l10n.settingsPrivacyYourData,
           children: [
-            ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Clear call history'), onTap: () => wipe('call history', () => ref.read(historyProvider.notifier).clear())),
-            ListTile(leading: const Icon(Icons.people_rounded), title: const Text('Delete all contacts'), onTap: () => wipe('all contacts', () => ref.read(contactsProvider.notifier).clear())),
+            ListTile(leading: const Icon(Icons.history_rounded), title: Text(context.l10n.settingsPrivacyClearHistory), onTap: () => wipe(context.l10n.settingsPrivacyConfirmHistory, context.l10n.settingsPrivacyDeletedHistory, () => ref.read(historyProvider.notifier).clear())),
+            ListTile(leading: const Icon(Icons.people_rounded), title: Text(context.l10n.settingsPrivacyDeleteContacts), onTap: () => wipe(context.l10n.settingsPrivacyConfirmContacts, context.l10n.settingsPrivacyDeletedContacts, () => ref.read(contactsProvider.notifier).clear())),
             ListTile(
               leading: const Icon(Icons.chat_rounded),
-              title: const Text('Delete all messages'),
-              onTap: () => wipe('all messages', () async {
+              title: Text(context.l10n.settingsPrivacyDeleteMessages),
+              onTap: () => wipe(context.l10n.settingsPrivacyConfirmMessages, context.l10n.settingsPrivacyDeletedMessages, () async {
                 final m = ref.read(messagesProvider.notifier);
                 for (final c in ref.read(messagesProvider).conversations) {
                   await m.deleteConversation(c.key);
@@ -867,23 +926,23 @@ class LanSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'LAN Link',
-          footer: 'Devices on the same network find each other, pair with a 6-digit code and talk directly, without any server.',
+          title: context.l10n.settingsLanGroup,
+          footer: context.l10n.settingsLanFooter,
           children: [
-            SwitchTile(icon: Icons.lan_rounded, title: 'Enable LAN Link', value: s.lanEnabled, onChanged: (v) => _s(ref).update({'lanEnabled': v})),
-            TextTile(icon: Icons.badge_rounded, title: 'Device name', hint: 'This device', value: s.lanDeviceName, onChanged: (v) => _s(ref).update({'lanDeviceName': v})),
-            SwitchTile(icon: Icons.volume_up_rounded, title: 'Allow intercom', subtitle: 'Let paired devices call you and be auto-answered', value: s.lanAllowIntercom, onChanged: (v) => _s(ref).update({'lanAllowIntercom': v})),
-            if (s.lanAllowIntercom) SwitchTile(icon: Icons.help_outline_rounded, title: 'Ask before allowing intercom', subtitle: 'Otherwise paired devices are auto-answered for 30 s after they ask', value: s.lanIntercomPrompt, onChanged: (v) => _s(ref).update({'lanIntercomPrompt': v})),
-            SwitchTile(icon: Icons.download_for_offline_rounded, title: 'Auto-accept files from paired devices', subtitle: 'Otherwise you are asked for every file', value: s.lanAutoAcceptFiles, onChanged: (v) => _s(ref).update({'lanAutoAcceptFiles': v})),
-            SwitchTile(icon: Icons.call_received_rounded, title: 'Let paired devices pull my calls', subtitle: 'A paired device can take over a call that is active here', value: s.lanAllowPull, onChanged: (v) => _s(ref).update({'lanAllowPull': v})),
-            TextTile(icon: Icons.folder_rounded, title: 'Downloads folder', hint: 'Default (Downloads/SoftphonePro)', value: s.lanDownloadsDir, onChanged: (v) => _s(ref).update({'lanDownloadsDir': v})),
-            TextTile(icon: Icons.settings_ethernet_rounded, title: 'Link port', hint: 'Automatic', value: s.lanLinkPort == 0 ? '' : '${s.lanLinkPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'lanLinkPort': int.tryParse(v.trim()) ?? 0})),
+            SwitchTile(icon: Icons.lan_rounded, title: context.l10n.settingsLanEnable, value: s.lanEnabled, onChanged: (v) => _s(ref).update({'lanEnabled': v})),
+            TextTile(icon: Icons.badge_rounded, title: context.l10n.settingsLanDeviceName, hint: context.l10n.settingsLanDeviceNameHint, value: s.lanDeviceName, onChanged: (v) => _s(ref).update({'lanDeviceName': v})),
+            SwitchTile(icon: Icons.volume_up_rounded, title: context.l10n.settingsLanAllowIntercom, subtitle: context.l10n.settingsLanAllowIntercomSub, value: s.lanAllowIntercom, onChanged: (v) => _s(ref).update({'lanAllowIntercom': v})),
+            if (s.lanAllowIntercom) SwitchTile(icon: Icons.help_outline_rounded, title: context.l10n.settingsLanAskIntercom, subtitle: context.l10n.settingsLanAskIntercomSub, value: s.lanIntercomPrompt, onChanged: (v) => _s(ref).update({'lanIntercomPrompt': v})),
+            SwitchTile(icon: Icons.download_for_offline_rounded, title: context.l10n.settingsLanAutoAcceptFiles, subtitle: context.l10n.settingsLanAutoAcceptFilesSub, value: s.lanAutoAcceptFiles, onChanged: (v) => _s(ref).update({'lanAutoAcceptFiles': v})),
+            SwitchTile(icon: Icons.call_received_rounded, title: context.l10n.settingsLanAllowPull, subtitle: context.l10n.settingsLanAllowPullSub, value: s.lanAllowPull, onChanged: (v) => _s(ref).update({'lanAllowPull': v})),
+            TextTile(icon: Icons.folder_rounded, title: context.l10n.settingsLanDownloads, hint: context.l10n.settingsLanDownloadsHint, value: s.lanDownloadsDir, onChanged: (v) => _s(ref).update({'lanDownloadsDir': v})),
+            TextTile(icon: Icons.settings_ethernet_rounded, title: context.l10n.settingsLanPort, hint: context.l10n.commonAutomatic, value: s.lanLinkPort == 0 ? '' : '${s.lanLinkPort}', keyboardType: TextInputType.number, onChanged: (v) => _s(ref).update({'lanLinkPort': int.tryParse(v.trim()) ?? 0})),
           ],
         ),
         if (acc.profiles.isNotEmpty)
           SettingsGroup(
-            title: 'Accounts shared with paired devices',
-            footer: 'Sharing a registered account lets a paired device on the same server receive your calls directly (call transfer) instead of relaying them.',
+            title: context.l10n.settingsLanSharedAccounts,
+            footer: context.l10n.settingsLanSharedAccountsFooter,
             children: [
               for (final p in acc.profiles)
                 CheckboxListTile(
@@ -928,14 +987,14 @@ class AdvancedSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Engine',
+          title: context.l10n.settingsAdvEngine,
           children: [
-            SwitchTile(icon: Icons.science_rounded, title: 'Use simulator', subtitle: 'Run without the native engine. Calls are simulated.', value: s.useSimulator, onChanged: (v) => _s(ref).update({'useSimulator': v})),
-            SelectTile<int>(title: 'Log level', value: s.logLevel, options: const {1: 'Errors', 3: 'Info', 4: 'Debug', 5: 'Verbose'}, onChanged: (v) => _s(ref).update({'logLevel': v})),
-            SwitchTile(title: 'SIP trace', value: s.sipTrace, onChanged: (v) => _s(ref).update({'sipTrace': v})),
+            SwitchTile(icon: Icons.science_rounded, title: context.l10n.settingsAdvSimulator, subtitle: context.l10n.settingsAdvSimulatorSub, value: s.useSimulator, onChanged: (v) => _s(ref).update({'useSimulator': v})),
+            SelectTile<int>(title: context.l10n.settingsAdvLogLevel, value: s.logLevel, options: {1: context.l10n.settingsAdvLogErrors, 3: context.l10n.settingsAdvLogInfo, 4: context.l10n.settingsAdvLogDebug, 5: context.l10n.settingsAdvLogVerbose}, onChanged: (v) => _s(ref).update({'logLevel': v})),
+            SwitchTile(title: context.l10n.settingsAdvSipTrace, value: s.sipTrace, onChanged: (v) => _s(ref).update({'sipTrace': v})),
             ListTile(
               leading: const Icon(Icons.restart_alt_rounded),
-              title: const Text('Restart engine'),
+              title: Text(context.l10n.settingsAdvRestartEngine),
               subtitle: Text('${e.phase.name}${e.version.isNotEmpty ? ', ${e.version}' : ''}'),
               onTap: () => ref.read(engineProvider.notifier).restart(),
             ),
@@ -943,13 +1002,13 @@ class AdvancedSection extends ConsumerWidget {
         ),
         if (desktop)
           SettingsGroup(
-            title: 'Desktop',
+            title: context.l10n.settingsAdvDesktop,
             children: [
-              SwitchTile(icon: Icons.login_rounded, title: 'Start at login', value: s.startAtLogin, onChanged: (v) {
+              SwitchTile(icon: Icons.login_rounded, title: context.l10n.settingsAdvStartAtLogin, value: s.startAtLogin, onChanged: (v) {
                 _s(ref).update({'startAtLogin': v});
                 ref.read(platformServicesProvider).setStartAtLogin(v);
               }),
-              SwitchTile(icon: Icons.minimize_rounded, title: 'Close to tray', subtitle: 'Closing the window keeps SoftphonePro running so calls can still ring. Quit from the tray / menu bar icon.', value: s.minimizeToTray, onChanged: (v) => _s(ref).update({'minimizeToTray': v})),
+              SwitchTile(icon: Icons.minimize_rounded, title: context.l10n.settingsAdvCloseToTray, subtitle: context.l10n.settingsAdvCloseToTraySub, value: s.minimizeToTray, onChanged: (v) => _s(ref).update({'minimizeToTray': v})),
             ],
           ),
         if (desktop) const AutomationSettingsGroup(),
@@ -976,24 +1035,24 @@ class AboutSection extends StatelessWidget {
               ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.asset('assets/branding/icon_1024.png', width: 84, height: 84, errorBuilder: (_, __, ___) => const Icon(Icons.phone_rounded, size: 64))),
               const SizedBox(height: 12),
               Text('SoftphonePro', style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-              Text('Version $kAppVersion', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+              Text(context.l10n.settingsAboutVersion(kAppVersion), style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
             ],
           ),
         ),
         const UpdatesSettingsGroup(),
         SettingsGroup(
-          title: 'Licence',
-          footer: 'SoftphonePro is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 or later. It is distributed WITHOUT ANY WARRANTY.',
+          title: context.l10n.settingsAboutLicence,
+          footer: context.l10n.settingsAboutLicenceFooter,
           children: [
-            NavTile(icon: Icons.gavel_rounded, title: 'GNU GPL v3 or later', subtitle: 'Source code available in the project repository', onTap: () => showLicensePage(context: context, applicationName: 'SoftphonePro', applicationVersion: kAppVersion)),
+            NavTile(icon: Icons.gavel_rounded, title: context.l10n.settingsAboutGpl, subtitle: context.l10n.settingsAboutGplSub, onTap: () => showLicensePage(context: context, applicationName: 'SoftphonePro', applicationVersion: kAppVersion)),
           ],
         ),
         SettingsGroup(
-          title: 'Third-party notices',
+          title: context.l10n.settingsAboutThirdParty,
           children: [
             for (final n in kNativeNotices)
-              ListTile(title: Text(n.name), subtitle: Text('${n.license}. ${n.purpose}.${n.version.isEmpty ? '' : ' Version ${n.version}.'}')),
-            const ListTile(title: Text('Flutter and Dart packages'), subtitle: Text('BSD 3-clause, MIT and Apache 2.0. See the licence page.')),
+              ListTile(title: Text(n.name), subtitle: Text(n.version.isEmpty ? context.l10n.settingsAboutNotice(n.license, n.purpose) : context.l10n.settingsAboutNoticeVersion(n.license, n.purpose, n.version))),
+            ListTile(title: Text(context.l10n.settingsAboutPackages), subtitle: Text(context.l10n.settingsAboutPackagesSub)),
           ],
         ),
       ],

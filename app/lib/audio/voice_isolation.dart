@@ -3,20 +3,21 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
 import '../services/engine_controller.dart';
 import '../services/settings_controller.dart';
 
 /// Low / Medium / High / Max for a 0-1 strength.
-String strengthLabel(double v) {
-  if (v < 0.35) return 'Low';
-  if (v < 0.65) return 'Medium';
-  if (v < 0.9) return 'High';
-  return 'Max';
+String strengthLabel(AppLocalizations l, double v) {
+  if (v < 0.35) return l.audioStrengthLow;
+  if (v < 0.65) return l.audioStrengthMedium;
+  if (v < 0.9) return l.audioStrengthHigh;
+  return l.audioStrengthMax;
 }
 
 /// "High (80%)".
-String strengthText(double v) => '${strengthLabel(v)} (${(v * 100).round()}%)';
+String strengthText(AppLocalizations l, double v) => l.audioStrengthText(strengthLabel(l, v), (v * 100).round());
 
 /// The voice-isolation parts of [s] as an engine config.
 VoiceIsolationConfig voiceIsolationConfigOf(AppSettings s) => VoiceIsolationConfig(

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../diagnostics/sip_dialogs.dart';
 import '../../../diagnostics/sip_message.dart';
+import '../../../l10n/l10n.dart';
 import 'trace_style.dart';
 
 const double _kRowH = 52;
 const double _kTimeW = 66;
 
-/// Ladder (sequence) diagram of one SIP dialog.
+/// Ladder (sequence) diagram of one SIP dialog. The diagram is an
+/// absolutely positioned time/lane drawing and never mirrors in RTL locales.
 class LadderDiagram extends StatelessWidget {
   const LadderDiagram({super.key, required this.ladder, required this.onTap});
   final Ladder ladder;
@@ -16,7 +18,10 @@ class LadderDiagram extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return LayoutBuilder(
+    final l = context.l10n;
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: LayoutBuilder(
       builder: (context, c) {
         final lanes = ladder.lanes.length;
         final minLane = 150.0;
@@ -45,7 +50,7 @@ class LadderDiagram extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            i == 0 ? 'Local\n${ladder.lanes[0]}' : ladder.lanes[i],
+                            i == 0 ? '${l.diagLadderLocal}\n${ladder.lanes[0]}' : ladder.lanes[i],
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
@@ -77,6 +82,7 @@ class LadderDiagram extends StatelessWidget {
         if (width <= c.maxWidth + 0.5) return body;
         return SingleChildScrollView(scrollDirection: Axis.horizontal, child: SizedBox(width: width, height: c.maxHeight, child: body));
       },
+    ),
     );
   }
 }
@@ -101,7 +107,7 @@ class _LadderRow extends StatelessWidget {
     final right = xa < xb ? xb : xa;
     return Semantics(
       button: true,
-      label: '${m.outgoing ? 'Sent' : 'Received'} ${m.longLabel}',
+      label: m.outgoing ? context.l10n.diagLadderSent(m.longLabel) : context.l10n.diagLadderReceived(m.longLabel),
       child: InkWell(
         onTap: () => onTap(m),
         child: Stack(

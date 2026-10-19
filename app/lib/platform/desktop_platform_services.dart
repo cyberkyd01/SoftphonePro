@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:window_manager/window_manager.dart';
+import 'dart:ui' show Locale;
 
+import '../l10n/l10n.dart';
 import 'desktop/desktop_channel.dart';
 import 'desktop/desktop_notifier.dart';
 import 'desktop/tray_controller.dart';
@@ -30,6 +32,11 @@ class DesktopPlatformServices extends NoopPlatformServices {
        notifier = notifier ?? DesktopNotifier();
 
   final List<String> startupArgs;
+
+  /// Supplies the current strings (set by the desktop shell, which can read
+  /// the language setting); English until then.
+  AppLocalizations Function()? l10n;
+  AppLocalizations get _l => l10n?.call() ?? lookupAppLocalizations(const Locale('en'));
   final DesktopChannel channel;
   final TrayController tray;
   final DesktopNotifier notifier;
@@ -117,6 +124,8 @@ class DesktopPlatformServices extends NoopPlatformServices {
       callKey: callKey,
       title: title,
       body: body,
+      answerLabel: _l.trayNotificationAnswer,
+      declineLabel: _l.trayNotificationDecline,
       onTap: (tap) {
         switch (tap) {
           case NotificationTap.answer:
@@ -229,8 +238,8 @@ class DesktopPlatformServices extends NoopPlatformServices {
   }
 
   Future<void> _pushTray() {
-    var tip = _inCall ? (_callTooltip ?? 'SoftphonePro - in a call') : _baseTooltip;
-    if (_badge > 0) tip = '$tip - $_badge new';
+    var tip = _inCall ? (_callTooltip ?? _l.trayTooltipInCall) : _baseTooltip;
+    if (_badge > 0) tip = _l.trayTooltipWithNew(tip, _badge);
     return tray.setState(tooltip: tip, ringing: _ringing, badge: _badge);
   }
 

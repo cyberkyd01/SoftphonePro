@@ -1,0 +1,4 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro, aramalar sırasında sesinizi iletmek için mikrofona ihtiyaç duyar.";
+"NSContactsUsageDescription" = "SoftphonePro, siz istediğinizde kişilerinizi içe aktarır.";
+"NSCameraUsageDescription" = "SoftphonePro, yapılandırma ve eşleştirme QR kodlarını taramak için kamerayı kullanır.";
+"NSLocalNetworkUsageDescription" = "SoftphonePro, diğer cihazlarınızı bulmak ve bağlamak (LAN Link) ve doğrudan arama yapmak için yerel ağı kullanır.";

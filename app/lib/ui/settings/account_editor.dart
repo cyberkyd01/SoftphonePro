@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
+import '../../l10n/l10n.dart';
 import '../../models/account_profile.dart';
 import '../../recordings/recording_rules.dart';
 import '../../services/accounts_controller.dart';
@@ -48,10 +49,10 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
   Widget _sw(String title, bool v, ValueChanged<bool> on, {String? sub}) => SwitchTile(title: title, subtitle: sub, value: v, onChanged: on);
   Widget _num(String title, int v, ValueChanged<int> on, {String? sub, int? min, int? max}) => TextTile(
     title: title,
-    subtitle: sub == null && min != null && max != null ? 'Allowed range $min to $max' : sub,
+    subtitle: sub == null && min != null && max != null ? context.l10n.acctRangeAllowed(min, max) : sub,
     value: '$v',
     keyboardType: TextInputType.number,
-    validator: (s) => validateInt(s, min: min, max: max),
+    validator: (s) => validateInt(s, min: min, max: max, l: context.l10n),
     onChanged: (s) => on(int.tryParse(s) ?? v),
   );
 
@@ -70,22 +71,22 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
       canPop: !_dirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final discard = await confirm(context, title: 'Discard changes?', message: 'Your edits to this account are not saved.', confirmLabel: 'Discard');
+        final discard = await confirm(context, title: context.l10n.acctEditorDiscardTitle, message: context.l10n.acctEditorDiscardMessage, confirmLabel: context.l10n.acctEditorDiscardConfirm);
         if (discard && context.mounted) context.pop();
       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(_p.name),
           actions: [
-            TextButton(key: const Key('save-account'), onPressed: _dirty ? _save : null, child: const Text('Save')),
+            TextButton(key: const Key('save-account'), onPressed: _dirty ? _save : null, child: Text(context.l10n.actionSave)),
             PopupMenuButton<String>(
               onSelected: (v) async {
-                if (v == 'delete' && await confirm(context, title: 'Delete ${_p.name}?', message: 'The account and its saved password will be removed from this device.')) {
+                if (v == 'delete' && await confirm(context, title: context.l10n.acctEditorDeleteTitle(_p.name), message: context.l10n.acctEditorDeleteMessage)) {
                   await ref.read(accountsProvider.notifier).remove(_p.id);
                   if (context.mounted) context.go('/settings/accounts');
                 }
               },
-              itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('Delete account'))],
+              itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text(context.l10n.acctEditorMenuDelete))],
             ),
           ],
         ),
@@ -95,28 +96,28 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 48),
               children: [
-                SettingsGroup(title: 'Basic', children: [
-                  _tx('Label', _p.label, (v) => _upd((p) => p.copyWith(label: v)), hint: 'e.g. Office'),
-                  _tx('Display name', c.displayName, (v) => _cfg((x) => x.copyWith(displayName: v))),
-                  _tx('Username', c.username, (v) => _cfg((x) => x.copyWith(username: v))),
+                SettingsGroup(title: context.l10n.acctGroupBasic, children: [
+                  _tx(context.l10n.acctFieldLabel, _p.label, (v) => _upd((p) => p.copyWith(label: v)), hint: context.l10n.acctFieldLabelHint),
+                  _tx(context.l10n.acctFieldDisplayName, c.displayName, (v) => _cfg((x) => x.copyWith(displayName: v))),
+                  _tx(context.l10n.acctFieldUsername, c.username, (v) => _cfg((x) => x.copyWith(username: v))),
                   ListTile(
                     key: const Key('acc-protocol'),
-                    title: const Text('Protocol'),
-                    subtitle: const Text('Fixed when the account is created'),
+                    title: Text(context.l10n.acctFieldProtocol),
+                    subtitle: Text(context.l10n.acctFieldProtocolSub),
                     trailing: Text(iax ? 'IAX2' : 'SIP', style: Theme.of(context).textTheme.bodyMedium),
                   ),
-                  if (!iax) _tx('Authorization user', c.authUser ?? '', (v) => _cfg((x) => AccountConfigX.withAuth(x, v)), hint: 'Same as username', sub: 'Only if the provider uses a different login name than the username'),
-                  _tx('Password', c.password, (v) => _cfg((x) => x.copyWith(password: v)), obscure: true),
+                  if (!iax) _tx(context.l10n.acctFieldAuthUser, c.authUser ?? '', (v) => _cfg((x) => AccountConfigX.withAuth(x, v)), hint: context.l10n.acctFieldAuthUserHint, sub: context.l10n.acctFieldAuthUserSub),
+                  _tx(context.l10n.acctFieldPassword, c.password, (v) => _cfg((x) => x.copyWith(password: v)), obscure: true),
                   if (iax) ...[
-                    _tx('Server host', c.iax.host.isEmpty ? c.domain : c.iax.host, (v) => _cfg((x) => x.copyWith(domain: v, iax: x.iax.copyWith(host: v))), validator: validateHost),
-                    _num('Port', c.iax.port, (v) => _cfg((x) => x.copyWith(iax: x.iax.copyWith(port: v))), min: 1, max: 65535, sub: 'IAX2 default is 4569'),
-                    _tx('Context', c.iax.context ?? '', (v) => _cfg((x) => x.copyWith(iax: IaxConfig(host: x.iax.host, port: x.iax.port, context: v.isEmpty ? null : v))), hint: 'Not set', sub: 'Optional. Sent to the PBX as the called context'),
+                    _tx(context.l10n.acctFieldServerHost, c.iax.host.isEmpty ? c.domain : c.iax.host, (v) => _cfg((x) => x.copyWith(domain: v, iax: x.iax.copyWith(host: v))), validator: (s) => validateHost(s, context.l10n)),
+                    _num(context.l10n.acctFieldPort, c.iax.port, (v) => _cfg((x) => x.copyWith(iax: x.iax.copyWith(port: v))), min: 1, max: 65535, sub: context.l10n.acctFieldIaxPortSub),
+                    _tx(context.l10n.acctFieldIaxContext, c.iax.context ?? '', (v) => _cfg((x) => x.copyWith(iax: IaxConfig(host: x.iax.host, port: x.iax.port, context: v.isEmpty ? null : v))), hint: context.l10n.commonNotSet, sub: context.l10n.acctFieldIaxContextSub),
                   ] else
-                    _tx('Server / domain', c.domain, (v) => _cfg((x) => x.copyWith(domain: v)), validator: validateHost, sub: 'host or host:port'),
-                  _sw('Enabled', _p.enabled, (v) => _upd((p) => p.copyWith(enabled: v))),
-                  _sw('Default account for outgoing calls', _p.isDefault, (v) => _upd((p) => p.copyWith(isDefault: v))),
+                    _tx(context.l10n.acctFieldServerDomain, c.domain, (v) => _cfg((x) => x.copyWith(domain: v)), validator: (s) => validateHost(s, context.l10n), sub: context.l10n.acctFieldServerDomainSub),
+                  _sw(context.l10n.acctFieldEnabled, _p.enabled, (v) => _upd((p) => p.copyWith(enabled: v))),
+                  _sw(context.l10n.acctFieldDefault, _p.isDefault, (v) => _upd((p) => p.copyWith(isDefault: v))),
                   ListTile(
-                    title: const Text('Colour'),
+                    title: Text(context.l10n.acctFieldColour),
                     trailing: Wrap(spacing: 8, children: [
                       for (final col in kAvatarPalette.take(7))
                         InkResponse(onTap: () => _upd((p) => p.copyWith(color: col)), child: Container(width: 26, height: 26, decoration: BoxDecoration(color: Color(col), shape: BoxShape.circle, border: _p.color == col ? Border.all(width: 3, color: Theme.of(context).colorScheme.onSurface) : null))),
@@ -124,15 +125,15 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   ),
                 ]),
                 if (iax) ...[
-                  SettingsGroup(title: 'Registration', children: [
-                    _sw('Register', c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: 'Turn off for peers that need no registration'),
-                    _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: 'Asterisk usually forces 60 s. Range 10 to 86400'),
-                    _num('Retry interval (s)', c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400),
-                    _num('First retry (s)', c.regFirstRetrySec, (v) => _cfg((x) => x.copyWith(regFirstRetrySec: v)), min: 0, max: 86400),
+                  SettingsGroup(title: context.l10n.acctGroupRegistration, children: [
+                    _sw(context.l10n.acctFieldRegister, c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: context.l10n.acctFieldRegisterSubIax),
+                    _num(context.l10n.acctFieldRegExpiry, c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: context.l10n.acctFieldRegExpirySubIax),
+                    _num(context.l10n.acctFieldRetryInterval, c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400),
+                    _num(context.l10n.acctFieldFirstRetry, c.regFirstRetrySec, (v) => _cfg((x) => x.copyWith(regFirstRetrySec: v)), min: 0, max: 86400),
                   ]),
                   SettingsGroup(
-                    title: 'Codecs',
-                    footer: 'IAX2 supports G.711 and GSM. Drag to set the preference order.',
+                    title: context.l10n.acctGroupCodecs,
+                    footer: context.l10n.acctGroupCodecsFooterIax,
                     children: [
                       ReorderableListView(
                         shrinkWrap: true,
@@ -151,7 +152,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                               leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_indicator_rounded)),
                               title: Text(iaxCodecs[i].split('/').first),
                               trailing: c.codecs.contains(iaxCodecs[i]) || c.codecs.isEmpty
-                                  ? IconButton(tooltip: 'Remove ${iaxCodecs[i].split('/').first}', icon: const Icon(Icons.close_rounded), onPressed: iaxCodecs.length <= 1 ? null : () => _cfg((x) => x.copyWith(codecs: iaxCodecs.where((e) => e != iaxCodecs[i]).toList())))
+                                  ? IconButton(tooltip: context.l10n.acctCodecRemove(iaxCodecs[i].split('/').first), icon: const Icon(Icons.close_rounded), onPressed: iaxCodecs.length <= 1 ? null : () => _cfg((x) => x.copyWith(codecs: iaxCodecs.where((e) => e != iaxCodecs[i]).toList())))
                                   : null,
                             ),
                         ],
@@ -159,7 +160,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                       if (iaxCodecs.length < iaxKnown.length)
                         ListTile(
                           leading: const Icon(Icons.add_rounded),
-                          title: const Text('Add codec'),
+                          title: Text(context.l10n.acctCodecAdd),
                           onTap: () async {
                             final pick = await showModalBottomSheet<String>(
                               context: context,
@@ -171,62 +172,62 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     ],
                   ),
                 ] else ...[
-                SettingsGroup(title: 'Server and transport', children: [
-                  _tx('Registrar override', c.registrar ?? '', (v) => _cfg((x) => AccountConfigX.withRegistrar(x, v)), hint: 'sip:server:5060'),
-                  _tx('Backup registrar', _p.backupRegistrar, (v) => _upd((p) => p.copyWith(backupRegistrar: v.trim())), hint: 'None', sub: 'Used after 3 failed attempts; the primary is retried every 5 minutes'),
-                  _tx('Outbound proxies', c.proxies.join(', '), (v) => _cfg((x) => x.copyWith(proxies: v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList())), hint: 'None'),
+                SettingsGroup(title: context.l10n.acctGroupServerTransport, children: [
+                  _tx(context.l10n.acctFieldRegistrar, c.registrar ?? '', (v) => _cfg((x) => AccountConfigX.withRegistrar(x, v)), hint: 'sip:server:5060'),
+                  _tx(context.l10n.acctFieldBackupRegistrar, _p.backupRegistrar, (v) => _upd((p) => p.copyWith(backupRegistrar: v.trim())), hint: context.l10n.commonNone, sub: context.l10n.acctFieldBackupRegistrarSub),
+                  _tx(context.l10n.acctFieldProxies, c.proxies.join(', '), (v) => _cfg((x) => x.copyWith(proxies: v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty).toList())), hint: context.l10n.commonNone),
                   SelectTile<AccTransport>(
                     key: const Key('acc-transport'),
-                    title: 'Transport',
-                    subtitle: c.transport == AccTransport.auto ? 'Looks up the server\'s DNS SRV records and picks TLS, TCP or UDP' : null,
+                    title: context.l10n.acctFieldTransport,
+                    subtitle: c.transport == AccTransport.auto ? context.l10n.acctFieldTransportAutoSub : null,
                     value: c.transport,
-                    options: {for (final t in AccTransport.values) t: t == AccTransport.auto ? 'Automatic (DNS SRV)' : t.wire.toUpperCase()},
+                    options: {for (final t in AccTransport.values) t: t == AccTransport.auto ? context.l10n.acctTransportAuto : t.wire.toUpperCase()},
                     onChanged: (v) => _cfg((x) => x.copyWith(transport: v)),
                   ),
-                  if (ws) _tx('WebSocket path', c.wsPath, (v) => _cfg((x) => x.copyWith(wsPath: v)), hint: '/ws', sub: 'HTTP path of the WebSocket upgrade, e.g. /ws. Must start with "/"', validator: validateWsPath),
-                  _num('Registration expiry (s)', c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: '300 to 3600 is typical. Range 10 to 86400'),
-                  if (!ws) _num('Keep-alive (s)', c.keepAliveSec, (v) => _cfg((x) => x.copyWith(keepAliveSec: v)), min: 0, max: 3600, sub: 'UDP keep-alive interval. 0 turns it off. Range 0 to 3600'),
-                  _num('Local SIP port', c.localPort, (v) => _cfg((x) => x.copyWith(localPort: v)), min: 0, max: 65535, sub: '0 uses the shared transport. Range 0 to 65535'),
-                  _sw('Register', c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: 'Turn off for trunks without registration'),
-                  if (!ws) _sw('SIP Outbound (RFC 5626)', c.sipOutbound, (v) => _cfg((x) => x.copyWith(sipOutbound: v)), sub: 'Keeps a persistent flow through NAT. Needs server support'),
+                  if (ws) _tx(context.l10n.acctFieldWsPath, c.wsPath, (v) => _cfg((x) => x.copyWith(wsPath: v)), hint: '/ws', sub: context.l10n.acctFieldWsPathSub, validator: (s) => validateWsPath(s, context.l10n)),
+                  _num(context.l10n.acctFieldRegExpiry, c.regExpires, (v) => _cfg((x) => x.copyWith(regExpires: v)), min: 10, max: 86400, sub: context.l10n.acctFieldRegExpirySubSip),
+                  if (!ws) _num(context.l10n.acctFieldKeepAlive, c.keepAliveSec, (v) => _cfg((x) => x.copyWith(keepAliveSec: v)), min: 0, max: 3600, sub: context.l10n.acctFieldKeepAliveSub),
+                  _num(context.l10n.acctFieldLocalPort, c.localPort, (v) => _cfg((x) => x.copyWith(localPort: v)), min: 0, max: 65535, sub: context.l10n.acctFieldLocalPortSub),
+                  _sw(context.l10n.acctFieldRegister, c.register, (v) => _cfg((x) => x.copyWith(register: v)), sub: context.l10n.acctFieldRegisterSubSip),
+                  if (!ws) _sw(context.l10n.acctFieldSipOutbound, c.sipOutbound, (v) => _cfg((x) => x.copyWith(sipOutbound: v)), sub: context.l10n.acctFieldSipOutboundSub),
                 ]),
                 if (c.transport == AccTransport.tls || c.transport == AccTransport.wss || c.transport == AccTransport.auto)
                   TlsClientCertGroup(config: c, onChanged: (cfg) => _upd((p) => p.copyWith(config: cfg))),
-                SettingsGroup(title: 'NAT', children: [
-                  _sw('Use STUN', c.useStun, (v) => _cfg((x) => x.copyWith(useStun: v))),
+                SettingsGroup(title: context.l10n.acctGroupNat, children: [
+                  _sw(context.l10n.acctFieldUseStun, c.useStun, (v) => _cfg((x) => x.copyWith(useStun: v))),
                   _sw('ICE', c.ice, (v) => _cfg((x) => x.copyWith(ice: v))),
-                  _sw('TURN relay', c.turn.enabled, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(enabled: v)))),
+                  _sw(context.l10n.acctFieldTurn, c.turn.enabled, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(enabled: v)))),
                   if (c.turn.enabled) ...[
-                    _tx('TURN server', c.turn.server, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(server: v)))),
-                    _tx('TURN username', c.turn.username, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(username: v)))),
-                    _tx('TURN password', c.turn.password, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(password: v))), obscure: true),
+                    _tx(context.l10n.acctFieldTurnServer, c.turn.server, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(server: v)))),
+                    _tx(context.l10n.acctFieldTurnUsername, c.turn.username, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(username: v)))),
+                    _tx(context.l10n.acctFieldTurnPassword, c.turn.password, (v) => _cfg((x) => x.copyWith(turn: x.turn.copyWith(password: v))), obscure: true),
                   ],
                   if (!ws) ...[
-                    _sw('Rewrite Contact header', c.contactRewrite, (v) => _cfg((x) => x.copyWith(contactRewrite: v)), sub: 'Use the address the server sees. Keep on behind NAT'),
-                    _sw('Rewrite Via header', c.viaRewrite, (v) => _cfg((x) => x.copyWith(viaRewrite: v)), sub: 'Use the address the server sees. Keep on behind NAT'),
+                    _sw(context.l10n.acctFieldContactRewrite, c.contactRewrite, (v) => _cfg((x) => x.copyWith(contactRewrite: v)), sub: context.l10n.acctFieldRewriteSub),
+                    _sw(context.l10n.acctFieldViaRewrite, c.viaRewrite, (v) => _cfg((x) => x.copyWith(viaRewrite: v)), sub: context.l10n.acctFieldRewriteSub),
                   ],
-                  _sw('Rewrite SDP address', c.sdpNatRewrite, (v) => _cfg((x) => x.copyWith(sdpNatRewrite: v)), sub: 'Replace the media address in SDP with the public one'),
-                  SelectTile<Ipv6Mode>(title: 'IPv6 signalling', value: c.ipv6Sip, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Sip: v))),
-                  SelectTile<Ipv6Mode>(title: 'IPv6 media', value: c.ipv6Media, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Media: v))),
+                  _sw(context.l10n.acctFieldSdpRewrite, c.sdpNatRewrite, (v) => _cfg((x) => x.copyWith(sdpNatRewrite: v)), sub: context.l10n.acctFieldSdpRewriteSub),
+                  SelectTile<Ipv6Mode>(title: context.l10n.acctFieldIpv6Sip, value: c.ipv6Sip, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Sip: v))),
+                  SelectTile<Ipv6Mode>(title: context.l10n.acctFieldIpv6Media, value: c.ipv6Media, options: {for (final m in Ipv6Mode.values) m: m.wire}, onChanged: (v) => _cfg((x) => x.copyWith(ipv6Media: v))),
                 ]),
-                SettingsGroup(title: 'Advanced media', footer: 'WebRTC gateways need RTCP multiplexing and RTCP feedback.', children: [
-                  _sw('RTCP multiplexing', c.rtcpMux, (v) => _cfg((x) => x.copyWith(rtcpMux: v)), sub: 'Send RTP and RTCP on one port (rtcp-mux)'),
-                  _sw('RTCP feedback (AVPF)', c.rtcpFb, (v) => _cfg((x) => x.copyWith(rtcpFb: v)), sub: 'Offer RTP/AVPF with NACK. Needed for WebRTC servers'),
+                SettingsGroup(title: context.l10n.acctGroupAdvancedMedia, footer: context.l10n.acctGroupAdvancedMediaFooter, children: [
+                  _sw(context.l10n.acctFieldRtcpMux, c.rtcpMux, (v) => _cfg((x) => x.copyWith(rtcpMux: v)), sub: context.l10n.acctFieldRtcpMuxSub),
+                  _sw(context.l10n.acctFieldRtcpFb, c.rtcpFb, (v) => _cfg((x) => x.copyWith(rtcpFb: v)), sub: context.l10n.acctFieldRtcpFbSub),
                 ]),
-                SettingsGroup(title: 'Security', children: [
-                  SelectTile<SrtpMode>(title: 'Media encryption (SRTP)', value: c.srtp, options: const {SrtpMode.off: 'Off', SrtpMode.optional: 'Optional', SrtpMode.mandatory: 'Required'}, onChanged: (v) => _cfg((x) => x.copyWith(srtp: v))),
-                  SelectTile<SrtpKeying>(title: 'Key exchange', value: c.srtpKeying.isEmpty ? SrtpKeying.sdes : c.srtpKeying.first, options: const {SrtpKeying.sdes: 'SDES', SrtpKeying.dtls: 'DTLS'}, onChanged: (v) => _cfg((x) => x.copyWith(srtpKeying: [v]))),
-                  SelectTile<int>(title: 'Secure signalling', value: c.srtpSecureSignaling, options: const {0: 'Not required', 1: 'TLS hop-by-hop', 2: 'TLS end-to-end (sips)'}, onChanged: (v) => _cfg((x) => x.copyWith(srtpSecureSignaling: v))),
-                  SelectTile<String>(title: 'Auth algorithm', value: c.authAlgorithm, options: const {'auto': 'Automatic', 'md5': 'MD5', 'sha256': 'SHA-256'}, onChanged: (v) => _cfg((x) => x.copyWith(authAlgorithm: v))),
-                  _sw('Hide caller ID (privacy)', c.privacy, (v) => _cfg((x) => x.copyWith(privacy: v))),
-                  SelectTile<AcceptPolicy>(title: 'Incoming transfers (REFER)', value: c.referPolicy, options: const {AcceptPolicy.accept: 'Accept', AcceptPolicy.reject: 'Reject'}, onChanged: (v) => _cfg((x) => x.copyWith(referPolicy: v))),
-                  SelectTile<AcceptPolicy>(title: 'Presence watchers', value: c.watcherPolicy, options: const {AcceptPolicy.accept: 'Accept', AcceptPolicy.reject: 'Reject'}, onChanged: (v) => _cfg((x) => x.copyWith(watcherPolicy: v))),
+                SettingsGroup(title: context.l10n.acctGroupSecurity, children: [
+                  SelectTile<SrtpMode>(title: context.l10n.acctFieldSrtp, value: c.srtp, options: {SrtpMode.off: context.l10n.commonOff, SrtpMode.optional: context.l10n.acctOptOptional, SrtpMode.mandatory: context.l10n.acctOptRequired}, onChanged: (v) => _cfg((x) => x.copyWith(srtp: v))),
+                  SelectTile<SrtpKeying>(title: context.l10n.acctFieldKeyExchange, value: c.srtpKeying.isEmpty ? SrtpKeying.sdes : c.srtpKeying.first, options: {SrtpKeying.sdes: 'SDES', SrtpKeying.dtls: 'DTLS'}, onChanged: (v) => _cfg((x) => x.copyWith(srtpKeying: [v]))),
+                  SelectTile<int>(title: context.l10n.acctFieldSecureSignaling, value: c.srtpSecureSignaling, options: {0: context.l10n.acctOptNotRequired, 1: context.l10n.acctOptTlsHop, 2: context.l10n.acctOptTlsE2e}, onChanged: (v) => _cfg((x) => x.copyWith(srtpSecureSignaling: v))),
+                  SelectTile<String>(title: context.l10n.acctFieldAuthAlgorithm, value: c.authAlgorithm, options: {'auto': context.l10n.commonAutomatic, 'md5': 'MD5', 'sha256': 'SHA-256'}, onChanged: (v) => _cfg((x) => x.copyWith(authAlgorithm: v))),
+                  _sw(context.l10n.acctFieldPrivacy, c.privacy, (v) => _cfg((x) => x.copyWith(privacy: v))),
+                  SelectTile<AcceptPolicy>(title: context.l10n.acctFieldReferPolicy, value: c.referPolicy, options: {AcceptPolicy.accept: context.l10n.acctOptAccept, AcceptPolicy.reject: context.l10n.acctOptReject}, onChanged: (v) => _cfg((x) => x.copyWith(referPolicy: v))),
+                  SelectTile<AcceptPolicy>(title: context.l10n.acctFieldWatcherPolicy, value: c.watcherPolicy, options: {AcceptPolicy.accept: context.l10n.acctOptAccept, AcceptPolicy.reject: context.l10n.acctOptReject}, onChanged: (v) => _cfg((x) => x.copyWith(watcherPolicy: v))),
                 ]),
                 SettingsGroup(
-                  title: 'Codecs',
-                  footer: 'Overrides the global codec list for this account.',
+                  title: context.l10n.acctGroupCodecs,
+                  footer: context.l10n.acctGroupCodecsFooter,
                   children: [
-                    _sw('Use global codec order', c.codecs.isEmpty, (v) => _cfg((x) => x.copyWith(codecs: v ? <String>[] : orderCodecs(known, <String>[])))),
+                    _sw(context.l10n.acctFieldUseGlobalCodecs, c.codecs.isEmpty, (v) => _cfg((x) => x.copyWith(codecs: v ? <String>[] : orderCodecs(known, <String>[])))),
                     if (c.codecs.isNotEmpty)
                       ReorderableListView(
                         shrinkWrap: true,
@@ -244,14 +245,14 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                               key: ValueKey(codecs[i]),
                               leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_indicator_rounded)),
                               title: Text(codecs[i].split('/').first),
-                              trailing: IconButton(tooltip: 'Remove ${codecs[i].split('/').first}', icon: const Icon(Icons.close_rounded), onPressed: () => _cfg((x) => x.copyWith(codecs: codecs.where((e) => e != codecs[i]).toList()))),
+                              trailing: IconButton(tooltip: context.l10n.acctCodecRemove(codecs[i].split('/').first), icon: const Icon(Icons.close_rounded), onPressed: () => _cfg((x) => x.copyWith(codecs: codecs.where((e) => e != codecs[i]).toList()))),
                             ),
                         ],
                       ),
                     if (c.codecs.isNotEmpty && known.any((k) => !codecs.contains(k)))
                       ListTile(
                         leading: const Icon(Icons.add_rounded),
-                        title: const Text('Add codec'),
+                        title: Text(context.l10n.acctCodecAdd),
                         onTap: () async {
                           final pick = await showModalBottomSheet<String>(
                             context: context,
@@ -263,63 +264,63 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                   ],
                 ),
                 ],
-                SettingsGroup(title: 'Features', children: [
-                  _tx('Voicemail number', _p.voicemailNumber, (v) => _upd((p) => p.copyWith(voicemailNumber: v)), hint: '*97'),
-                  if (!iax) _sw('Voicemail indicator (MWI)', c.mwi, (v) => _cfg((x) => x.copyWith(mwi: v)), sub: 'Subscribe to message-waiting notifications'),
-                  if (!iax) _sw('Publish my presence', c.publishPresence, (v) => _cfg((x) => x.copyWith(publishPresence: v)), sub: 'Let the server share your online status'),
-                  _sw('Do not disturb', _p.dnd, (v) => _upd((p) => p.copyWith(dnd: v))),
-                  SelectTile<ForwardMode>(title: 'Call forwarding', value: _p.forwarding.mode, options: const {ForwardMode.off: 'Off', ForwardMode.always: 'Always', ForwardMode.busy: 'When busy', ForwardMode.noAnswer: 'No answer'}, onChanged: (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(mode: v)))),
-                  if (_p.forwarding.mode != ForwardMode.off) _tx('Forward to', _p.forwarding.target, (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(target: v))), hint: 'Number or SIP address'),
-                  if (_p.forwarding.mode == ForwardMode.noAnswer) _num('Ring for (s)', _p.forwarding.noAnswerSec, (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(noAnswerSec: v)))),
-                  _sw('Auto-answer', _p.autoAnswer.enabled, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(enabled: v)))),
+                SettingsGroup(title: context.l10n.acctGroupFeatures, children: [
+                  _tx(context.l10n.acctFieldVoicemailNumber, _p.voicemailNumber, (v) => _upd((p) => p.copyWith(voicemailNumber: v)), hint: '*97'),
+                  if (!iax) _sw(context.l10n.acctFieldMwi, c.mwi, (v) => _cfg((x) => x.copyWith(mwi: v)), sub: context.l10n.acctFieldMwiSub),
+                  if (!iax) _sw(context.l10n.acctFieldPublishPresence, c.publishPresence, (v) => _cfg((x) => x.copyWith(publishPresence: v)), sub: context.l10n.acctFieldPublishPresenceSub),
+                  _sw(context.l10n.acctFieldDnd, _p.dnd, (v) => _upd((p) => p.copyWith(dnd: v))),
+                  SelectTile<ForwardMode>(title: context.l10n.acctFieldForwarding, value: _p.forwarding.mode, options: {ForwardMode.off: context.l10n.commonOff, ForwardMode.always: context.l10n.acctOptForwardAlways, ForwardMode.busy: context.l10n.acctOptForwardBusy, ForwardMode.noAnswer: context.l10n.acctOptForwardNoAnswer}, onChanged: (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(mode: v)))),
+                  if (_p.forwarding.mode != ForwardMode.off) _tx(context.l10n.acctFieldForwardTo, _p.forwarding.target, (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(target: v))), hint: context.l10n.acctFieldForwardToHint),
+                  if (_p.forwarding.mode == ForwardMode.noAnswer) _num(context.l10n.acctFieldRingFor, _p.forwarding.noAnswerSec, (v) => _upd((p) => p.copyWith(forwarding: p.forwarding.copyWith(noAnswerSec: v)))),
+                  _sw(context.l10n.acctFieldAutoAnswer, _p.autoAnswer.enabled, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(enabled: v)))),
                   if (_p.autoAnswer.enabled) ...[
-                    _num('Answer after (s)', _p.autoAnswer.delaySec, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(delaySec: v)))),
-                    _sw('Only for intercom calls', _p.autoAnswer.onlyIntercomHeaders, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(onlyIntercomHeaders: v))), sub: 'Needs an auto-answer header from the PBX'),
+                    _num(context.l10n.acctFieldAnswerAfter, _p.autoAnswer.delaySec, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(delaySec: v)))),
+                    _sw(context.l10n.acctFieldIntercomOnly, _p.autoAnswer.onlyIntercomHeaders, (v) => _upd((p) => p.copyWith(autoAnswer: p.autoAnswer.copyWith(onlyIntercomHeaders: v))), sub: context.l10n.acctFieldIntercomOnlySub),
                   ],
-                  SelectTile<String>(title: 'Ringtone', value: _p.ringtone, options: const {'default': 'Default', 'classic': 'Classic', 'soft': 'Soft', 'digital': 'Digital'}, onChanged: (v) => _upd((p) => p.copyWith(ringtone: v))),
-                  SelectTile<String>(key: const Key('acc-auto-record'), title: 'Record calls', value: _p.autoRecord, options: kAccountRecordOptions, onChanged: (v) => _upd((p) => p.copyWith(autoRecord: v))),
-                  AudioRefTile(key: const Key('acc-hold-music'), title: 'Hold music', value: _p.holdMusic, holdMusicOnly: true, leading: const {'inherit': 'Use global setting', 'pbx': 'PBX default'}, onChanged: (v) => _upd((p) => p.copyWith(holdMusic: v))),
-                  AudioRefTile(key: const Key('acc-opening-announcement'), title: 'Opening announcement', value: _p.openingAnnouncement, leading: const {'inherit': 'Use global setting', 'off': 'Off'}, onChanged: (v) => _upd((p) => p.copyWith(openingAnnouncement: v))),
+                  SelectTile<String>(title: context.l10n.acctFieldRingtone, value: _p.ringtone, options: {'default': context.l10n.commonDefault, 'classic': context.l10n.acctRingtoneClassic, 'soft': context.l10n.acctRingtoneSoft, 'digital': context.l10n.acctRingtoneDigital}, onChanged: (v) => _upd((p) => p.copyWith(ringtone: v))),
+                  SelectTile<String>(key: const Key('acc-auto-record'), title: context.l10n.acctFieldRecordCalls, value: _p.autoRecord, options: accountRecordOptions(context.l10n), onChanged: (v) => _upd((p) => p.copyWith(autoRecord: v))),
+                  AudioRefTile(key: const Key('acc-hold-music'), title: context.l10n.acctFieldHoldMusic, value: _p.holdMusic, holdMusicOnly: true, leading: {'inherit': context.l10n.acctOptUseGlobal, 'pbx': context.l10n.acctOptPbxDefault}, onChanged: (v) => _upd((p) => p.copyWith(holdMusic: v))),
+                  AudioRefTile(key: const Key('acc-opening-announcement'), title: context.l10n.acctFieldOpeningAnnouncement, value: _p.openingAnnouncement, leading: {'inherit': context.l10n.acctOptUseGlobal, 'off': context.l10n.commonOff}, onChanged: (v) => _upd((p) => p.copyWith(openingAnnouncement: v))),
                 ]),
-                SettingsGroup(title: 'Feature codes', footer: 'Dialled for park, pickup, DND and forwarding on your PBX.', children: [
-                  _tx('Park', _p.featureCodes.park, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(park: v)))),
-                  _tx('Group pickup', _p.featureCodes.pickupGroup, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupGroup: v)))),
-                  _tx('Directed pickup prefix', _p.featureCodes.pickupDirectedPrefix, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupDirectedPrefix: v)))),
-                  _tx('Park retrieve prefix', _p.featureCodes.parkRetrieve, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(parkRetrieve: v))), hint: 'Dial the slot number', sub: 'Prefix dialled before the park slot to pick a parked call back up'),
-                  _tx('DND on', _p.featureCodes.dndOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOn: v)))),
-                  _tx('DND off', _p.featureCodes.dndOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOff: v)))),
-                  _tx('Forward on', _p.featureCodes.forwardOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOn: v)))),
-                  _tx('Forward off', _p.featureCodes.forwardOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOff: v)))),
+                SettingsGroup(title: context.l10n.acctGroupFeatureCodes, footer: context.l10n.acctGroupFeatureCodesFooter, children: [
+                  _tx(context.l10n.acctFieldPark, _p.featureCodes.park, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(park: v)))),
+                  _tx(context.l10n.acctFieldGroupPickup, _p.featureCodes.pickupGroup, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupGroup: v)))),
+                  _tx(context.l10n.acctFieldDirectedPickup, _p.featureCodes.pickupDirectedPrefix, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(pickupDirectedPrefix: v)))),
+                  _tx(context.l10n.acctFieldParkRetrieve, _p.featureCodes.parkRetrieve, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(parkRetrieve: v))), hint: context.l10n.acctFieldParkRetrieveHint, sub: context.l10n.acctFieldParkRetrieveSub),
+                  _tx(context.l10n.acctFieldDndOn, _p.featureCodes.dndOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOn: v)))),
+                  _tx(context.l10n.acctFieldDndOff, _p.featureCodes.dndOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(dndOff: v)))),
+                  _tx(context.l10n.acctFieldForwardOn, _p.featureCodes.forwardOn, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOn: v)))),
+                  _tx(context.l10n.acctFieldForwardOff, _p.featureCodes.forwardOff, (v) => _upd((p) => p.copyWith(featureCodes: p.featureCodes.copyWith(forwardOff: v)))),
                 ]),
                 if (iax)
-                  SettingsGroup(title: 'Advanced', footer: 'DTMF is sent as native IAX2 frames.', children: [
-                    _tx('Caller ID override', c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: 'Use account default', sub: 'Caller ID name or number sent to the PBX'),
+                  SettingsGroup(title: context.l10n.acctGroupAdvanced, footer: context.l10n.acctGroupAdvancedFooterIax, children: [
+                    _tx(context.l10n.acctFieldCallerIdOverride, c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: context.l10n.acctFieldCallerIdHint, sub: context.l10n.acctFieldCallerIdSub),
                   ])
                 else
-                SettingsGroup(title: 'Advanced', children: [
-                  SelectTile<SessionTimers>(title: 'Session timers', value: c.sessionTimers, options: {for (final s in SessionTimers.values) s: s.wire}, onChanged: (v) => _cfg((x) => x.copyWith(sessionTimers: v))),
-                  _num('Session expires (s)', c.timerSe, (v) => _cfg((x) => x.copyWith(timerSe: v)), min: 90, max: 86400, sub: 'Range 90 to 86400'),
-                  _sw('100rel (reliable provisional)', c.use100rel, (v) => _cfg((x) => x.copyWith(use100rel: v))),
-                  SelectTile<HoldType>(title: 'Hold method', value: c.holdType, options: const {HoldType.rfc3264: 'RFC 3264 (sendonly)', HoldType.rfc2543: 'RFC 2543 (0.0.0.0)'}, onChanged: (v) => _cfg((x) => x.copyWith(holdType: v))),
-                  SelectTile<DtmfMethod>(title: 'DTMF method', value: c.dtmfMethod, options: const {DtmfMethod.rfc2833: 'RFC 2833', DtmfMethod.info: 'SIP INFO', DtmfMethod.inband: 'In-band', DtmfMethod.auto: 'Automatic'}, onChanged: (v) => _cfg((x) => x.copyWith(dtmfMethod: v))),
-                  SelectTile<RedirectPolicy>(title: 'Redirects (3xx)', value: c.redirect, options: const {RedirectPolicy.auto: 'Follow', RedirectPolicy.ask: 'Ask', RedirectPolicy.reject: 'Reject'}, onChanged: (v) => _cfg((x) => x.copyWith(redirect: v))),
-                  _sw('Lock codec after answer', c.lockCodec, (v) => _cfg((x) => x.copyWith(lockCodec: v))),
-                  _sw('Media keep-alive', c.streamKeepAlive, (v) => _cfg((x) => x.copyWith(streamKeepAlive: v))),
-                  _sw('Drop calls when registration fails', c.dropCallsOnRegFail, (v) => _cfg((x) => x.copyWith(dropCallsOnRegFail: v))),
-                  _tx('Caller ID override', c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: 'Use account default'),
-                  _tx('User-Agent', c.userAgent ?? '', (v) => _cfg((x) => AccountConfigX.withUserAgent(x, v)), hint: 'Default'),
-                  _tx('Extra SIP headers', headersText, (v) => _cfg((x) => x.copyWith(headers: parseHeaders(v))), hint: 'X-Header: value (one per line)'),
-                  _num('Retry interval (s)', c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400, sub: 'Wait before retrying a failed registration. Range 0 to 86400'),
-                  _num('Unregister timeout (ms)', c.unregTimeoutMs, (v) => _cfg((x) => x.copyWith(unregTimeoutMs: v)), min: 0, max: 60000, sub: 'How long to wait for the unregister reply. Range 0 to 60000'),
-                  _num('MWI subscription expiry (s)', c.mwiExpires, (v) => _cfg((x) => x.copyWith(mwiExpires: v)), min: 0, max: 86400),
-                  _num('DSCP for SIP', c.dscp.sip, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: v, rtp: x.dscp.rtp))), min: 0, max: 63, sub: 'QoS marking of signalling. 24 (CS3) is typical'),
-                  _num('DSCP for RTP', c.dscp.rtp, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: x.dscp.sip, rtp: v))), min: 0, max: 63, sub: 'QoS marking of media. 46 (EF) is typical'),
-                  _sw('Re-INVITE after network change', c.ipChange.reinvite, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(reinvite: v)))),
-                  _sw('Hang up calls on network change', c.ipChange.hangupCalls, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(hangupCalls: v)))),
+                SettingsGroup(title: context.l10n.acctGroupAdvanced, children: [
+                  SelectTile<SessionTimers>(title: context.l10n.acctFieldSessionTimers, value: c.sessionTimers, options: {for (final s in SessionTimers.values) s: s.wire}, onChanged: (v) => _cfg((x) => x.copyWith(sessionTimers: v))),
+                  _num(context.l10n.acctFieldSessionExpires, c.timerSe, (v) => _cfg((x) => x.copyWith(timerSe: v)), min: 90, max: 86400, sub: context.l10n.acctFieldSessionExpiresSub),
+                  _sw(context.l10n.acctField100rel, c.use100rel, (v) => _cfg((x) => x.copyWith(use100rel: v))),
+                  SelectTile<HoldType>(title: context.l10n.acctFieldHoldMethod, value: c.holdType, options: {HoldType.rfc3264: 'RFC 3264 (sendonly)', HoldType.rfc2543: 'RFC 2543 (0.0.0.0)'}, onChanged: (v) => _cfg((x) => x.copyWith(holdType: v))),
+                  SelectTile<DtmfMethod>(title: context.l10n.acctFieldDtmfMethod, value: c.dtmfMethod, options: {DtmfMethod.rfc2833: 'RFC 2833', DtmfMethod.info: 'SIP INFO', DtmfMethod.inband: context.l10n.acctOptDtmfInband, DtmfMethod.auto: context.l10n.commonAutomatic}, onChanged: (v) => _cfg((x) => x.copyWith(dtmfMethod: v))),
+                  SelectTile<RedirectPolicy>(title: context.l10n.acctFieldRedirects, value: c.redirect, options: {RedirectPolicy.auto: context.l10n.acctOptRedirectFollow, RedirectPolicy.ask: context.l10n.acctOptRedirectAsk, RedirectPolicy.reject: context.l10n.acctOptReject}, onChanged: (v) => _cfg((x) => x.copyWith(redirect: v))),
+                  _sw(context.l10n.acctFieldLockCodec, c.lockCodec, (v) => _cfg((x) => x.copyWith(lockCodec: v))),
+                  _sw(context.l10n.acctFieldMediaKeepAlive, c.streamKeepAlive, (v) => _cfg((x) => x.copyWith(streamKeepAlive: v))),
+                  _sw(context.l10n.acctFieldDropCalls, c.dropCallsOnRegFail, (v) => _cfg((x) => x.copyWith(dropCallsOnRegFail: v))),
+                  _tx(context.l10n.acctFieldCallerIdOverride, c.callerId ?? '', (v) => _cfg((x) => AccountConfigX.withCallerId(x, v)), hint: context.l10n.acctFieldCallerIdHint),
+                  _tx('User-Agent', c.userAgent ?? '', (v) => _cfg((x) => AccountConfigX.withUserAgent(x, v)), hint: context.l10n.commonDefault),
+                  _tx(context.l10n.acctFieldExtraHeaders, headersText, (v) => _cfg((x) => x.copyWith(headers: parseHeaders(v))), hint: context.l10n.acctFieldExtraHeadersHint),
+                  _num(context.l10n.acctFieldRetryInterval, c.regRetrySec, (v) => _cfg((x) => x.copyWith(regRetrySec: v)), min: 0, max: 86400, sub: context.l10n.acctFieldRetryIntervalSub),
+                  _num(context.l10n.acctFieldUnregTimeout, c.unregTimeoutMs, (v) => _cfg((x) => x.copyWith(unregTimeoutMs: v)), min: 0, max: 60000, sub: context.l10n.acctFieldUnregTimeoutSub),
+                  _num(context.l10n.acctFieldMwiExpiry, c.mwiExpires, (v) => _cfg((x) => x.copyWith(mwiExpires: v)), min: 0, max: 86400),
+                  _num(context.l10n.acctFieldDscpSip, c.dscp.sip, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: v, rtp: x.dscp.rtp))), min: 0, max: 63, sub: context.l10n.acctFieldDscpSipSub),
+                  _num(context.l10n.acctFieldDscpRtp, c.dscp.rtp, (v) => _cfg((x) => x.copyWith(dscp: DscpConfig(sip: x.dscp.sip, rtp: v))), min: 0, max: 63, sub: context.l10n.acctFieldDscpRtpSub),
+                  _sw(context.l10n.acctFieldReinvite, c.ipChange.reinvite, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(reinvite: v)))),
+                  _sw(context.l10n.acctFieldHangupOnIpChange, c.ipChange.hangupCalls, (v) => _cfg((x) => x.copyWith(ipChange: x.ipChange.copyWith(hangupCalls: v)))),
                 ]),
                 const SizedBox(height: 16),
                 if (acc.errorOf(_p.id) != null)
-                  Padding(padding: const EdgeInsets.all(16), child: Text('Last error: ${acc.errorOf(_p.id)}')),
+                  Padding(padding: const EdgeInsets.all(16), child: Text(context.l10n.acctEditorLastError(acc.errorOf(_p.id)!))),
               ],
             ),
           ),
@@ -329,35 +330,40 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
   }
 }
 
-/// Integer validation with the engine's accepted range.
-String? validateInt(String s, {int? min, int? max}) {
+/// Integer validation with the engine's accepted range. [l] defaults to English.
+String? validateInt(String s, {int? min, int? max, AppLocalizations? l}) {
+  final loc = l ?? _en;
   final v = int.tryParse(s.trim());
-  if (v == null) return 'Enter a whole number';
-  if (min != null && v < min) return 'Must be at least $min';
-  if (max != null && v > max) return 'Must be at most $max';
+  if (v == null) return loc.acctValidateInt;
+  if (min != null && v < min) return loc.acctValidateMin(min);
+  if (max != null && v > max) return loc.acctValidateMax(max);
   return null;
 }
 
+final AppLocalizations _en = lookupAppLocalizations(const Locale('en'));
+
 /// Server host (optionally host:port) must be non-empty and have no spaces.
-String? validateHost(String s) {
+String? validateHost(String s, [AppLocalizations? l]) {
+  final loc = l ?? _en;
   final v = s.trim();
-  if (v.isEmpty) return 'Enter a server host name or address';
-  if (RegExp(r'\s').hasMatch(v)) return 'The server cannot contain spaces';
-  if (v.contains('/') || v.contains('@')) return 'Enter only host or host:port';
+  if (v.isEmpty) return loc.acctValidateHostEmpty;
+  if (RegExp(r'\s').hasMatch(v)) return loc.acctValidateHostSpaces;
+  if (v.contains('/') || v.contains('@')) return loc.acctValidateHostFormat;
   final m = RegExp(r'^(?:\[[^\]]+\]|[^:]+):(\d+)$').firstMatch(v);
   if (m != null) {
     final port = int.parse(m.group(1)!);
-    if (port < 1 || port > 65535) return 'Port must be between 1 and 65535';
+    if (port < 1 || port > 65535) return loc.acctValidatePortRange;
   }
   return null;
 }
 
 /// WebSocket upgrade path: starts with "/", at most 120 characters.
-String? validateWsPath(String s) {
+String? validateWsPath(String s, [AppLocalizations? l]) {
+  final loc = l ?? _en;
   final v = s.trim();
-  if (!v.startsWith('/')) return 'The path must start with "/"';
-  if (v.length > 120) return 'Use at most 120 characters';
-  if (RegExp(r'\s').hasMatch(v)) return 'The path cannot contain spaces';
+  if (!v.startsWith('/')) return loc.acctValidateWsStart;
+  if (v.length > 120) return loc.acctValidateWsLength;
+  if (RegExp(r'\s').hasMatch(v)) return loc.acctValidateWsSpaces;
   return null;
 }
 

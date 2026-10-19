@@ -30,6 +30,8 @@ class DesktopNotifier {
     required String title,
     required String body,
     required void Function(NotificationTap tap) onTap,
+    String answerLabel = 'Answer',
+    String declineLabel = 'Decline',
   }) async {
     if (!_ready) return;
     await cancelIncomingCall(callKey);
@@ -38,8 +40,8 @@ class DesktopNotifier {
       title: title,
       body: body,
       actions: [
-        LocalNotificationAction(text: 'Answer'),
-        LocalNotificationAction(text: 'Decline'),
+        LocalNotificationAction(text: answerLabel),
+        LocalNotificationAction(text: declineLabel),
       ],
     );
     n.onClick = () => onTap(NotificationTap.body);

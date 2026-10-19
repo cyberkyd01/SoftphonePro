@@ -1,0 +1,4 @@
+"NSMicrophoneUsageDescription" = "يحتاج SoftphonePro إلى الميكروفون لنقل صوتك أثناء المكالمات.";
+"NSContactsUsageDescription" = "يستورد SoftphonePro جهات الاتصال لديك عندما تطلب ذلك.";
+"NSCameraUsageDescription" = "يستخدم SoftphonePro الكاميرا لمسح رموز QR الخاصة بالإعداد والاقتران.";
+"NSLocalNetworkUsageDescription" = "يستخدم SoftphonePro الشبكة المحلية للعثور على أجهزتك الأخرى وربطها (LAN Link) وللاتصال بالأطراف مباشرةً.";

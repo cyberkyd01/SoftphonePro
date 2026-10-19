@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../l10n/l10n.dart';
 import '../../core/theme.dart';
 import '../../models/contact.dart';
 import '../../services/calls_controller.dart';
@@ -10,12 +11,12 @@ import '../../services/contacts_controller.dart';
 import '../../services/presence_controller.dart';
 import '../widgets/basic_widgets.dart';
 
-String lampText(LampState s) => switch (s) {
-  LampState.idle => 'Available',
-  LampState.ringing => 'Ringing',
-  LampState.busy => 'On a call',
-  LampState.offline => 'Offline',
-  LampState.unknown => 'Unknown',
+String lampText(LampState s, AppLocalizations l) => switch (s) {
+  LampState.idle => l.statusAvailable,
+  LampState.ringing => l.presenceLampRinging,
+  LampState.busy => l.statusOnACall,
+  LampState.offline => l.statusOffline,
+  LampState.unknown => l.commonUnknown,
 };
 
 class PresencePage extends ConsumerWidget {
@@ -28,19 +29,19 @@ class PresencePage extends ConsumerWidget {
     return Column(
       children: [
         PageHeader(
-          title: 'Presence',
-          subtitle: 'Busy lamp field',
+          title: context.l10n.shellTabPresence,
+          subtitle: context.l10n.presenceHeader,
           actions: [
-            IconButton(tooltip: 'Choose contacts to watch', onPressed: () => context.go('/contacts'), icon: const Icon(Icons.group_add_rounded)),
+            IconButton(tooltip: context.l10n.presenceChooseTooltip, onPressed: () => context.go('/contacts'), icon: const Icon(Icons.group_add_rounded)),
           ],
         ),
         Expanded(
           child: contacts.isEmpty
               ? EmptyState(
                   icon: Icons.grid_view_rounded,
-                  title: 'No extensions on the board',
-                  subtitle: 'Turn on "Show on BLF board" for a contact to see when they are free, ringing or busy.',
-                  actionLabel: 'Open contacts',
+                  title: context.l10n.presenceEmptyTitle,
+                  subtitle: context.l10n.presenceEmptySubtitle,
+                  actionLabel: context.l10n.presenceOpenContacts,
                   onAction: () => context.go('/contacts'),
                 )
               : GridView.builder(
@@ -72,7 +73,7 @@ class _BlfTile extends ConsumerWidget {
     };
     return Semantics(
       button: true,
-      label: '${contact.displayName}, ${lampText(lamp)}. Tap to call, long press for more',
+      label: context.l10n.presenceTileSemantics(contact.displayName, lampText(lamp, context.l10n)),
       excludeSemantics: true,
       child: Material(
         color: colors.card,
@@ -98,7 +99,7 @@ class _BlfTile extends ConsumerWidget {
                   children: [
                     StatusDot(color: lampColor, size: 8, pulse: lamp == LampState.ringing),
                     const SizedBox(width: 6),
-                    Text(lampText(lamp), style: t.textTheme.bodySmall),
+                    Text(lampText(lamp, context.l10n), style: t.textTheme.bodySmall),
                   ],
                 ),
               ],
@@ -120,7 +121,7 @@ class _BlfTile extends ConsumerWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.call_rounded),
-              title: Text('Call ${contact.displayName}'),
+              title: Text(ctx.l10n.presenceCallName(contact.displayName)),
               onTap: () {
                 Navigator.pop(ctx);
                 calls.dial(contact.primary);
@@ -128,8 +129,8 @@ class _BlfTile extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.pan_tool_alt_rounded),
-              title: const Text('Pick up this extension'),
-              subtitle: const Text('Answer their ringing call (directed pickup)'),
+              title: Text(ctx.l10n.presencePickup),
+              subtitle: Text(ctx.l10n.presencePickupSub),
               enabled: lamp == LampState.ringing || lamp == LampState.unknown,
               onTap: () {
                 Navigator.pop(ctx);
@@ -143,7 +144,7 @@ class _BlfTile extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.phone_forwarded_rounded),
-              title: const Text('Transfer current call here'),
+              title: Text(ctx.l10n.presenceTransferHere),
               enabled: active != null && active.isConfirmed,
               onTap: () {
                 Navigator.pop(ctx);
@@ -152,7 +153,7 @@ class _BlfTile extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.visibility_off_rounded),
-              title: const Text('Remove from board'),
+              title: Text(ctx.l10n.presenceRemove),
               onTap: () {
                 Navigator.pop(ctx);
                 ref.read(contactsProvider.notifier).save(contact.copyWith(blf: false));

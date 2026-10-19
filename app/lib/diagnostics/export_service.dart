@@ -6,16 +6,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/providers.dart';
 
 /// Saves bytes through a platform save dialog; returns the saved path/name,
 /// or null when cancelled. Override in tests.
 typedef SaveBytes = Future<String?> Function(String fileName, Uint8List bytes);
 
-Future<String?> defaultSaveBytes(String fileName, Uint8List bytes) async {
+Future<String?> defaultSaveBytes(String fileName, Uint8List bytes, {String? dialogTitle}) async {
   final isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
   final path = await FilePicker.platform.saveFile(
-    dialogTitle: 'Save $fileName',
+    dialogTitle: dialogTitle ?? 'Save $fileName',
     fileName: fileName,
     bytes: isDesktop ? null : bytes,
   );
@@ -24,7 +25,9 @@ Future<String?> defaultSaveBytes(String fileName, Uint8List bytes) async {
   return path;
 }
 
-final diagnosticsSaveProvider = Provider<SaveBytes>((ref) => defaultSaveBytes);
+final diagnosticsSaveProvider = Provider<SaveBytes>(
+  (ref) => (fileName, bytes) => defaultSaveBytes(fileName, bytes, dialogTitle: ref.read(l10nProvider).diagSaveDialogTitle(fileName)),
+);
 
 String stamp([DateTime? t]) {
   final d = t ?? DateTime.now();
@@ -62,15 +65,16 @@ class DiagnosticsExporter {
   Future<void> saveBytes(String fileName, Uint8List bytes) async {
     try {
       final p = await ref.read(diagnosticsSaveProvider)(fileName, bytes);
-      if (p != null) ref.read(noticeProvider.notifier).show('Saved $fileName');
+      if (p != null) ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).diagSavedFile(fileName));
     } catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not save the file', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).diagSaveFailed, details: '$e');
     }
   }
 
-  Future<void> copy(String text, {String what = 'Text'}) async {
+  /// Copies [text]; [confirmation] is the localised notice (default: "Text copied...").
+  Future<void> copy(String text, {String? confirmation}) async {
     await Clipboard.setData(ClipboardData(text: text));
-    ref.read(noticeProvider.notifier).show('$what copied to the clipboard');
+    ref.read(noticeProvider.notifier).show(confirmation ?? ref.read(l10nProvider).diagCopiedText);
   }
 }
 

@@ -7,6 +7,10 @@ import 'package:softphonepro/models/contact.dart';
 import 'package:softphonepro/recordings/recording_formats.dart';
 import 'package:softphonepro/recordings/recording_rules.dart';
 import 'package:spcore_dart/spcore_dart.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
+import 'package:flutter/widgets.dart' show Locale;
+
+final _l = lookupAppLocalizations(const Locale('en'));
 
 AccountProfile acc(String autoRecord) => AccountProfile(
   id: 'a',
@@ -57,9 +61,9 @@ void main() {
   });
 
   test('formats: labels, extensions, playability per platform', () {
-    expect(recordFormatLabel(RecordFormat.wav), 'Standard (WAV)');
-    expect(recordFormatLabel(RecordFormat.wavStereo), contains('separate channels'));
-    expect(recordFormatLabel(RecordFormat.opus), 'Compressed (Opus)');
+    expect(recordFormatLabel(_l, RecordFormat.wav), 'Standard (WAV)');
+    expect(recordFormatLabel(_l, RecordFormat.wavStereo), contains('separate channels'));
+    expect(recordFormatLabel(_l, RecordFormat.opus), 'Compressed (Opus)');
     expect(recordFormatExtension(RecordFormat.opus), 'ogg');
     expect(recordFormatExtension(RecordFormat.wavStereo), 'wav');
     expect(recordFormatBadge('opus'), 'Opus');

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../models/app_settings.dart';
 import '../models/contact.dart';
@@ -18,12 +19,21 @@ const Map<String, String> kBuiltInRingtones = {
 
 const String kRecordBeepAsset = 'assets/sounds/record_beep.wav';
 
-/// Labels for the ringtone pickers (global, account, contact).
+/// Ringtone picker option ids (global, account, contact); the values are the
+/// English labels - the UI uses [ringtoneOptions].
 const Map<String, String> kRingtoneOptions = {
   'default': 'System default',
   'classic': 'Classic',
   'soft': 'Soft',
   'digital': 'Digital',
+};
+
+/// Localised labels for the ringtone pickers, keyed like [kRingtoneOptions].
+Map<String, String> ringtoneOptions(AppLocalizations l) => {
+  'default': l.callRingtoneSystemDefault,
+  'classic': l.callRingtoneClassic,
+  'soft': l.callRingtoneSoft,
+  'digital': l.callRingtoneDigital,
 };
 
 bool isRingtonePath(String name) => name.contains('/') || name.contains(r'\');

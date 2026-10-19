@@ -40,3 +40,4 @@ __pycache__/
 *.pyc
 app/test/failures/
 third_party/**/pubspec.lock
+app/test/**/failures/

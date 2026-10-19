@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/settings_controller.dart';
 import 'automation_api.dart';
 import 'automation_auth.dart';
@@ -69,12 +70,12 @@ class AutomationService extends Notifier<AutomationStatus> {
       return;
     }
     if (s.automationToken.length < 16) {
-      state = const AutomationStatus(error: 'No access token set. Generate one in Settings > Advanced.');
+      state = AutomationStatus(error: ref.read(l10nProvider).automationNoToken);
       return;
     }
     final port = s.automationPort;
     if (port < 0 || port > 65535) {
-      state = AutomationStatus(error: 'Invalid port $port');
+      state = AutomationStatus(error: ref.read(l10nProvider).automationInvalidPort(port));
       return;
     }
     final hub = AutomationEventHub();
@@ -92,8 +93,8 @@ class AutomationService extends Notifier<AutomationStatus> {
       await hub.close();
       state = AutomationStatus(
         error: port == 0
-            ? 'Could not start: ${e.message}'
-            : 'Port $port is not available (${e.osError?.message ?? e.message}). Choose another port.',
+            ? ref.read(l10nProvider).automationCouldNotStart(e.message)
+            : ref.read(l10nProvider).automationPortUnavailable(port, e.osError?.message ?? e.message),
       );
       return;
     }

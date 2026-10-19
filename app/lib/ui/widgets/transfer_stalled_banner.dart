@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../services/calls_controller.dart';
 
 /// Progress of a blind transfer ("Transferring..."), and when it got no answer from the server within
 /// [kTransferConfirmTimeout]: keep the call or send the transfer again.
 class TransferStalledBanner extends ConsumerWidget {
-  const TransferStalledBanner({super.key, required this.call, this.margin = const EdgeInsets.only(top: 12)});
+  const TransferStalledBanner({super.key, required this.call, this.margin = const EdgeInsetsDirectional.only(top: 12)});
   final UiCall call;
   final EdgeInsetsGeometry margin;
 
@@ -23,7 +24,7 @@ class TransferStalledBanner extends ConsumerWidget {
           children: [
             Icon(Icons.sync_rounded, size: 16, color: t.colorScheme.primary),
             const SizedBox(width: 8),
-            Text('Transferring...', style: t.textTheme.bodyMedium),
+            Text(context.l10n.callTransferring, style: t.textTheme.bodyMedium),
           ],
         ),
       );
@@ -45,12 +46,12 @@ class TransferStalledBanner extends ConsumerWidget {
             children: [
               Icon(Icons.warning_amber_rounded, size: 18, color: context.colors.holdAmber),
               const SizedBox(width: 6),
-              Flexible(child: Text('Transfer not confirmed by the server', style: t.textTheme.titleSmall)),
+              Flexible(child: Text(context.l10n.callTransferNotConfirmed, style: t.textTheme.titleSmall)),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'The call is still up. Keep it, or send the transfer again.',
+            context.l10n.callTransferStalledHint,
             textAlign: TextAlign.center,
             style: t.textTheme.bodySmall,
           ),
@@ -61,7 +62,7 @@ class TransferStalledBanner extends ConsumerWidget {
                 child: OutlinedButton(
                   key: const Key('transfer-keep'),
                   onPressed: () => calls.keepCallAfterStalledTransfer(call.cid),
-                  child: const Text('Keep call'),
+                  child: Text(context.l10n.callTransferKeepCall),
                 ),
               ),
               const SizedBox(width: 8),
@@ -69,7 +70,7 @@ class TransferStalledBanner extends ConsumerWidget {
                 child: FilledButton(
                   key: const Key('transfer-retry'),
                   onPressed: () => calls.retryStalledTransfer(call.cid),
-                  child: const Text('Retry'),
+                  child: Text(context.l10n.actionRetry),
                 ),
               ),
             ],

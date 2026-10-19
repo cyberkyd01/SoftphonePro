@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../models/call_record.dart';
 import '../storage/repositories.dart';
 import 'history_controller.dart';
@@ -107,7 +108,7 @@ class JournalEntry {
   };
 
   /// The history record for a call that was cut off.
-  CallRecord toInterruptedRecord() {
+  CallRecord toInterruptedRecord([String reason = 'The app was closed during the call']) {
     final answered = answeredAt;
     final end = lastSeen ?? answered ?? start;
     return CallRecord(
@@ -121,7 +122,7 @@ class JournalEntry {
       connectMs: answered == null ? 0 : answered.difference(start).inMilliseconds,
       durationMs: answered == null ? 0 : end.difference(answered).inMilliseconds.clamp(0, 1 << 40),
       result: CallResult.interrupted,
-      reason: 'The app was closed during the call',
+      reason: reason,
       recordingPath: recordingPath,
       recordingId: recordingId,
       callId: callId,
@@ -154,14 +155,14 @@ class CallJournal {
 
   /// Converts entries left by earlier sessions into "interrupted" history
   /// records and clears them. Returns how many were recovered.
-  Future<int> recoverInto(HistoryController history, {String? session}) async {
+  Future<int> recoverInto(HistoryController history, {String? session, String? reason}) async {
     final mine = session ?? kJournalSession;
     var n = 0;
     final entries = await all();
     entries.sort((a, b) => a.start.compareTo(b.start));
     for (final e in entries) {
       if (e.session == mine) continue;
-      await history.add(e.toInterruptedRecord());
+      await history.add(reason == null ? e.toInterruptedRecord() : e.toInterruptedRecord(reason));
       await _store.delete(e.key);
       n++;
     }
@@ -176,7 +177,10 @@ final callJournalProvider = Provider<CallJournal>(
 /// Recovers leftovers of a previous run; call once at startup.
 Future<int> recoverInterruptedCalls(Ref ref) async {
   try {
-    return await ref.read(callJournalProvider).recoverInto(ref.read(historyProvider.notifier));
+    return await ref.read(callJournalProvider).recoverInto(
+      ref.read(historyProvider.notifier),
+      reason: ref.read(l10nProvider).callJournalInterrupted,
+    );
   } catch (e) {
     debugPrint('call journal recovery failed: $e');
     return 0;

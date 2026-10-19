@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:ui' show Locale;
 
 import 'package:http/http.dart' as http;
 import 'package:spcore_dart/spcore_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../models/provider_templates.dart';
 
@@ -50,31 +52,33 @@ class Provisioning {
     String text, {
     Map<String, String> vars = const {},
     Uuid? uuid,
+    AppLocalizations? l10n,
   }) {
+    final l = l10n ?? lookupAppLocalizations(const Locale('en'));
     final dynamic raw;
     try {
       raw = jsonDecode(text);
     } on FormatException catch (e) {
-      throw ProvisioningException('Not valid JSON: ${e.message}');
+      throw ProvisioningException(l.provisioningNotValidJson(e.message));
     }
     if (raw is! Map) {
-      throw ProvisioningException('Expected a JSON object');
+      throw ProvisioningException(l.provisioningExpectedObject);
     }
     final root = Map<String, dynamic>.from(substitute(raw, vars) as Map);
     final v = root['version'];
     if (v is num && v > version) {
-      throw ProvisioningException('Unsupported config version $v');
+      throw ProvisioningException(l.provisioningUnsupportedVersion('$v'));
     }
     final warnings = <String>[];
     final accounts = <AccountProfile>[];
     const gen = Uuid();
     for (final a in (root['accounts'] as List? ?? const [])) {
       if (a is! Map) {
-        warnings.add('Skipped a non-object account entry');
+        warnings.add(l.provisioningSkippedAccountEntry);
         continue;
       }
       try {
-        accounts.add(_account(Map<String, dynamic>.from(a), uuid ?? gen));
+        accounts.add(_account(Map<String, dynamic>.from(a), uuid ?? gen, l));
       } on ProvisioningException catch (e) {
         warnings.add(e.message);
       }
@@ -83,7 +87,7 @@ class Provisioning {
         ? Map<String, dynamic>.from(root['settings'] as Map)
         : <String, dynamic>{};
     if (accounts.isEmpty && settings.isEmpty) {
-      warnings.add('The file contains no accounts or settings');
+      warnings.add(l.provisioningNothingToImport);
     }
     return ProvisioningResult(
       accounts: accounts,
@@ -92,7 +96,7 @@ class Provisioning {
     );
   }
 
-  static AccountProfile _account(Map<String, dynamic> a, Uuid uuid) {
+  static AccountProfile _account(Map<String, dynamic> a, Uuid uuid, AppLocalizations l) {
     final id = uuid.v4();
     if (a['sip'] is Map) {
       return AccountProfile.fromJson(a, newId: id).copyWith(isDefault: false);
@@ -101,7 +105,7 @@ class Provisioning {
     final domain = '${a['domain'] ?? a['server'] ?? ''}';
     if (username.isEmpty || domain.isEmpty) {
       throw ProvisioningException(
-        'Account "${a['label'] ?? a['username'] ?? '?'}" needs username and domain',
+        l.provisioningAccountNeedsUserDomain('${a['label'] ?? a['username'] ?? '?'}'),
       );
     }
     final t = templateById('${a['template'] ?? 'generic'}');
@@ -141,18 +145,20 @@ class Provisioning {
     Uri url, {
     Map<String, String> vars = const {},
     http.Client? client,
+    AppLocalizations? l10n,
   }) async {
+    final l = l10n ?? lookupAppLocalizations(const Locale('en'));
     final c = client ?? http.Client();
     try {
       final r = await c.get(url).timeout(const Duration(seconds: 15));
       if (r.statusCode != 200) {
-        throw ProvisioningException('Server answered ${r.statusCode}');
+        throw ProvisioningException(l.provisioningServerAnswered(r.statusCode));
       }
-      return parse(utf8.decode(r.bodyBytes), vars: vars);
+      return parse(utf8.decode(r.bodyBytes), vars: vars, l10n: l);
     } on ProvisioningException {
       rethrow;
     } catch (e) {
-      throw ProvisioningException('Could not download the configuration: $e');
+      throw ProvisioningException(l.provisioningDownloadFailed('$e'));
     } finally {
       if (client == null) c.close();
     }

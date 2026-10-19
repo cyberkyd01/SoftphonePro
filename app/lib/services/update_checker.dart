@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Locale;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/l10n.dart';
 import '../platform/desktop_platform_services.dart';
 import 'engine_controller.dart';
 import 'providers.dart';
@@ -110,30 +112,32 @@ Future<UpdateCheckResult> checkForUpdate({
   required SemVer current,
   Duration timeout = const Duration(seconds: 10),
   Uri? endpoint,
+  AppLocalizations? l10n,
 }) async {
+  final l = l10n ?? lookupAppLocalizations(const Locale('en'));
   try {
     final r = await client
         .get(endpoint ?? Uri.parse(kReleasesApi), headers: const {'Accept': 'application/vnd.github+json'})
         .timeout(timeout);
     if (r.statusCode == 403 || r.statusCode == 429) {
-      return const UpdateCheckResult(UpdateOutcome.rateLimited, error: 'GitHub rate limit reached, try again later', answered: true);
+      return UpdateCheckResult(UpdateOutcome.rateLimited, error: l.updatesRateLimited, answered: true);
     }
     if (r.statusCode == 404) {
       // No release published yet.
       return const UpdateCheckResult(UpdateOutcome.upToDate, answered: true);
     }
     if (r.statusCode != 200) {
-      return UpdateCheckResult(UpdateOutcome.failed, error: 'GitHub answered ${r.statusCode}', answered: true);
+      return UpdateCheckResult(UpdateOutcome.failed, error: l.updatesServerAnswered(r.statusCode), answered: true);
     }
     final j = jsonDecode(utf8.decode(r.bodyBytes));
-    if (j is! Map) return const UpdateCheckResult(UpdateOutcome.failed, error: 'Unexpected reply', answered: true);
+    if (j is! Map) return UpdateCheckResult(UpdateOutcome.failed, error: l.updatesUnexpectedReply, answered: true);
     if (j['draft'] == true || j['prerelease'] == true) {
       return const UpdateCheckResult(UpdateOutcome.upToDate, answered: true);
     }
     final v = SemVer.parse('${j['tag_name'] ?? ''}');
     final url = '${j['html_url'] ?? ''}';
     if (v == null || !url.startsWith('https://')) {
-      return const UpdateCheckResult(UpdateOutcome.failed, error: 'Unexpected reply', answered: true);
+      return UpdateCheckResult(UpdateOutcome.failed, error: l.updatesUnexpectedReply, answered: true);
     }
     if (v.compareTo(current) > 0) {
       return UpdateCheckResult(
@@ -144,7 +148,7 @@ Future<UpdateCheckResult> checkForUpdate({
     }
     return const UpdateCheckResult(UpdateOutcome.upToDate, answered: true);
   } on TimeoutException {
-    return const UpdateCheckResult(UpdateOutcome.failed, error: 'Timed out');
+    return UpdateCheckResult(UpdateOutcome.failed, error: l.updatesTimedOut);
   } catch (e) {
     return UpdateCheckResult(UpdateOutcome.failed, error: '$e');
   }
@@ -232,11 +236,12 @@ class UpdateController extends Notifier<UpdateState> {
 
   /// Runs a check immediately ("Check now"). A skipped version stays hidden.
   Future<UpdateCheckResult> checkNow() async {
-    if (state.checking) return state.lastResult ?? const UpdateCheckResult(UpdateOutcome.failed, error: 'Already checking');
+    if (state.checking) return state.lastResult ?? UpdateCheckResult(UpdateOutcome.failed, error: ref.read(l10nProvider).updatesAlreadyChecking);
     state = state.copyWith(checking: true);
     final res = await checkForUpdate(
       client: ref.read(updateHttpClientProvider),
       current: await ref.read(currentVersionProvider),
+      l10n: ref.read(l10nProvider),
     );
     final settings = ref.read(settingsProvider.notifier);
     if (res.answered) {

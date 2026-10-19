@@ -3,37 +3,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../widgets/basic_widgets.dart';
 import '../../platform/desktop/shortcuts_section.dart';
 import 'provisioning_section.dart';
 import 'sections.dart';
 
 class SettingsEntry {
-  const SettingsEntry(this.key, this.title, this.icon, this.builder, {this.subtitle = ''});
+  const SettingsEntry(this.key, this.title, this.icon, this.builder, {this.subtitle});
   final String key;
-  final String title;
-  final String subtitle;
+  final String Function(AppLocalizations l) title;
+  final String Function(AppLocalizations l)? subtitle;
   final IconData icon;
   final Widget Function() builder;
 }
 
 final List<SettingsEntry> kSettingsEntries = [
-  SettingsEntry('accounts', 'Accounts', Icons.dns_rounded, () => const AccountsSection(), subtitle: 'SIP accounts and registration'),
-  SettingsEntry('audio', 'Audio', Icons.mic_rounded, () => const AudioSection(), subtitle: 'Devices, levels, echo cancellation'),
-  SettingsEntry('codecs', 'Codecs', Icons.graphic_eq_rounded, () => const CodecsSection(), subtitle: 'Order, availability, Opus'),
-  SettingsEntry('calls', 'Calls', Icons.call_rounded, () => const CallsSection(), subtitle: 'DND, waiting, auto-answer, dial rules'),
-  SettingsEntry('network', 'Network', Icons.lan_rounded, () => const NetworkSection(), subtitle: 'Transports, STUN, TLS, DNS'),
-  SettingsEntry('recording', 'Recording', Icons.fiber_manual_record_rounded, () => const RecordingSection()),
-  SettingsEntry('notifications', 'Notifications and ringtones', Icons.notifications_rounded, () => const NotificationsSection()),
+  SettingsEntry('accounts', (l) => l.settingsEntryAccounts, Icons.dns_rounded, () => const AccountsSection(), subtitle: (l) => l.settingsEntryAccountsSub),
+  SettingsEntry('audio', (l) => l.settingsEntryAudio, Icons.mic_rounded, () => const AudioSection(), subtitle: (l) => l.settingsEntryAudioSub),
+  SettingsEntry('codecs', (l) => l.settingsEntryCodecs, Icons.graphic_eq_rounded, () => const CodecsSection(), subtitle: (l) => l.settingsEntryCodecsSub),
+  SettingsEntry('calls', (l) => l.settingsEntryCalls, Icons.call_rounded, () => const CallsSection(), subtitle: (l) => l.settingsEntryCallsSub),
+  SettingsEntry('network', (l) => l.settingsEntryNetwork, Icons.lan_rounded, () => const NetworkSection(), subtitle: (l) => l.settingsEntryNetworkSub),
+  SettingsEntry('recording', (l) => l.settingsEntryRecording, Icons.fiber_manual_record_rounded, () => const RecordingSection()),
+  SettingsEntry('notifications', (l) => l.settingsEntryNotifications, Icons.notifications_rounded, () => const NotificationsSection()),
   if (hotkeysSupported)
-    SettingsEntry('shortcuts', 'Shortcuts', Icons.keyboard_rounded, () => const ShortcutsSection(), subtitle: 'Global hotkeys, in-app keys'),
-  SettingsEntry('appearance', 'Appearance', Icons.palette_rounded, () => const AppearanceSection()),
-  SettingsEntry('privacy', 'Privacy and security', Icons.shield_rounded, () => const PrivacySection()),
-  SettingsEntry('lan', 'LAN Link', Icons.devices_rounded, () => const LanSection()),
-  SettingsEntry('provisioning', 'Provisioning', Icons.qr_code_2_rounded, () => const ProvisioningSection(), subtitle: 'Import, export, QR'),
-  SettingsEntry('diagnostics', 'Diagnostics', Icons.monitor_heart_rounded, () => const DiagnosticsSection(), subtitle: 'SIP trace, network checks'),
-  SettingsEntry('advanced', 'Advanced', Icons.tune_rounded, () => const AdvancedSection()),
-  SettingsEntry('about', 'About', Icons.info_outline_rounded, () => const AboutSection()),
+    SettingsEntry('shortcuts', (l) => l.settingsEntryShortcuts, Icons.keyboard_rounded, () => const ShortcutsSection(), subtitle: (l) => l.settingsEntryShortcutsSub),
+  SettingsEntry('appearance', (l) => l.settingsEntryAppearance, Icons.palette_rounded, () => const AppearanceSection()),
+  SettingsEntry('privacy', (l) => l.settingsEntryPrivacy, Icons.shield_rounded, () => const PrivacySection()),
+  SettingsEntry('lan', (l) => l.settingsEntryLan, Icons.devices_rounded, () => const LanSection()),
+  SettingsEntry('provisioning', (l) => l.settingsEntryProvisioning, Icons.qr_code_2_rounded, () => const ProvisioningSection(), subtitle: (l) => l.settingsEntryProvisioningSub),
+  SettingsEntry('diagnostics', (l) => l.settingsEntryDiagnostics, Icons.monitor_heart_rounded, () => const DiagnosticsSection(), subtitle: (l) => l.settingsEntryDiagnosticsSub),
+  SettingsEntry('advanced', (l) => l.settingsEntryAdvanced, Icons.tune_rounded, () => const AdvancedSection()),
+  SettingsEntry('about', (l) => l.settingsEntryAbout, Icons.info_outline_rounded, () => const AboutSection()),
 ];
 
 SettingsEntry? settingsEntry(String? key) {
@@ -57,7 +58,7 @@ class SettingsPage extends ConsumerWidget {
     Widget list(String? selected) => ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        const PageHeader(title: 'Settings'),
+        PageHeader(title: context.l10n.actionSettings),
         const SizedBox(height: 4),
         for (final e in kSettingsEntries)
           Padding(
@@ -67,8 +68,8 @@ class SettingsPage extends ConsumerWidget {
               selected: selected == e.key,
               selectedTileColor: t.colorScheme.primary.withValues(alpha: 0.1),
               leading: Icon(e.icon),
-              title: Text(e.title),
-              subtitle: expanded || e.subtitle.isEmpty ? null : Text(e.subtitle),
+              title: Text(e.title(context.l10n)),
+              subtitle: expanded || e.subtitle == null ? null : Text(e.subtitle!(context.l10n)),
               trailing: expanded ? null : const Icon(Icons.chevron_right_rounded),
               onTap: () => context.go('/settings/${e.key}'),
             ),
@@ -99,8 +100,8 @@ class _Detail extends StatelessWidget {
     return Column(
       children: [
         PageHeader(
-          title: entry.title,
-          leading: showBack ? IconButton(tooltip: 'Back', onPressed: () => context.go('/settings'), icon: const Icon(Icons.arrow_back_rounded)) : null,
+          title: entry.title(context.l10n),
+          leading: showBack ? IconButton(tooltip: context.l10n.actionBack, onPressed: () => context.go('/settings'), icon: const Icon(Icons.arrow_back_rounded)) : null,
         ),
         Expanded(
           child: Align(

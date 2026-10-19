@@ -6,6 +6,7 @@ import '../../../audio/audio_library.dart';
 import '../../../audio/mic_recorder.dart';
 import '../../../core/format.dart';
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/providers.dart';
 import '../../widgets/settings_tiles.dart';
 
@@ -14,7 +15,7 @@ class AudioFilesPage extends StatelessWidget {
   const AudioFilesPage({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Audio files')),
+    appBar: AppBar(title: Text(context.l10n.audioFilesTitle)),
     body: const AudioFilesBody(),
   );
 }
@@ -49,12 +50,13 @@ class _AudioFilesBodyState extends ConsumerState<AudioFilesBody> {
   }
 
   Future<void> _import() async {
+    final l = context.l10n;
     setState(() => _importing = true);
     try {
       final path = await ref.read(audioFilePickerProvider)();
       if (path == null) return;
       final item = await ref.read(audioLibraryProvider).import(path);
-      _notice('Added "${item.name}"');
+      _notice(l.audioAdded(item.name));
     } on AudioLibraryException catch (e) {
       _notice(e.message, error: true);
     } finally {
@@ -63,31 +65,33 @@ class _AudioFilesBodyState extends ConsumerState<AudioFilesBody> {
   }
 
   Future<void> _toggle(AudioItem i) async {
+    final l = context.l10n;
     if (_preview.playing.value != null && _preview.playing.value == (i.path ?? i.ref)) {
       await _preview.stop();
       return;
     }
     final path = i.path ?? await ref.read(audioLibraryProvider).resolve(i.ref);
     if (path == null) {
-      _notice('That file is not available.', error: true);
+      _notice(l.audioFileUnavailable, error: true);
       return;
     }
     await _preview.play(path);
   }
 
   Future<void> _rename(AudioItem i) async {
-    final n = await promptText(context, title: 'Rename', initial: i.name, validator: (v) => v.isEmpty ? 'Enter a name' : null);
+    final n = await promptText(context, title: context.l10n.actionRename, initial: i.name, validator: (v) => v.isEmpty ? context.l10n.audioNameRequired : null);
     if (n != null) await ref.read(audioLibraryProvider).rename(i.ref, n);
   }
 
   Future<void> _delete(AudioItem i) async {
-    if (!await confirm(context, title: 'Delete "${i.name}"?', message: 'Settings that use this file go back to the default.')) return;
+    if (!await confirm(context, title: context.l10n.audioDeleteTitle(i.name), message: context.l10n.audioDeleteMessage)) return;
     if (_preview.playing.value == i.path) await _preview.stop();
     await ref.read(audioLibraryProvider).delete(i.ref);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final items = ref.watch(audioItemsProvider).value ?? const <AudioItem>[];
     final builtin = items.where((i) => i.builtin).toList();
     final mine = items.where((i) => !i.builtin).toList();
@@ -95,13 +99,13 @@ class _AudioFilesBodyState extends ConsumerState<AudioFilesBody> {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Add',
-          footer: 'WAV (PCM, mu-law, A-law) and MP3 files work. Files are copied into the app, so the original can move.',
+          title: l.audioGroupAdd,
+          footer: l.audioAddFooter,
           children: [
             ListTile(
               key: const Key('audio-import'),
               leading: const Icon(Icons.upload_file_rounded),
-              title: const Text('Import a WAV or MP3…'),
+              title: Text(l.audioImport),
               trailing: _importing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
               onTap: _importing ? null : _import,
             ),
@@ -109,21 +113,21 @@ class _AudioFilesBodyState extends ConsumerState<AudioFilesBody> {
           ],
         ),
         SettingsGroup(
-          title: 'My files',
+          title: l.audioGroupMine,
           children: [
             if (mine.isEmpty)
-              const ListTile(
-                key: Key('audio-empty'),
-                leading: Icon(Icons.library_music_outlined),
-                title: Text('No files yet'),
-                subtitle: Text('Import a file or record your own announcement.'),
+              ListTile(
+                key: const Key('audio-empty'),
+                leading: const Icon(Icons.library_music_outlined),
+                title: Text(l.audioEmptyTitle),
+                subtitle: Text(l.audioEmptyHint),
               ),
             for (final i in mine) _ItemTile(item: i, preview: _preview, onToggle: () => _toggle(i), onRename: () => _rename(i), onDelete: () => _delete(i)),
           ],
         ),
         SettingsGroup(
-          title: 'Built in',
-          footer: 'Generated for SoftphonePro, free to use.',
+          title: l.audioGroupBuiltIn,
+          footer: l.audioBuiltInFooter,
           children: [
             for (final i in builtin) _ItemTile(item: i, preview: _preview, onToggle: () => _toggle(i)),
           ],
@@ -143,6 +147,7 @@ class _ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final sub = [if (item.format.isNotEmpty) item.format.toUpperCase(), _duration(item.durationMs)].where((e) => e.isNotEmpty).join('  ·  ');
     return ValueListenableBuilder<String?>(
       valueListenable: preview.playing,
@@ -152,7 +157,7 @@ class _ItemTile extends StatelessWidget {
           key: Key('audio-${item.ref}'),
           leading: IconButton.filledTonal(
             key: Key('audio-play-${item.ref}'),
-            tooltip: on ? 'Stop preview' : 'Preview ${item.name}',
+            tooltip: on ? l.audioPreviewStop : l.audioPreviewPlay(item.name),
             icon: Icon(on ? Icons.stop_rounded : Icons.play_arrow_rounded),
             onPressed: onToggle,
           ),
@@ -162,11 +167,11 @@ class _ItemTile extends StatelessWidget {
               ? null
               : PopupMenuButton<String>(
                   key: Key('audio-menu-${item.ref}'),
-                  tooltip: 'More',
+                  tooltip: l.actionMore,
                   onSelected: (v) => v == 'rename' ? onRename?.call() : onDelete?.call(),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'rename', child: Text('Rename')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'rename', child: Text(l.actionRename)),
+                    PopupMenuItem(value: 'delete', child: Text(l.actionDelete)),
                   ],
                 ),
         );
@@ -200,20 +205,21 @@ class _RecorderTileState extends ConsumerState<_RecorderTile> {
   }
 
   Future<void> _save() async {
-    final n = await promptText(context, title: 'Name this recording', initial: 'My announcement', validator: (v) => v.isEmpty ? 'Enter a name' : null);
+    final n = await promptText(context, title: context.l10n.audioRecordedName, initial: context.l10n.audioRecordedDefaultName, validator: (v) => v.isEmpty ? context.l10n.audioNameRequired : null);
     if (n == null) return;
     final item = await _rec.save(n);
-    if (item != null && mounted) ref.read(noticeProvider.notifier).show('Saved "${item.name}"');
+    if (item != null && mounted) ref.read(noticeProvider.notifier).show(context.l10n.audioSaved(item.name));
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final r = ref.watch(micRecorderProvider);
     final t = Theme.of(context);
     final c = context.colors;
     if (r.recording || r.phase == RecorderPhase.saving) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           key: const Key('recorder-active'),
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +235,7 @@ class _RecorderTileState extends ConsumerState<_RecorderTile> {
                   style: FilledButton.styleFrom(backgroundColor: c.endRed),
                   onPressed: r.recording ? _rec.stop : null,
                   icon: const Icon(Icons.stop_rounded),
-                  label: const Text('Stop'),
+                  label: Text(l.audioRecorderStop),
                 ),
               ],
             ),
@@ -254,20 +260,20 @@ class _RecorderTileState extends ConsumerState<_RecorderTile> {
         builder: (context, playing, _) {
           final on = playing == r.file;
           return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            padding: const EdgeInsetsDirectional.only(start: 16, top: 8, end: 8, bottom: 8),
             child: Row(
               key: const Key('recorder-review'),
               children: [
                 IconButton.filledTonal(
                   key: const Key('recorder-preview'),
-                  tooltip: on ? 'Stop preview' : 'Play recording',
+                  tooltip: on ? l.audioPreviewStop : l.audioRecorderPlay,
                   icon: Icon(on ? Icons.stop_rounded : Icons.play_arrow_rounded),
                   onPressed: () => on ? _preview.stop() : _preview.play(r.file!),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text('New recording  ·  ${formatMs(r.durationMs)}')),
-                TextButton(key: const Key('recorder-discard'), onPressed: () { _preview.stop(); _rec.discard(); }, child: const Text('Discard')),
-                FilledButton(key: const Key('recorder-save'), onPressed: _save, child: const Text('Save')),
+                Expanded(child: Text(l.audioRecorderNew(formatMs(r.durationMs)))),
+                TextButton(key: const Key('recorder-discard'), onPressed: () { _preview.stop(); _rec.discard(); }, child: Text(l.audioRecorderDiscard)),
+                FilledButton(key: const Key('recorder-save'), onPressed: _save, child: Text(l.actionSave)),
               ],
             ),
           );
@@ -279,8 +285,8 @@ class _RecorderTileState extends ConsumerState<_RecorderTile> {
         ListTile(
           key: const Key('audio-record'),
           leading: const Icon(Icons.mic_rounded),
-          title: const Text('Record your own…'),
-          subtitle: Text(r.error ?? 'Uses the microphone selected in Audio settings'),
+          title: Text(l.audioRecordOwn),
+          subtitle: Text(r.error ?? l.audioRecordOwnHint),
           subtitleTextStyle: r.error == null ? null : TextStyle(color: t.colorScheme.error),
           onTap: _rec.start,
         ),

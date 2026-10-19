@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/settings_controller.dart';
 import '../../services/update_checker.dart';
 import '../widgets/settings_tiles.dart';
@@ -15,32 +16,32 @@ class UpdatesSettingsGroup extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final u = ref.watch(updateProvider);
     final res = u.lastResult;
+    final l = context.l10n;
     final status = u.checking
-        ? 'Checking...'
+        ? l.updatesChecking
         : switch (res?.outcome) {
-            UpdateOutcome.available => 'SoftphonePro ${res!.release!.version} is available',
-            UpdateOutcome.upToDate => 'You are up to date',
-            UpdateOutcome.rateLimited || UpdateOutcome.failed => res!.error ?? 'Could not check',
+            UpdateOutcome.available => l.updatesAvailable('${res!.release!.version}'),
+            UpdateOutcome.upToDate => l.updatesUpToDate,
+            UpdateOutcome.rateLimited || UpdateOutcome.failed => res!.error ?? l.updatesCouldNotCheck,
             null => s.updateLastCheck == 0
-                ? 'Not checked yet'
-                : 'Last checked ${DateTime.fromMillisecondsSinceEpoch(s.updateLastCheck).toLocal().toString().split('.').first}',
+                ? l.updatesNotCheckedYet
+                : l.updatesLastChecked(DateTime.fromMillisecondsSinceEpoch(s.updateLastCheck).toLocal()),
           };
     return SettingsGroup(
-      title: 'Updates',
-      footer:
-          'Checking contacts api.github.com only (once a week) and sends nothing but the request itself: no identifier, no account or call data. SoftphonePro never downloads or installs anything by itself.',
+      title: l.updatesTitle,
+      footer: l.updatesFooter,
       children: [
         SwitchTile(
           key: const Key('update-check'),
           icon: Icons.system_update_alt_rounded,
-          title: 'Check for updates',
+          title: l.updatesCheckSwitch,
           value: s.updateCheck,
           onChanged: (v) => ref.read(settingsProvider.notifier).update({'updateCheck': v}),
         ),
         ListTile(
           key: const Key('update-check-now'),
           leading: const Icon(Icons.refresh_rounded),
-          title: const Text('Check now'),
+          title: Text(l.updatesCheckNow),
           subtitle: Text(status),
           enabled: !u.checking,
           onTap: () => ref.read(updateProvider.notifier).checkNow(),
@@ -48,10 +49,10 @@ class UpdatesSettingsGroup extends ConsumerWidget {
         if (s.updateSkipVersion.isNotEmpty)
           ListTile(
             leading: const Icon(Icons.undo_rounded),
-            title: Text('Skipping version ${s.updateSkipVersion}'),
+            title: Text(l.updatesSkippingVersion(s.updateSkipVersion)),
             trailing: TextButton(
               onPressed: () => ref.read(settingsProvider.notifier).update({'updateSkipVersion': ''}),
-              child: const Text('Stop skipping'),
+              child: Text(l.updatesStopSkipping),
             ),
           ),
       ],

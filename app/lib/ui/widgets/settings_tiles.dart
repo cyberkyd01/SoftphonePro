@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import 'basic_widgets.dart';
 
 /// Rounded card containing settings rows.
@@ -138,7 +139,7 @@ class TextTile extends StatelessWidget {
       leading: icon == null ? null : Icon(icon),
       title: Text(title),
       subtitle: Text(
-        shown.isEmpty ? (hint ?? subtitle ?? 'Not set') : shown,
+        shown.isEmpty ? (hint ?? subtitle ?? context.l10n.commonNotSet) : shown,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -254,6 +255,7 @@ Future<String?> promptText(
             obscureText: obscure,
             keyboardType: keyboardType,
             maxLines: obscure ? 1 : maxLines,
+            textDirection: keyboardType == TextInputType.number || keyboardType == TextInputType.phone ? TextDirection.ltr : null,
             decoration: InputDecoration(hintText: hint, helperText: helper, helperMaxLines: 3, errorText: error, errorMaxLines: 3),
             onChanged: (_) {
               if (error != null) setLocal(() => error = null);
@@ -261,8 +263,8 @@ Future<String?> promptText(
             onSubmitted: submit,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(onPressed: () => submit(ctl.text), child: const Text('Save')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(ctx.l10n.actionCancel)),
+            FilledButton(onPressed: () => submit(ctl.text), child: Text(ctx.l10n.actionSave)),
           ],
         );
       },
@@ -274,7 +276,7 @@ Future<bool> confirm(
   BuildContext context, {
   required String title,
   required String message,
-  String confirmLabel = 'Delete',
+  String? confirmLabel,
   bool destructive = true,
 }) async {
   final r = await showDialog<bool>(
@@ -283,11 +285,11 @@ Future<bool> confirm(
       title: Text(title),
       content: Text(message),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l10n.actionCancel)),
         FilledButton(
           style: destructive ? FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error) : null,
           onPressed: () => Navigator.pop(ctx, true),
-          child: Text(confirmLabel),
+          child: Text(confirmLabel ?? ctx.l10n.actionDelete),
         ),
       ],
     ),

@@ -1,3 +1,4 @@
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../models/app_settings.dart';
 import '../models/call_record.dart';
@@ -28,18 +29,18 @@ bool shouldAutoRecord({
 }
 
 /// Labels for the per-account override.
-const Map<String, String> kAccountRecordOptions = {
-  'inherit': 'Use global setting',
-  'always': 'Record all calls',
-  'incoming': 'Record incoming calls only',
-  'outgoing': 'Record outgoing calls only',
-  'never': 'Never record',
+Map<String, String> accountRecordOptions(AppLocalizations l) => {
+  'inherit': l.recOptionInherit,
+  'always': l.recOptionAlways,
+  'incoming': l.recOptionIncoming,
+  'outgoing': l.recOptionOutgoing,
+  'never': l.recOptionNever,
 };
 
 /// Labels for the global rule.
-const Map<String, String> kGlobalRecordOptions = {
-  'off': 'Off',
-  'all': 'All calls',
-  'incoming': 'Incoming calls only',
-  'outgoing': 'Outgoing calls only',
+Map<String, String> globalRecordOptions(AppLocalizations l) => {
+  'off': l.commonOff,
+  'all': l.recRuleAll,
+  'incoming': l.recRuleIncoming,
+  'outgoing': l.recRuleOutgoing,
 };

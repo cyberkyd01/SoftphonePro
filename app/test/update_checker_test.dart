@@ -13,6 +13,7 @@ import 'package:softphonepro/services/update_checker.dart';
 import 'package:softphonepro/storage/app_database.dart';
 import 'package:softphonepro/storage/secrets_store.dart';
 import 'package:softphonepro/ui/widgets/update_banner.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 http.Client replying(int code, Object? body, {List<Uri>? log}) => MockClient((req) async {
   log?.add(req.url);
@@ -155,7 +156,7 @@ void main() {
       await tester.runAsync(() => c.read(updateProvider.notifier).checkNow());
       await tester.pumpWidget(UncontrolledProviderScope(
         container: c,
-        child: const MaterialApp(home: Scaffold(body: UpdateBanner())),
+        child: const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: UpdateBanner())),
       ));
       expect(find.text('SoftphonePro 1.1.0 is available'), findsOneWidget);
       await tester.tap(find.byKey(const Key('update-download')));

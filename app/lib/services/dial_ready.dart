@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import 'accounts_controller.dart';
 import 'calls_controller.dart';
 import 'engine_controller.dart';
@@ -19,41 +20,57 @@ class DialReadiness {
 /// How long a link / CLI driven call waits for the engine and the account.
 const Duration kDialReadyTimeout = Duration(seconds: 15);
 
-String _stateWord(AccountStatus s) => switch (s) {
-  AccountStatus.registered => 'registered',
-  AccountStatus.registering => 'still registering',
-  AccountStatus.offline => 'not registered yet',
-  AccountStatus.failed => 'not registered (registration failed)',
-  AccountStatus.disabled => 'disabled',
-};
+String _accountState(AppLocalizations l, String name, AccountStatus s) =>
+    switch (s) {
+      AccountStatus.registered => l.callDialAccountRegistered(name),
+      AccountStatus.registering => l.callDialAccountRegistering(name),
+      AccountStatus.offline => l.callDialAccountOffline(name),
+      AccountStatus.failed => l.callDialAccountFailed(name),
+      AccountStatus.disabled => l.callDialAccountDisabled(name),
+    };
 
 /// `null` = ready, `(true, msg)` = keep waiting, `(false, msg)` = give up.
-({bool wait, String message})? _evaluate(Ref ref, String target, String? accountId) {
+({bool wait, String message})? _evaluate(
+  Ref ref,
+  String target,
+  String? accountId,
+) {
+  final l = ref.read(l10nProvider);
   final eng = ref.read(engineProvider);
   if (eng.phase == EnginePhase.failed) {
     return (
       wait: false,
-      message: 'The call engine failed to start${eng.error == null ? '' : ': ${eng.error}'}',
+      message: eng.error == null
+          ? l.callDialEngineFailed
+          : l.callDialEngineFailedWithReason('${eng.error}'),
     );
   }
   if (!eng.running) {
-    return (wait: true, message: 'The call engine is still starting');
+    return (wait: true, message: l.callDialEngineStarting);
   }
   final calls = ref.read(callsProvider.notifier);
   final res = calls.dialRules().apply(target);
-  if (res.target.isEmpty || res.emergency || ipLiteralHost(res.target) != null) return null;
+  if (res.target.isEmpty || res.emergency || ipLiteralHost(res.target) != null) {
+    return null;
+  }
   final selected = accountId ?? res.accountId ?? ref.read(dialAccountProvider);
   if (selected == kDirectAccountId) return null;
   final acc = ref.read(accountsProvider);
-  final profile = (selected == null ? null : acc.byId(selected)) ?? acc.defaultProfile;
+  final profile =
+      (selected == null ? null : acc.byId(selected)) ?? acc.defaultProfile;
   // No account (the dialler reports it) or a disabled one: nothing to wait for.
   if (profile == null || !profile.enabled) return null;
   final st = acc.statusOf(profile.id);
   if (st == AccountStatus.registered) return null;
-  final base = 'Account ${profile.name} is ${_stateWord(st)}';
+  final base = _accountState(l, profile.name, st);
   if (st == AccountStatus.failed) {
     final why = acc.errorOf(profile.id);
-    return (wait: false, message: why == null || why.isEmpty ? base : '$base: $why');
+    return (
+      wait: false,
+      message: why == null || why.isEmpty
+          ? base
+          : l.callDialBlockedWithReason(base, why),
+    );
   }
   return (wait: true, message: base);
 }
@@ -95,7 +112,11 @@ Future<DialReadiness> waitForDialReady(
     check();
     if (!done.isCompleted) {
       done.complete(
-        DialReadiness.blocked('${r!.message} after ${timeout.inSeconds} s; the call was not placed'),
+        DialReadiness.blocked(
+          ref
+              .read(l10nProvider)
+              .callDialTimedOut(r!.message, timeout.inSeconds),
+        ),
       );
     }
   });

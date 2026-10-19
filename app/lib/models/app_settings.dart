@@ -28,6 +28,9 @@ class AppSettings {
   int get accent => _i('accent', 0xFF3F51E0);
   bool get compactDensity => _b('compactDensity', false);
 
+  /// UI language: `system` (follow the OS) or a code from `kAppLanguages`.
+  String get language => _s('language', 'system');
+
   // ---- status / calls
   String get globalStatus => _s('globalStatus', 'available');
   bool get dnd => _b('dnd', false);

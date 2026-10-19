@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softphonepro/ui/widgets/qr_payload.dart';
 import 'package:softphonepro/ui/widgets/qr_scanner_sheet.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 void main() {
   group('parseQrPayload', () {
@@ -31,7 +32,7 @@ void main() {
   testWidgets('paste fallback returns trimmed text; no camera shown when unsupported', (tester) async {
     String? got;
     await tester.pumpWidget(
-      MaterialApp(
+      MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, 
         home: Builder(
           builder: (ctx) => TextButton(
             onPressed: () async => got = await showQrScannerSheet(ctx, cameraSupported: false),
@@ -55,7 +56,7 @@ void main() {
     String? got;
     ValueChanged<String>? emit;
     await tester.pumpWidget(
-      MaterialApp(
+      MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, 
         home: Builder(
           builder: (ctx) => TextButton(
             onPressed: () async => got = await showQrScannerSheet(

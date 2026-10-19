@@ -1,0 +1,5 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro needs the microphone to carry your voice during calls.";
+"NSContactsUsageDescription" = "SoftphonePro can show your device contacts when you search or dial, and import them on request.";
+"NSCameraUsageDescription" = "SoftphonePro uses the camera to scan provisioning and pairing QR codes.";
+"NSFaceIDUsageDescription" = "SoftphonePro uses Face ID to unlock the app.";
+"NSLocalNetworkUsageDescription" = "SoftphonePro discovers other SoftphonePro devices on your local network.";

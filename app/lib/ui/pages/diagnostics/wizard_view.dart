@@ -5,6 +5,7 @@ import '../../../core/theme.dart';
 import '../../../diagnostics/export_service.dart';
 import '../../../diagnostics/network_wizard.dart';
 import '../../../diagnostics/system_info.dart';
+import '../../../l10n/l10n.dart';
 
 class WizardView extends ConsumerWidget {
   const WizardView({super.key});
@@ -14,11 +15,12 @@ class WizardView extends ConsumerWidget {
     final w = ref.watch(networkWizardProvider);
     final ctl = ref.read(networkWizardProvider.notifier);
     final t = Theme.of(context);
+    final l = context.l10n;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
         Text(
-          'Checks your connection, DNS, NAT, server reachability, TLS and registration, and explains what to fix.',
+          l.diagWizIntro,
           style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
@@ -28,26 +30,26 @@ class WizardView extends ConsumerWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (w.running)
-              OutlinedButton.icon(key: const Key('wizard-stop'), onPressed: ctl.cancel, icon: const Icon(Icons.stop_rounded), label: const Text('Stop'))
+              OutlinedButton.icon(key: const Key('wizard-stop'), onPressed: ctl.cancel, icon: const Icon(Icons.stop_rounded), label: Text(l.diagWizStop))
             else
               FilledButton.icon(
                 key: const Key('wizard-run'),
                 onPressed: ctl.run,
                 icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(w.steps.isEmpty ? 'Run checks' : 'Run again'),
+                label: Text(w.steps.isEmpty ? l.diagWizRunChecks : l.diagWizRunAgain),
               ),
             if (w.steps.isNotEmpty && !w.running) ...[
               OutlinedButton.icon(
                 key: const Key('wizard-copy'),
-                onPressed: () => ref.read(diagnosticsExporterProvider).copy(_report(ref), what: 'Report'),
+                onPressed: () => ref.read(diagnosticsExporterProvider).copy(_report(ref), confirmation: l.diagCopiedReport),
                 icon: const Icon(Icons.copy_rounded),
-                label: const Text('Copy report'),
+                label: Text(l.diagWizCopyReport),
               ),
               OutlinedButton.icon(
                 key: const Key('wizard-save'),
                 onPressed: () => ref.read(diagnosticsExporterProvider).saveText('network-report-${stamp()}.txt', _report(ref)),
                 icon: const Icon(Icons.ios_share_rounded),
-                label: const Text('Save report'),
+                label: Text(l.diagWizSaveReport),
               ),
             ],
           ],
@@ -57,9 +59,9 @@ class WizardView extends ConsumerWidget {
           Wrap(
             spacing: 8,
             children: [
-              _count(context, 'Passed', w.count(StepStatus.pass), context.colors.regOk),
-              _count(context, 'Warnings', w.count(StepStatus.warn), context.colors.regWarn),
-              _count(context, 'Failed', w.count(StepStatus.fail), context.colors.regFail),
+              _count(l.diagWizCountPassed(w.count(StepStatus.pass)), context.colors.regOk),
+              _count(l.diagWizCountWarnings(w.count(StepStatus.warn)), context.colors.regWarn),
+              _count(l.diagWizCountFailed(w.count(StepStatus.fail)), context.colors.regFail),
             ],
           ),
         ],
@@ -74,8 +76,8 @@ class WizardView extends ConsumerWidget {
     return ref.read(networkWizardProvider.notifier).buildReport(header: info?.toText());
   }
 
-  Widget _count(BuildContext context, String l, int n, Color c) =>
-      Chip(visualDensity: VisualDensity.compact, avatar: CircleAvatar(backgroundColor: c, radius: 5), label: Text('$l $n'));
+  Widget _count(String label, Color c) =>
+      Chip(visualDensity: VisualDensity.compact, avatar: CircleAvatar(backgroundColor: c, radius: 5), label: Text(label));
 }
 
 class _StepCard extends ConsumerWidget {
@@ -85,6 +87,7 @@ class _StepCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final c = context.colors;
     final (icon, color) = switch (step.status) {
       StepStatus.pass => (Icons.check_circle_rounded, c.regOk),
@@ -103,14 +106,21 @@ class _StepCard extends ConsumerWidget {
           children: [
             step.status == StepStatus.running
                 ? const SizedBox(width: 24, height: 24, child: Padding(padding: EdgeInsets.all(2), child: CircularProgressIndicator(strokeWidth: 2.5)))
-                : Icon(icon, color: color, semanticLabel: step.status.name),
+                : Icon(icon, color: color, semanticLabel: switch (step.status) {
+                    StepStatus.pass => l.diagWizStatusPass,
+                    StepStatus.warn => l.diagWizStatusWarn,
+                    StepStatus.fail => l.diagWizStatusFail,
+                    StepStatus.skipped => l.diagWizStatusSkipped,
+                    StepStatus.running => l.diagWizStatusRunning,
+                    StepStatus.pending => l.diagWizStatusPending,
+                  }),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(step.title, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                  if (step.summary.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(step.summary)),
+                  if (step.summary.isNotEmpty) Padding(padding: const EdgeInsetsDirectional.only(top: 2), child: Text(step.summary)),
                   for (final d in step.details)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../core/format.dart';
+import '../../l10n/l10n.dart';
 import '../../models/provider_templates.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/providers.dart';
@@ -78,11 +79,11 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
 
   Future<void> _save() async {
     if (_user.text.trim().isEmpty || _domain.text.trim().isEmpty) {
-      setState(() => _err = 'Username and server are required');
+      setState(() => _err = context.l10n.onboardingRequired);
       return;
     }
-    final domErr = validateHost(_domain.text);
-    final portErr = _tpl!.isIax ? validateInt(_port.text, min: 1, max: 65535) : null;
+    final domErr = validateHost(_domain.text, context.l10n);
+    final portErr = _tpl!.isIax ? validateInt(_port.text, min: 1, max: 65535, l: context.l10n) : null;
     if (domErr != null || portErr != null) {
       setState(() {
         _err = null;
@@ -116,9 +117,9 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Choose your provider', style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+          Text(context.l10n.onboardingChooseProvider, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('We prefill transport, ports and NAT settings for you.', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+          Text(context.l10n.onboardingChooseProviderSub, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 12),
           _protoPicker(),
           const SizedBox(height: 12),
@@ -130,7 +131,7 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
                   key: Key('tpl-${tpl.id}'),
                   leading: Avatar(name: tpl.name, size: 40),
                   title: Text(tpl.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(tpl.description),
+                  subtitle: Text(tpl.descriptionOf(context.l10n)),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _pick(tpl),
                 ),
@@ -147,7 +148,7 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
                     if (n > 0) widget.onDone();
                   },
                   icon: const Icon(Icons.qr_code_scanner_rounded),
-                  label: const Text('Scan QR'),
+                  label: Text(context.l10n.onboardingScanQr),
                 ),
               ),
               const SizedBox(width: 8),
@@ -158,14 +159,14 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
                     if (n > 0) widget.onDone();
                   },
                   icon: const Icon(Icons.link_rounded),
-                  label: const Text('Import from URL'),
+                  label: Text(context.l10n.onboardingImportUrl),
                 ),
               ),
             ],
           ),
           if (widget.onSkip != null) ...[
             const SizedBox(height: 8),
-            TextButton(key: const Key('onb-skip'), onPressed: widget.onSkip, child: const Text('Skip for now (demo mode)')),
+            TextButton(key: const Key('onb-skip'), onPressed: widget.onSkip, child: Text(context.l10n.onboardingSkip)),
           ],
         ],
       );
@@ -175,13 +176,13 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
       children: [
         Row(
           children: [
-            IconButton(tooltip: 'Back', onPressed: () => setState(() => _tpl = null), icon: const Icon(Icons.arrow_back_rounded)),
+            IconButton(tooltip: context.l10n.actionBack, onPressed: () => setState(() => _tpl = null), icon: const Icon(Icons.arrow_back_rounded)),
             Expanded(child: Text(_tpl!.name, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
           ],
         ),
         const SizedBox(height: 4),
         _protoPicker(),
-        if (_tpl!.notes.isNotEmpty) ...[
+        if (_tpl!.notesOf(context.l10n).isNotEmpty) ...[
           const SizedBox(height: 12),
           Container(
             key: const Key('acc-notes'),
@@ -192,13 +193,13 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
               children: [
                 Icon(Icons.info_outline_rounded, size: 20, color: t.colorScheme.onSecondaryContainer),
                 const SizedBox(width: 10),
-                Expanded(child: Text(_tpl!.notes, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSecondaryContainer))),
+                Expanded(child: Text(_tpl!.notesOf(context.l10n), style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSecondaryContainer))),
               ],
             ),
           ),
         ],
         const SizedBox(height: 12),
-        TextField(key: const Key('acc-username'), controller: _user, autocorrect: false, decoration: InputDecoration(labelText: _tpl!.usernameHint, prefixIcon: const Icon(Icons.person_rounded))),
+        TextField(key: const Key('acc-username'), controller: _user, autocorrect: false, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: _tpl!.usernameHintOf(context.l10n), prefixIcon: const Icon(Icons.person_rounded))),
         const SizedBox(height: 12),
         TextField(
           key: const Key('acc-password'),
@@ -206,9 +207,9 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
           obscureText: !_showPass,
           autocorrect: false,
           decoration: InputDecoration(
-            labelText: 'Password',
+            labelText: context.l10n.acctFieldPassword,
             prefixIcon: const Icon(Icons.key_rounded),
-            suffixIcon: IconButton(tooltip: _showPass ? 'Hide password' : 'Show password', onPressed: () => setState(() => _showPass = !_showPass), icon: Icon(_showPass ? Icons.visibility_off_rounded : Icons.visibility_rounded)),
+            suffixIcon: IconButton(tooltip: _showPass ? context.l10n.onboardingHidePassword : context.l10n.onboardingShowPassword, onPressed: () => setState(() => _showPass = !_showPass), icon: Icon(_showPass ? Icons.visibility_off_rounded : Icons.visibility_rounded)),
           ),
         ),
         const SizedBox(height: 12),
@@ -216,15 +217,16 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
           key: const Key('acc-domain'),
           controller: _domain,
           autocorrect: false,
+          textDirection: TextDirection.ltr,
           keyboardType: TextInputType.url,
           onChanged: (_) {
             if (_domainErr != null) setState(() => _domainErr = null);
           },
           decoration: InputDecoration(
-            labelText: _tpl!.serverLabel,
+            labelText: _tpl!.serverLabelOf(context.l10n),
             prefixIcon: const Icon(Icons.dns_rounded),
             errorText: _domainErr,
-            helperText: _tpl!.defaultPort != null && !_tpl!.isIax ? 'Port ${_tpl!.defaultPort} is used unless you add :port' : null,
+            helperText: _tpl!.defaultPort != null && !_tpl!.isIax ? context.l10n.onboardingDefaultPortHelper(_tpl!.defaultPort!) : null,
           ),
         ),
         const SizedBox(height: 12),
@@ -232,29 +234,30 @@ class _AddAccountFlowState extends ConsumerState<AddAccountFlow> {
           TextField(
             key: const Key('acc-port'),
             controller: _port,
+            textDirection: TextDirection.ltr,
             keyboardType: TextInputType.number,
             onChanged: (_) {
               if (_portErr != null) setState(() => _portErr = null);
             },
-            decoration: InputDecoration(labelText: 'Port', prefixIcon: const Icon(Icons.numbers_rounded), errorText: _portErr, helperText: 'IAX2 default is 4569'),
+            decoration: InputDecoration(labelText: context.l10n.acctFieldPort, prefixIcon: const Icon(Icons.numbers_rounded), errorText: _portErr, helperText: context.l10n.acctFieldIaxPortSub),
           ),
           const SizedBox(height: 12),
-          TextField(key: const Key('acc-context'), controller: _context, autocorrect: false, decoration: const InputDecoration(labelText: 'Context (optional)', prefixIcon: Icon(Icons.account_tree_rounded))),
+          TextField(key: const Key('acc-context'), controller: _context, autocorrect: false, decoration: InputDecoration(labelText: context.l10n.onboardingContextOptional, prefixIcon: Icon(Icons.account_tree_rounded))),
           const SizedBox(height: 12),
         ],
-        TextField(key: const Key('acc-name'), controller: _name, decoration: const InputDecoration(labelText: 'Display name (optional)', prefixIcon: Icon(Icons.badge_rounded))),
+        TextField(key: const Key('acc-name'), controller: _name, decoration: InputDecoration(labelText: context.l10n.onboardingDisplayNameOptional, prefixIcon: Icon(Icons.badge_rounded))),
         const SizedBox(height: 12),
-        TextField(controller: _label, decoration: const InputDecoration(labelText: 'Account label (optional)', prefixIcon: Icon(Icons.label_rounded))),
+        TextField(controller: _label, decoration: InputDecoration(labelText: context.l10n.onboardingLabelOptional, prefixIcon: Icon(Icons.label_rounded))),
         const SizedBox(height: 12),
         if (_tpl!.isIax)
-          TextField(key: const Key('acc-callerid'), controller: _callerId, decoration: const InputDecoration(labelText: 'Caller ID (optional)', prefixIcon: Icon(Icons.contact_phone_rounded)))
+          TextField(key: const Key('acc-callerid'), controller: _callerId, decoration: InputDecoration(labelText: context.l10n.onboardingCallerIdOptional, prefixIcon: Icon(Icons.contact_phone_rounded)))
         else
-          TextField(controller: _auth, autocorrect: false, decoration: const InputDecoration(labelText: 'Authorization user (if different)', prefixIcon: Icon(Icons.verified_user_rounded))),
+          TextField(controller: _auth, autocorrect: false, decoration: InputDecoration(labelText: context.l10n.onboardingAuthUserOptional, prefixIcon: Icon(Icons.verified_user_rounded))),
         if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: TextStyle(color: t.colorScheme.error))),
         const SizedBox(height: 20),
-        FilledButton(key: const Key('acc-save'), onPressed: _save, child: const Text('Add account')),
+        FilledButton(key: const Key('acc-save'), onPressed: _save, child: Text(context.l10n.acctAddAccount)),
         const SizedBox(height: 8),
-        Text('You can fine-tune ${_tpl!.isIax ? 'codecs and registration' : 'transport, NAT, security and codecs'} later in Settings.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
+        Text(_tpl!.isIax ? context.l10n.onboardingFineTuneIax : context.l10n.onboardingFineTuneSip, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
       ],
     );
   }
@@ -265,7 +268,7 @@ class AccountWizardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add account')),
+      appBar: AppBar(title: Text(context.l10n.acctAddAccount)),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -287,7 +290,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Future<void> _finish({bool demo = false}) async {
     if (demo && ref.read(accountsProvider).profiles.isEmpty) {
-      final p = templateById('generic').build(id: newId(), username: '1001', password: 'demo', domain: 'demo.softphonepro.local', displayName: 'Demo user', label: 'Demo account');
+      final p = templateById('generic').build(id: newId(), username: '1001', password: 'demo', domain: 'demo.softphonepro.local', displayName: ref.read(l10nProvider).onboardingDemoUser, label: ref.read(l10nProvider).onboardingDemoAccount);
       await ref.read(accountsProvider.notifier).add(p);
     }
     await ref.read(settingsProvider.notifier).update({'onboardingDone': true});
@@ -302,18 +305,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       case 0:
         page = _Intro(
           icon: Icons.phone_in_talk_rounded,
-          title: 'Welcome to SoftphonePro',
-          text: 'Professional calling for every platform - free and open source. No ads, no tracking.',
-          button: 'Get started',
+          title: context.l10n.onboardingWelcomeTitle,
+          text: context.l10n.onboardingWelcomeText,
+          button: context.l10n.onboardingGetStarted,
           buttonKey: 'onb-get-started',
           onNext: () => setState(() => _step = 1),
         );
       case 1:
         page = _Intro(
           icon: Icons.mic_rounded,
-          title: 'Permissions',
-          text: 'SoftphonePro needs the microphone to carry your voice, and notifications to tell you about incoming calls and messages. Nothing leaves your device except your calls.',
-          button: 'Continue',
+          title: context.l10n.onboardingPermissionsTitle,
+          text: context.l10n.onboardingPermissionsText,
+          button: context.l10n.actionContinue,
           buttonKey: 'onb-continue',
           onNext: () async {
             await ref.read(platformServicesProvider).requestPermissions();

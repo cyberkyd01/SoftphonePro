@@ -1,0 +1,5 @@
+"NSMicrophoneUsageDescription" = "कॉल के दौरान आपकी आवाज़ पहुँचाने के लिए SoftphonePro को माइक्रोफ़ोन की आवश्यकता है।";
+"NSContactsUsageDescription" = "खोजते या डायल करते समय SoftphonePro आपके डिवाइस के संपर्क दिखा सकता है, और अनुरोध करने पर उन्हें इंपोर्ट कर सकता है।";
+"NSCameraUsageDescription" = "SoftphonePro प्रोविज़निंग और पेयरिंग QR कोड स्कैन करने के लिए कैमरे का उपयोग करता है।";
+"NSFaceIDUsageDescription" = "SoftphonePro ऐप अनलॉक करने के लिए Face ID का उपयोग करता है।";
+"NSLocalNetworkUsageDescription" = "SoftphonePro आपके स्थानीय नेटवर्क पर अन्य SoftphonePro डिवाइस खोजता है।";

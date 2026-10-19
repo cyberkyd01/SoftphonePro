@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/providers.dart';
 import '../services/settings_controller.dart';
 import '../ui/widgets/settings_tiles.dart';
@@ -17,27 +18,28 @@ class AppLockSettingsGroup extends ConsumerWidget {
     final bio = ref.watch(biometricAvailableProvider).maybeWhen(data: (v) => v, orElse: () => false);
     final lock = ref.read(appLockProvider.notifier);
     final notice = ref.read(noticeProvider.notifier);
+    final l = context.l10n;
     return SettingsGroup(
-      title: 'App lock',
-      footer: 'Calls still ring and can be answered while the app is locked.',
+      title: l.appLockTitle,
+      footer: l.appLockFooter,
       children: [
         SwitchTile(
           key: const Key('applock-switch'),
           icon: Icons.lock_rounded,
-          title: 'Require PIN to open the app',
-          subtitle: s.appLock ? 'History, contacts, messages and settings are locked' : 'Off',
+          title: l.appLockRequirePin,
+          subtitle: s.appLock ? l.appLockOnHint : l.commonOff,
           value: s.appLock,
           onChanged: (on) async {
             if (on) {
               final pin = await showNewPinDialog(context);
               if (pin == null) return;
               await lock.enable(pin);
-              notice.show('App lock is on');
+              notice.show(l.appLockIsOn);
             } else {
-              final ok = await verifyPinDialog(context, ref, title: 'Turn off app lock');
+              final ok = await verifyPinDialog(context, ref, title: l.appLockTurnOff);
               if (ok) {
                 await lock.disable();
-                notice.show('App lock is off');
+                notice.show(l.appLockIsOff);
               }
             }
           },
@@ -46,35 +48,35 @@ class AppLockSettingsGroup extends ConsumerWidget {
           NavTile(
             key: const Key('applock-change'),
             icon: Icons.password_rounded,
-            title: 'Change PIN',
+            title: l.appLockChangePin,
             onTap: () async {
-              if (!await verifyPinDialog(context, ref, title: 'Enter current PIN')) return;
+              if (!await verifyPinDialog(context, ref, title: l.appLockEnterCurrent)) return;
               if (!context.mounted) return;
               final pin = await showNewPinDialog(context);
               if (pin == null) return;
               await ref.read(appLockServiceProvider).setPin(pin);
-              notice.show('PIN changed');
+              notice.show(l.appLockPinChanged);
             },
           ),
           SelectTile<int>(
             icon: Icons.timer_outlined,
-            title: 'Lock after',
-            subtitle: 'Time in the background before the PIN is needed again',
+            title: l.appLockLockAfter,
+            subtitle: l.appLockLockAfterHint,
             value: const [0, 1, 5, 15, 30, 60].contains(s.appLockMinutes) ? s.appLockMinutes : 1,
-            options: const {0: 'Immediately', 1: '1 minute', 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour'},
+            options: {0: l.appLockImmediately, 1: l.appLockMinutes(1), 5: l.appLockMinutes(5), 15: l.appLockMinutes(15), 30: l.appLockMinutes(30), 60: l.appLockHour},
             onChanged: (v) => ref.read(settingsProvider.notifier).update({'appLockMinutes': v}),
           ),
           if (bio)
             SwitchTile(
               icon: Icons.fingerprint_rounded,
-              title: 'Unlock with biometrics',
+              title: l.appLockBiometrics,
               value: s.appLockBiometrics,
               onChanged: (v) => ref.read(settingsProvider.notifier).update({'appLockBiometrics': v}),
             ),
           NavTile(
             key: const Key('applock-now'),
             icon: Icons.lock_clock_rounded,
-            title: 'Lock now',
+            title: l.appLockNow,
             onTap: lock.lock,
           ),
         ],
@@ -87,6 +89,7 @@ final biometricAvailableProvider = FutureProvider<bool>((ref) => ref.watch(biome
 
 /// Asks twice for a new 4-8 digit PIN; null when cancelled.
 Future<String?> showNewPinDialog(BuildContext context) {
+  final l = context.l10n;
   final a = TextEditingController();
   final b = TextEditingController();
   String? error;
@@ -94,7 +97,7 @@ Future<String?> showNewPinDialog(BuildContext context) {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => AlertDialog(
-        title: const Text('Set a PIN'),
+        title: Text(l.appLockSetPin),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -104,33 +107,35 @@ Future<String?> showNewPinDialog(BuildContext context) {
               autofocus: true,
               obscureText: true,
               keyboardType: TextInputType.number,
+              textDirection: TextDirection.ltr,
               maxLength: AppLockService.maxPinLength,
-              decoration: const InputDecoration(labelText: 'PIN (4-8 digits)', counterText: ''),
+              decoration: InputDecoration(labelText: l.appLockPinDigits, counterText: ''),
             ),
             TextField(
               key: const Key('pin-confirm'),
               controller: b,
               obscureText: true,
               keyboardType: TextInputType.number,
+              textDirection: TextDirection.ltr,
               maxLength: AppLockService.maxPinLength,
-              decoration: InputDecoration(labelText: 'Repeat PIN', counterText: '', errorText: error),
+              decoration: InputDecoration(labelText: l.appLockRepeatPin, counterText: '', errorText: error),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.actionCancel)),
           FilledButton(
             key: const Key('pin-save'),
             onPressed: () {
               if (!AppLockService.isValidPin(a.text)) {
-                setState(() => error = 'Use 4 to 8 digits');
+                setState(() => error = l.appLockUseDigits);
               } else if (a.text != b.text) {
-                setState(() => error = 'PINs do not match');
+                setState(() => error = l.appLockMismatch);
               } else {
                 Navigator.pop(ctx, a.text);
               }
             },
-            child: const Text('Save'),
+            child: Text(l.actionSave),
           ),
         ],
       ),
@@ -141,6 +146,7 @@ Future<String?> showNewPinDialog(BuildContext context) {
 /// Prompts for the current PIN and checks it (with the same backoff as the
 /// lock screen). True when it was right.
 Future<bool> verifyPinDialog(BuildContext context, WidgetRef ref, {required String title}) async {
+  final l = context.l10n;
   final c = TextEditingController();
   final svc = ref.read(appLockServiceProvider);
   String? error;
@@ -155,11 +161,12 @@ Future<bool> verifyPinDialog(BuildContext context, WidgetRef ref, {required Stri
           autofocus: true,
           obscureText: true,
           keyboardType: TextInputType.number,
+              textDirection: TextDirection.ltr,
           maxLength: AppLockService.maxPinLength,
-          decoration: InputDecoration(labelText: 'PIN', counterText: '', errorText: error),
+          decoration: InputDecoration(labelText: l.appLockPin, counterText: '', errorText: error),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.actionCancel)),
           FilledButton(
             key: const Key('pin-verify'),
             onPressed: () async {
@@ -169,13 +176,13 @@ Future<bool> verifyPinDialog(BuildContext context, WidgetRef ref, {required Stri
               } else {
                 setState(() {
                   error = r.result == PinResult.lockedOut || r.retryAfter > Duration.zero
-                      ? 'Too many attempts. Try again in ${r.retryAfter.inSeconds}s'
-                      : 'Wrong PIN';
+                      ? l.appLockTooManyTryIn(r.retryAfter.inSeconds)
+                      : l.appLockWrongPin;
                   c.clear();
                 });
               }
             },
-            child: const Text('OK'),
+            child: Text(l.actionOk),
           ),
         ],
       ),

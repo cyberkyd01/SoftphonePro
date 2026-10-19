@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:flutter_localizations/flutter_localizations.dart';
+
 import 'core/theme.dart';
+import 'l10n/l10n.dart';
 import 'security/app_lock_gate.dart';
 import 'services/app_services.dart';
 import 'services/calls_controller.dart';
@@ -40,6 +43,11 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
   }
 
   @override
+  void didChangeLocales(List<Locale>? locales) {
+    ref.read(systemLocalesProvider.notifier).refresh();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
       ref.read(engineProvider.notifier).onAppDetached();
@@ -64,10 +72,10 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
           action: n.details == null
               ? null
               : SnackBarAction(
-                  label: 'Details',
+                  label: ref.read(l10nProvider).actionDetails,
                   onPressed: () {
                     final ctx = rootNavigatorKey.currentContext;
-                    if (ctx != null) showErrorDetails(ctx, n.isError ? 'Error' : 'Details', n.message, n.details);
+                    if (ctx != null) showErrorDetails(ctx, n.isError ? ref.read(l10nProvider).commonError : ref.read(l10nProvider).actionDetails, n.message, n.details);
                   },
                 ),
         ),
@@ -82,18 +90,26 @@ class _SoftphoneAppState extends ConsumerState<SoftphoneApp> with WidgetsBinding
         barrierDismissible: false,
         builder: (dctx) => AlertDialog(
           key: const Key('redirect-prompt'),
-          title: const Text('Call redirected'),
-          content: Text('Call redirected to ${p.target} - follow?'),
+          title: Text(dctx.l10n.appRedirectTitle),
+          content: Text(dctx.l10n.appRedirectMessage(p.target)),
           actions: [
-            TextButton(key: const Key('redirect-reject'), onPressed: () => Navigator.pop(dctx, false), child: const Text('Cancel call')),
-            FilledButton(key: const Key('redirect-follow'), onPressed: () => Navigator.pop(dctx, true), child: const Text('Follow')),
+            TextButton(key: const Key('redirect-reject'), onPressed: () => Navigator.pop(dctx, false), child: Text(dctx.l10n.appRedirectCancelCall)),
+            FilledButton(key: const Key('redirect-follow'), onPressed: () => Navigator.pop(dctx, true), child: Text(dctx.l10n.acctOptRedirectFollow)),
           ],
         ),
       ).then((v) => ref.read(callsProvider.notifier).resolveRedirect(v ?? false));
     });
     return MaterialApp.router(
-      title: 'SoftphonePro',
+      onGenerateTitle: (ctx) => ctx.l10n.appName,
       debugShowCheckedModeBanner: false,
+      locale: ref.watch(appLocaleProvider),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       scaffoldMessengerKey: rootMessengerKey,
       routerConfig: router,
       themeMode: settings.themeMode,

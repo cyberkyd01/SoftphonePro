@@ -1,11 +1,12 @@
 import 'package:spcore_dart/spcore_dart.dart' show CallState;
 
+import '../l10n/l10n.dart';
 import '../models/contact.dart';
 import '../services/calls_controller.dart';
 import '../services/caller_identity.dart';
 
 /// Display name for a live call: contact name, remote display, or number.
-String callTitle(UiCall c, List<Contact> contacts) {
+String callTitle(UiCall c, List<Contact> contacts, AppLocalizations l) {
   final lan = c.lan;
   if (lan != null) {
     // Transferred calls are about the original caller; other LAN calls about the device.
@@ -18,27 +19,27 @@ String callTitle(UiCall c, List<Contact> contacts) {
   if (who.name.isNotEmpty) return who.name;
   if (who.number.isNotEmpty) return who.number;
   if (c.number.isNotEmpty) return c.number;
-  return 'Unknown caller';
+  return l.uiUnknownCaller;
 }
 
-String callStateText(UiCall c) {
-  if (c.isEnded) return 'Call ended';
-  if (c.transferStalled) return 'Transfer not confirmed';
-  if (c.transferPending) return 'Transferring...';
-  if (c.isConference) return 'Conference';
-  if (c.isHeld) return 'On hold';
-  if (c.remoteHeld) return 'Held by remote';
+String callStateText(UiCall c, AppLocalizations l) {
+  if (c.isEnded) return l.uiCallEnded;
+  if (c.transferStalled) return l.uiCallTransferNotConfirmed;
+  if (c.transferPending) return l.uiCallTransferring;
+  if (c.isConference) return l.uiCallConference;
+  if (c.isHeld) return l.uiCallOnHold;
+  if (c.remoteHeld) return l.uiCallHeldByRemote;
   switch (c.state) {
     case CallState.calling:
-      return 'Calling...';
+      return l.uiCallCalling;
     case CallState.early:
-      return 'Ringing...';
+      return l.uiCallRinging;
     case CallState.connecting:
-      return 'Connecting...';
+      return l.uiCallConnecting;
     case CallState.incoming:
-      return 'Incoming call';
+      return l.uiCallIncoming;
     case CallState.confirmed:
-      return 'Connected';
+      return l.uiCallConnected;
     default:
       return c.info.stateReason.isEmpty ? '...' : c.info.stateReason;
   }

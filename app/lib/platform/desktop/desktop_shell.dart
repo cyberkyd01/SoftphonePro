@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, Locale;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/app_settings.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/app_services.dart';
@@ -29,14 +30,11 @@ String trayTooltipText({
   required int online,
   required int total,
   String status = 'available',
+  AppLocalizations? l10n,
 }) {
-  final s = switch (status) {
-    'away' => ' (Away)',
-    'dnd' => ' (Do not disturb)',
-    _ => '',
-  };
-  if (total == 0) return 'SoftphonePro - no accounts$s';
-  return 'SoftphonePro - $online/$total online$s';
+  final l = l10n ?? lookupAppLocalizations(const Locale('en'));
+  if (total == 0) return l.trayTooltipNoAccounts(status);
+  return l.trayTooltipOnline(online, total, status);
 }
 
 /// One account row of the tray menu.
@@ -54,22 +52,25 @@ List<TrayMenuEntry> buildTrayMenu({
   required String status,
   required List<TrayAccount> accounts,
   int badge = 0,
-}) => [
-  TrayMenuEntry('toggle', windowVisible ? 'Hide SoftphonePro' : 'Show SoftphonePro'),
-  if (badge > 0) TrayMenuEntry('recents', '$badge new - open Recents'),
+  AppLocalizations? l10n,
+}) {
+  final l = l10n ?? lookupAppLocalizations(const Locale('en'));
+  return [
+  TrayMenuEntry('toggle', windowVisible ? l.trayHideApp : l.trayShowApp),
+  if (badge > 0) TrayMenuEntry('recents', l.trayNewOpenRecents(badge)),
   const TrayMenuEntry.separator(),
   TrayMenuEntry(
     'status',
-    'Status',
+    l.trayStatus,
     children: [
-      TrayMenuEntry('status:available', 'Available', checked: status == 'available'),
-      TrayMenuEntry('status:away', 'Away', checked: status == 'away'),
-      TrayMenuEntry('status:dnd', 'Do not disturb', checked: status == 'dnd'),
+      TrayMenuEntry('status:available', l.statusAvailable, checked: status == 'available'),
+      TrayMenuEntry('status:away', l.trayStatusAway, checked: status == 'away'),
+      TrayMenuEntry('status:dnd', l.statusDoNotDisturb, checked: status == 'dnd'),
     ],
   ),
   TrayMenuEntry(
     'accounts',
-    'Accounts',
+    l.trayAccounts,
     disabled: accounts.isEmpty,
     children: [
       for (final a in accounts)
@@ -77,8 +78,9 @@ List<TrayMenuEntry> buildTrayMenu({
     ],
   ),
   const TrayMenuEntry.separator(),
-  const TrayMenuEntry('quit', 'Quit SoftphonePro'),
-];
+  TrayMenuEntry('quit', l.trayQuit),
+  ];
+}
 
 /// Glue between the desktop OS shell and the app's controllers: tray menu,
 /// global hotkeys, close-to-tray, remembered window geometry, graceful quit.
@@ -103,8 +105,10 @@ class DesktopShell with WindowListener {
     final p = ref.read(platformServicesProvider);
     if (p is! DesktopPlatformServices) return;
     _platform = p;
+    _platform.l10n = () => ref.read(l10nProvider);
 
     _subs.add(ref.listen<AccountsState>(accountsProvider, (_, _) => _refreshTray()));
+    _subs.add(ref.listen<Locale>(appLocaleProvider, (_, _) => _refreshTray()));
     _subs.add(ref.listen<AppSettings>(settingsProvider, _onSettings));
     _subs.add(ref.listen<int>(missedCountProvider, (_, _) => _refreshTray()));
     _subs.add(ref.listen<int>(unreadMessagesProvider, (_, _) => _refreshTray()));
@@ -177,13 +181,14 @@ class DesktopShell with WindowListener {
     final online = enabled.where((p) => acc.statusOf(p.id) == AccountStatus.registered).length;
     final status = _settings.globalStatus;
     final int badge = (ref.read(missedCountProvider) + ref.read(unreadMessagesProvider)).toInt();
-    unawaited(_platform.setTrayTooltip(trayTooltipText(online: online, total: enabled.length, status: status)));
+    unawaited(_platform.setTrayTooltip(trayTooltipText(online: online, total: enabled.length, status: status, l10n: ref.read(l10nProvider))));
     unawaited(
       _platform.tray.setMenu(
         buildTrayMenu(
           windowVisible: _visible,
           status: status,
           badge: badge,
+          l10n: ref.read(l10nProvider),
           accounts: [
             for (final p in enabled)
               TrayAccount(p.id, p.name, acc.statusOf(p.id) == AccountStatus.registered),

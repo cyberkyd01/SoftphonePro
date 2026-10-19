@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softphonepro/ui/settings/native_licenses.dart';
 import 'package:softphonepro/ui/settings/sections.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 void main() {
   testWidgets('About lists the bundled native components', (tester) async {
     tester.view.physicalSize = const Size(900, 3000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(const ProviderScope(child: MaterialApp(home: Scaffold(body: AboutSection()))));
+    await tester.pumpWidget(const ProviderScope(child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: AboutSection()))));
     for (final name in ['PJSIP', 'OpenSSL', 'Opus', 'bcg729', 'RNNoise', 'minimp3', 'cJSON', 'Mozilla CA certificate bundle', 'Inter typeface']) {
       expect(find.text(name), findsOneWidget, reason: name);
     }

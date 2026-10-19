@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../models/call_record.dart';
 import '../../models/contact.dart';
 import '../../services/accounts_controller.dart';
@@ -143,7 +144,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
     final sel = ref.read(dialAccountProvider);
     final p = (sel != null ? acc.byId(sel) : null) ?? acc.defaultProfile;
     if (p == null || p.effectiveVoicemail.isEmpty) {
-      ref.read(noticeProvider.notifier).show('No voicemail number configured for this account');
+      ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).keypadNoVoicemail);
       return;
     }
     await ref.read(callsProvider.notifier).dial(p.effectiveVoicemail, accountId: p.id, applyRules: false);
@@ -189,7 +190,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
     final callBtn = RoundCallButton(
       icon: Icons.call_rounded,
       color: context.colors.callGreen,
-      label: 'Call',
+      label: context.l10n.keypadCall,
       size: 72,
       onPressed: _call,
     );
@@ -237,7 +238,9 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                         callBtn,
                         const SizedBox(height: 8),
                         Text(
-                          isDirect ? 'Call directly (no account)' : (selected == null ? 'Add an account to place calls' : 'Call from ${selected.name}'),
+                          isDirect
+                              ? context.l10n.keypadCallDirectly
+                              : (selected == null ? context.l10n.keypadAddAccount : context.l10n.keypadCallFrom(selected.name)),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ],
@@ -255,7 +258,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
               SizedBox(
                 width: 340,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 24, 24, 24),
+                  padding: const EdgeInsetsDirectional.fromSTEB(0, 24, 24, 24),
                   child: _SuggestionsPanel(suggestions: suggestions, query: text, onPick: pick, onCall: (s) => ref.read(callsProvider.notifier).dial(s.number)),
                 ),
               ),
@@ -281,7 +284,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
               // suggestions (or recent calls while nothing is typed).
               Expanded(
                 child: _QuickList(
-                  title: text.trim().isEmpty ? 'Recent' : 'Suggestions',
+                  title: text.trim().isEmpty ? context.l10n.keypadRecent : context.l10n.keypadSuggestions,
                   entries: text.trim().isEmpty ? _recent(history) : suggestions.take(3).toList(),
                   onPick: pick,
                 ),
@@ -300,7 +303,7 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                         children: [
                           for (final s in suggestions)
                             Padding(
-                              padding: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsetsDirectional.only(end: 8),
                               child: ActionChip(
                                 avatar: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 24),
                                 label: Text(s.name.isEmpty ? s.number : '${s.name}  ${s.number}'),
@@ -353,7 +356,7 @@ class _QuickList extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            padding: const EdgeInsetsDirectional.only(start: 4, bottom: 2),
             child: Text(title, style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
           ),
           for (final s in entries)
@@ -362,7 +365,7 @@ class _QuickList extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               leading: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 32),
               title: Text(s.name.isEmpty ? s.number : s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), maxLines: 1),
+              subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), maxLines: 1, textDirection: TextDirection.ltr),
               onTap: () => onPick(s),
             ),
         ],
@@ -402,12 +405,12 @@ class _NumberField extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Semantics(
-      label: 'Phone number',
+      label: context.l10n.keypadPhoneNumber,
       textField: true,
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Paste',
+            tooltip: context.l10n.keypadPaste,
             onPressed: onPaste,
             icon: const Icon(Icons.content_paste_rounded),
           ),
@@ -416,14 +419,15 @@ class _NumberField extends StatelessWidget {
               controller: controller,
               focusNode: focus,
               textAlign: TextAlign.center,
+              textDirection: TextDirection.ltr,
               keyboardType: TextInputType.none,
               showCursor: true,
               enableInteractiveSelection: true,
               style: tabular(t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w500, letterSpacing: 0.5)),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z*#+@.:_\-\s]'))],
               onSubmitted: (_) => onSubmit(),
-              decoration: const InputDecoration(
-                hintText: 'Enter number',
+              decoration: InputDecoration(
+                hintText: context.l10n.keypadEnterNumber,
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -436,7 +440,7 @@ class _NumberField extends StatelessWidget {
             builder: (context, _) => GestureDetector(
               onLongPress: onClear,
               child: IconButton(
-                tooltip: 'Backspace (long press to clear)',
+                tooltip: context.l10n.keypadBackspace,
                 onPressed: controller.text.isEmpty ? null : onBackspace,
                 icon: const Icon(Icons.backspace_outlined),
               ),
@@ -469,11 +473,11 @@ class _SuggestionsPanel extends StatelessWidget {
                     Icon(Icons.search_rounded, size: 32, color: t.colorScheme.onSurfaceVariant),
                     const SizedBox(height: 8),
                     Text(
-                      query.isEmpty ? 'Type a name or number' : 'No matches',
+                      query.isEmpty ? context.l10n.keypadTypeNameOrNumber : context.l10n.keypadNoMatches,
                       style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
                     ),
                     Text(
-                      'Suggestions come from contacts and recent calls',
+                      context.l10n.keypadSuggestionsHint,
                       textAlign: TextAlign.center,
                       style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                     ),
@@ -490,9 +494,9 @@ class _SuggestionsPanel extends StatelessWidget {
                 return ListTile(
                   leading: Avatar(name: s.name.isEmpty ? s.number : s.name),
                   title: Text(s.name.isEmpty ? s.number : s.name),
-                  subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null)),
+                  subtitle: s.name.isEmpty ? null : Text(s.number, style: tabular(null), textDirection: TextDirection.ltr),
                   trailing: IconButton(
-                    tooltip: 'Call ${s.name.isEmpty ? s.number : s.name}',
+                    tooltip: context.l10n.keypadCallPerson(s.name.isEmpty ? s.number : s.name),
                     icon: Icon(Icons.call_rounded, color: context.colors.callGreen),
                     onPressed: () => onCall(s),
                   ),

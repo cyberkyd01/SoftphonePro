@@ -10,6 +10,7 @@ import 'package:lan_link/lan_link.dart' as ll;
 import 'package:path/path.dart' as p;
 
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../lan/lan_controller.dart';
 import '../../../services/providers.dart';
 import '../../widgets/basic_widgets.dart';
@@ -26,7 +27,7 @@ class LanBadge extends StatelessWidget {
         color: t.colorScheme.tertiary.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text('LAN', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+      child: Text(context.l10n.lanBadge, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
     );
   }
 }
@@ -40,13 +41,13 @@ IconData platformIcon(String platform) => switch (platform) {
       _ => Icons.devices_rounded,
     };
 
-String statusLabelOf(ll.LanPeer p) {
-  if (!p.online) return 'Offline';
+String statusLabelOf(AppLocalizations l, ll.LanPeer p) {
+  if (!p.online) return l.statusOffline;
   return switch (p.status) {
-    ll.PeerStatus.available => 'Available',
-    ll.PeerStatus.busy => 'Busy',
-    ll.PeerStatus.onCall => 'On a call',
-    ll.PeerStatus.dnd => 'Do not disturb',
+    ll.PeerStatus.available => l.statusAvailable,
+    ll.PeerStatus.busy => l.lanBusy,
+    ll.PeerStatus.onCall => l.statusOnACall,
+    ll.PeerStatus.dnd => l.statusDoNotDisturb,
   };
 }
 
@@ -115,7 +116,7 @@ Future<void> pickAndSendLanFile(BuildContext context, WidgetRef ref, String peer
     lan.sendFile(peerId, path);
   }
   if (paths.isNotEmpty) {
-    ref.read(noticeProvider.notifier).show(paths.length == 1 ? 'Sending ${p.basename(paths.first)}...' : 'Sending ${paths.length} files...');
+    ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).lanSendingFiles(p.basename(paths.first), paths.length));
   }
 }
 
@@ -128,15 +129,15 @@ Future<String?> pickLanChatPeer(BuildContext context, List<ll.LanPeer> paired) {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Align(alignment: Alignment.centerLeft, child: Text('New message', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 20, 8),
+            child: Align(alignment: AlignmentDirectional.centerStart, child: Text(ctx.l10n.lanNewMessage, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
           ),
           ListTile(
             key: const Key('new-sip-message'),
             leading: const Icon(Icons.alternate_email_rounded),
-            title: const Text('SIP message'),
-            subtitle: const Text('To a number or address through your account'),
+            title: Text(ctx.l10n.lanSipMessage),
+            subtitle: Text(ctx.l10n.lanSipMessageSub),
             onTap: () => Navigator.pop(ctx, 'sip'),
           ),
           for (final d in paired)
@@ -144,7 +145,7 @@ Future<String?> pickLanChatPeer(BuildContext context, List<ll.LanPeer> paired) {
               key: Key('new-lan-${d.deviceId}'),
               leading: Avatar(name: d.name, size: 36, icon: platformIcon(d.info?.platform ?? '')),
               title: Text(d.name),
-              subtitle: Text(d.online ? 'LAN chat, online' : 'LAN chat, offline'),
+              subtitle: Text(d.online ? ctx.l10n.lanChatOnline : ctx.l10n.lanChatOffline),
               trailing: const LanBadge(),
               onTap: () => Navigator.pop(ctx, d.deviceId),
             ),
@@ -160,5 +161,5 @@ Future<void> openLanFile(BuildContext context, WidgetRef ref, String path, {bool
   final ok = reveal ? await ops.reveal(path) : await ops.open(path);
   if (ok) return;
   await Clipboard.setData(ClipboardData(text: path));
-  ref.read(noticeProvider.notifier).show('Saved at $path (path copied)');
+  ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).lanSavedAt(path));
 }

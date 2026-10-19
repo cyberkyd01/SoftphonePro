@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/format.dart';
+import '../l10n/l10n.dart';
 import '../models/call_record.dart';
 import '../models/chat.dart';
 import '../models/contact.dart';
@@ -42,15 +43,15 @@ final recordingFilterProvider = NotifierProvider<RecordingFilterController, Reco
 
 /// Name to show for a recording: user title, contact, name at recording
 /// time, number.
-String recordingTitle(RecordingMeta m, List<Contact> contacts) {
+String recordingTitle(RecordingMeta m, List<Contact> contacts, AppLocalizations l) {
   if (m.title.isNotEmpty) return m.title;
   final c = findContact(contacts, m.remote);
   if (c != null && c.displayName.isNotEmpty) return c.displayName;
   if (m.remoteName.isNotEmpty) return m.remoteName;
-  return m.remote.isEmpty ? 'Recording' : m.remote;
+  return m.remote.isEmpty ? l.recTitleFallback : m.remote;
 }
 
-List<RecordingMeta> applyRecordingFilter(List<RecordingMeta> all, RecordingFilter f, List<Contact> contacts) {
+List<RecordingMeta> applyRecordingFilter(List<RecordingMeta> all, RecordingFilter f, List<Contact> contacts, AppLocalizations l) {
   final q = f.query.trim().toLowerCase();
   final qd = digitsOf(q);
   final range = f.range;
@@ -64,7 +65,7 @@ List<RecordingMeta> applyRecordingFilter(List<RecordingMeta> all, RecordingFilte
       if (day.isBefore(from) || day.isAfter(to)) return false;
     }
     if (q.isNotEmpty) {
-      return recordingTitle(m, contacts).toLowerCase().contains(q) ||
+      return recordingTitle(m, contacts, l).toLowerCase().contains(q) ||
           m.remote.toLowerCase().contains(q) ||
           (qd.isNotEmpty && digitsOf(m.remote).contains(qd));
     }
@@ -77,5 +78,6 @@ final filteredRecordingsProvider = Provider<List<RecordingMeta>>((ref) {
     ref.watch(recordingsProvider),
     ref.watch(recordingFilterProvider),
     ref.watch(contactsProvider),
+    ref.watch(l10nProvider),
   );
 });

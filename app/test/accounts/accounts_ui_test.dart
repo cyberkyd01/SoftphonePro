@@ -11,6 +11,7 @@ import 'package:softphonepro/core/theme.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 Future<void> pumpPage(WidgetTester tester, TestEnv env, Widget page, {Size size = const Size(412, 915), Brightness brightness = Brightness.light}) async {
   tester.view.physicalSize = size * 2;
@@ -22,7 +23,7 @@ Future<void> pumpPage(WidgetTester tester, TestEnv env, Widget page, {Size size 
       child: Consumer(
         builder: (context, ref, _) {
           ref.watch(appServicesProvider);
-          return MaterialApp(debugShowCheckedModeBanner: false, theme: buildTheme(brightness), home: page);
+          return MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, debugShowCheckedModeBanner: false, theme: buildTheme(brightness), home: page);
         },
       ),
     ),

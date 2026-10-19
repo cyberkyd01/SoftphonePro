@@ -36,6 +36,9 @@ class SipDialog {
   String get from => first.fromUri;
   String get to => first.toUri;
 
+  /// Whether any response was captured for this dialog.
+  bool get hasResponse => messages.any((m) => m.isResponse);
+
   String get summary {
     final f = finalResponse;
     if (f != null) return f.label;

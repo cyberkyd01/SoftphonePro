@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/calls_controller.dart';
 import '../services/contacts_controller.dart';
 import '../ui/helpers.dart';
@@ -22,7 +23,8 @@ class AppLockGate extends ConsumerStatefulWidget {
   ConsumerState<AppLockGate> createState() => _AppLockGateState();
 }
 
-class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingObserver {
+class _AppLockGateState extends ConsumerState<AppLockGate>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -72,9 +74,19 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
     final callScreen = hasCalls && _observer.open.value.isNotEmpty;
     return Stack(
       children: [
-        ExcludeFocus(excluding: !callScreen, child: ExcludeSemantics(excluding: !callScreen, child: widget.child)),
+        ExcludeFocus(
+          excluding: !callScreen,
+          child: ExcludeSemantics(excluding: !callScreen, child: widget.child),
+        ),
         // Own Overlay: tooltips etc. need one and the Navigator's is covered.
-        if (!callScreen) Positioned.fill(child: Overlay(initialEntries: [OverlayEntry(builder: (_) => const AppLockScreen())])),
+        if (!callScreen)
+          Positioned.fill(
+            child: Overlay(
+              initialEntries: [
+                OverlayEntry(builder: (_) => const AppLockScreen()),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -131,7 +143,11 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   }
 
   void _digit(String d) {
-    if (_wait > Duration.zero || _busy || _pin.length >= AppLockService.maxPinLength) return;
+    if (_wait > Duration.zero ||
+        _busy ||
+        _pin.length >= AppLockService.maxPinLength) {
+      return;
+    }
     setState(() {
       _pin += d;
       _error = null;
@@ -139,7 +155,11 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   }
 
   Future<void> _submit() async {
-    if (_busy || _wait > Duration.zero || _pin.length < AppLockService.minPinLength) return;
+    if (_busy ||
+        _wait > Duration.zero ||
+        _pin.length < AppLockService.minPinLength) {
+      return;
+    }
     setState(() => _busy = true);
     final r = await ref.read(appLockProvider.notifier).unlockWithPin(_pin);
     if (!mounted) return;
@@ -147,7 +167,9 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
       _busy = false;
       _pin = '';
       if (!r.ok) {
-        _error = r.result == PinResult.lockedOut ? 'Too many attempts' : 'Wrong PIN';
+        _error = r.result == PinResult.lockedOut
+            ? context.l10n.appLockTooMany
+            : context.l10n.appLockWrongPin;
       }
     });
     if (r.retryAfter > Duration.zero) _startCountdown(r.retryAfter);
@@ -156,7 +178,10 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final bio = ref.watch(biometricUsableProvider).maybeWhen(data: (v) => v, orElse: () => false);
+    final l = context.l10n;
+    final bio = ref
+        .watch(biometricUsableProvider)
+        .maybeWhen(data: (v) => v, orElse: () => false);
     final locked = _wait > Duration.zero;
     return Material(
       key: const Key('lock-screen'),
@@ -171,24 +196,39 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const _LockCalls(),
-                  Icon(Icons.lock_rounded, size: 40, color: t.colorScheme.primary),
+                  Icon(
+                    Icons.lock_rounded,
+                    size: 40,
+                    color: t.colorScheme.primary,
+                  ),
                   const SizedBox(height: 12),
-                  Text('SoftphonePro is locked', style: t.textTheme.titleLarge),
+                  Text(l.appLockIsLocked, style: t.textTheme.titleLarge),
                   const SizedBox(height: 4),
-                  Text('Enter your PIN', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                  Text(
+                    l.appLockEnterPin,
+                    style: t.textTheme.bodyMedium?.copyWith(
+                      color: t.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     key: const Key('lock-dots'),
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      for (var i = 0; i < (_pin.length < 4 ? 4 : _pin.length); i++)
+                      for (
+                        var i = 0;
+                        i < (_pin.length < 4 ? 4 : _pin.length);
+                        i++
+                      )
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 5),
                           width: 14,
                           height: 14,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: i < _pin.length ? t.colorScheme.primary : null,
+                            color: i < _pin.length
+                                ? t.colorScheme.primary
+                                : null,
                             border: Border.all(color: t.colorScheme.outline),
                           ),
                         ),
@@ -198,35 +238,77 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
                     height: 36,
                     child: Center(
                       child: Text(
-                        locked ? 'Try again in ${_fmt(_wait)}' : (_error ?? ''),
+                        locked
+                            ? l.appLockTryAgainIn(_fmt(_wait, l))
+                            : (_error ?? ''),
                         key: const Key('lock-error'),
                         style: TextStyle(color: t.colorScheme.error),
                       ),
                     ),
                   ),
-                  for (final row in const [
-                    ['1', '2', '3'],
-                    ['4', '5', '6'],
-                    ['7', '8', '9'],
-                  ])
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [for (final d in row) _key(d, () => _digit(d), key: Key('lock-digit-$d'))]),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      bio
-                          ? _key('', _biometric, icon: Icons.fingerprint_rounded, key: const Key('lock-biometric'))
-                          : const SizedBox(width: 88, height: 64),
-                      _key('0', () => _digit('0'), key: const Key('lock-digit-0')),
-                      _key('', () => setState(() => _pin = _pin.isEmpty ? '' : _pin.substring(0, _pin.length - 1)), icon: Icons.backspace_outlined, key: const Key('lock-back')),
-                    ],
+                  // The keypad keeps its 1-2-3 layout in right-to-left languages.
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final row in const [
+                          ['1', '2', '3'],
+                          ['4', '5', '6'],
+                          ['7', '8', '9'],
+                        ])
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (final d in row)
+                                _key(
+                                  d,
+                                  () => _digit(d),
+                                  key: Key('lock-digit-$d'),
+                                ),
+                            ],
+                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            bio
+                                ? _key(
+                                    '',
+                                    _biometric,
+                                    icon: Icons.fingerprint_rounded,
+                                    key: const Key('lock-biometric'),
+                                  )
+                                : const SizedBox(width: 88, height: 64),
+                            _key(
+                              '0',
+                              () => _digit('0'),
+                              key: const Key('lock-digit-0'),
+                            ),
+                            _key(
+                              '',
+                              () => setState(
+                                () => _pin = _pin.isEmpty
+                                    ? ''
+                                    : _pin.substring(0, _pin.length - 1),
+                              ),
+                              icon: Icons.backspace_outlined,
+                              key: const Key('lock-back'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
                       key: const Key('lock-submit'),
-                      onPressed: locked || _pin.length < AppLockService.minPinLength ? null : _submit,
-                      child: const Text('Unlock'),
+                      onPressed:
+                          locked || _pin.length < AppLockService.minPinLength
+                          ? null
+                          : _submit,
+                      child: Text(l.appLockUnlock),
                     ),
                   ),
                 ],
@@ -238,20 +320,32 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
     );
   }
 
-  static String _fmt(Duration d) {
-    if (d.inMinutes >= 1) return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    return '${d.inSeconds}s';
+  static String _fmt(Duration d, AppLocalizations l) {
+    if (d.inMinutes >= 1) {
+      return l.appLockDurationMinSec(d.inMinutes, d.inSeconds % 60);
+    }
+    return l.appLockDurationSec(d.inSeconds);
   }
 
-  Widget _key(String label, VoidCallback onTap, {IconData? icon, required Key key}) => SizedBox(
+  Widget _key(
+    String label,
+    VoidCallback onTap, {
+    IconData? icon,
+    required Key key,
+  }) => SizedBox(
     width: 88,
     height: 64,
     child: Center(
       child: TextButton(
         key: key,
-        style: TextButton.styleFrom(shape: const CircleBorder(), minimumSize: const Size(56, 56)),
+        style: TextButton.styleFrom(
+          shape: const CircleBorder(),
+          minimumSize: const Size(56, 56),
+        ),
         onPressed: onTap,
-        child: icon != null ? Icon(icon) : Text(label, style: const TextStyle(fontSize: 24)),
+        child: icon != null
+            ? Icon(icon)
+            : Text(label, style: const TextStyle(fontSize: 24)),
       ),
     ),
   );
@@ -268,48 +362,73 @@ class _LockCalls extends ConsumerWidget {
     final contacts = ref.watch(contactsProvider);
     final ctl = ref.read(callsProvider.notifier);
     final t = Theme.of(context);
+    final l = context.l10n;
     return Column(
       key: const Key('lock-calls'),
       children: [
         for (final c in calls)
           Card(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin: const EdgeInsetsDirectional.only(bottom: 12),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Icon(c.isRingingIn ? Icons.ring_volume_rounded : Icons.call_rounded, color: t.colorScheme.primary),
+                  Icon(
+                    c.isRingingIn
+                        ? Icons.ring_volume_rounded
+                        : Icons.call_rounded,
+                    color: t.colorScheme.primary,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(c.isRingingIn ? 'Incoming call' : callStateText(c), style: t.textTheme.labelMedium),
-                        Text(callTitle(c, contacts), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
+                        Text(
+                          c.isRingingIn
+                              ? l.appLockIncomingCall
+                              : callStateText(c, context.l10n),
+                          style: t.textTheme.labelMedium,
+                        ),
+                        Text(
+                          callTitle(c, contacts, context.l10n),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.textTheme.titleMedium,
+                        ),
                       ],
                     ),
                   ),
                   if (c.isRingingIn) ...[
                     IconButton.filled(
                       key: Key('lock-decline-${c.cid}'),
-                      tooltip: 'Decline',
-                      style: IconButton.styleFrom(backgroundColor: t.colorScheme.error, foregroundColor: t.colorScheme.onError),
+                      tooltip: l.appLockDecline,
+                      style: IconButton.styleFrom(
+                        backgroundColor: t.colorScheme.error,
+                        foregroundColor: t.colorScheme.onError,
+                      ),
                       onPressed: () => ctl.decline(c.cid),
                       icon: const Icon(Icons.call_end_rounded),
                     ),
                     const SizedBox(width: 8),
                     IconButton.filled(
                       key: Key('lock-answer-${c.cid}'),
-                      tooltip: 'Answer',
-                      style: IconButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                      tooltip: l.appLockAnswer,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
                       onPressed: () => ctl.answer(c.cid),
                       icon: const Icon(Icons.call_rounded),
                     ),
                   ] else
                     IconButton.filled(
                       key: Key('lock-hangup-${c.cid}'),
-                      tooltip: 'Hang up',
-                      style: IconButton.styleFrom(backgroundColor: t.colorScheme.error, foregroundColor: t.colorScheme.onError),
+                      tooltip: l.appLockHangUp,
+                      style: IconButton.styleFrom(
+                        backgroundColor: t.colorScheme.error,
+                        foregroundColor: t.colorScheme.onError,
+                      ),
                       onPressed: () => ctl.hangup(c.cid),
                       icon: const Icon(Icons.call_end_rounded),
                     ),

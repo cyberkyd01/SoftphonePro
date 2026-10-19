@@ -14,6 +14,7 @@ import 'package:softphonepro/ui/settings/sections.dart';
 import 'package:softphonepro/ui/widgets/call_widgets.dart';
 
 import 'audio_harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 Future<AudioEnv> mk(WidgetTester tester, {Map<String, dynamic> settings = const {}, LogEngine? engine}) async =>
     (await tester.runAsync(() => AudioEnv.create(settings: settings, engine: engine)))!;
@@ -25,7 +26,7 @@ Future<void> pumpIn(WidgetTester tester, AudioEnv a, Widget page, {Size size = c
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: a.container,
-      child: MaterialApp(debugShowCheckedModeBanner: false, theme: buildTheme(brightness), home: Scaffold(body: page)),
+      child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, debugShowCheckedModeBanner: false, theme: buildTheme(brightness), home: Scaffold(body: page)),
     ),
   );
   await io(tester);

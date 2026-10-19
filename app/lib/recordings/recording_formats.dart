@@ -1,18 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:spcore_dart/spcore_dart.dart' show RecordFormat;
 
+import '../l10n/l10n.dart';
+
 /// Settings label of a recording format.
-String recordFormatLabel(RecordFormat f) => switch (f) {
-  RecordFormat.wav => 'Standard (WAV)',
-  RecordFormat.wavStereo => 'Stereo, you and the caller on separate channels (WAV)',
-  RecordFormat.opus => 'Compressed (Opus)',
+String recordFormatLabel(AppLocalizations l, RecordFormat f) => switch (f) {
+  RecordFormat.wav => l.recFormatWav,
+  RecordFormat.wavStereo => l.recFormatWavStereo,
+  RecordFormat.opus => l.recFormatOpus,
 };
 
 /// Short subtitle under the format choice.
-String recordFormatHint(RecordFormat f) => switch (f) {
-  RecordFormat.wav => 'Mono, about 2 MB per minute. Plays everywhere.',
-  RecordFormat.wavStereo => 'Two channels, about 4 MB per minute. You on the left, the caller on the right.',
-  RecordFormat.opus => 'About 0.2 MB per minute. Ogg Opus; some players on iPhone, Mac and Windows cannot open it.',
+String recordFormatHint(AppLocalizations l, RecordFormat f) => switch (f) {
+  RecordFormat.wav => l.recFormatWavHint,
+  RecordFormat.wavStereo => l.recFormatWavStereoHint,
+  RecordFormat.opus => l.recFormatOpusHint,
 };
 
 /// Badge text in the recordings list.

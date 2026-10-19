@@ -1,6 +1,9 @@
 import 'package:spcore_dart/spcore_dart.dart' show CallInfo;
 
+import 'package:flutter/widgets.dart' show Locale;
+
 import '../core/format.dart';
+import '../l10n/l10n.dart';
 import '../models/contact.dart';
 import 'contacts_controller.dart';
 
@@ -35,11 +38,19 @@ class CallerIdentity {
   bool get hasExtras =>
       secondaryNumber.isNotEmpty || forwardedFrom.isNotEmpty || transferredBy.isNotEmpty;
 
-  String get forwardedText => forwardedFrom.isEmpty
+  String forwardedLabel(AppLocalizations l) => forwardedFrom.isEmpty
       ? ''
-      : 'Forwarded from $forwardedFrom${forwardReason.isEmpty ? '' : ' ($forwardReason)'}';
+      : forwardReason.isEmpty
+          ? l.callIdentityForwardedFrom(forwardedFrom)
+          : l.callIdentityForwardedFromReason(forwardedFrom, forwardReason);
 
-  String get transferredText => transferredBy.isEmpty ? '' : 'Transferred by $transferredBy';
+  String transferredLabel(AppLocalizations l) => transferredBy.isEmpty ? '' : l.callIdentityTransferredBy(transferredBy);
+
+  /// English text (kept for tests / logs); the UI uses [forwardedLabel].
+  String get forwardedText => forwardedLabel(lookupAppLocalizations(const Locale('en')));
+
+  /// English text (kept for tests / logs); the UI uses [transferredLabel].
+  String get transferredText => transferredLabel(lookupAppLocalizations(const Locale('en')));
 
   static CallerIdentity of(CallInfo i, List<Contact> contacts, {String fromNumber = ''}) {
     final from = fromNumber.isNotEmpty

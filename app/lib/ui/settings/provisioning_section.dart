@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/provisioning.dart';
 import '../../services/provisioning_import.dart';
@@ -16,15 +17,16 @@ import '../widgets/settings_tiles.dart';
 
 /// Applies a parsed provisioning result after user confirmation.
 Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningResult r) async {
+  final l = context.l10n;
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Import configuration'),
+      title: Text(l.provisioningImportTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${r.accounts.length} account(s), ${r.settings.length} setting(s)'),
+          Text(l.provisioningSummary(r.accounts.length, r.settings.length)),
           for (final a in r.accounts) Text('• ${a.name}  (${a.address})'),
           if (r.warnings.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -33,8 +35,8 @@ Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningR
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(key: const Key('apply-import'), onPressed: r.accounts.isEmpty && r.settings.isEmpty ? null : () => Navigator.pop(ctx, true), child: const Text('Import')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.actionCancel)),
+        FilledButton(key: const Key('apply-import'), onPressed: r.accounts.isEmpty && r.settings.isEmpty ? null : () => Navigator.pop(ctx, true), child: Text(l.actionImport)),
       ],
     ),
   );
@@ -45,13 +47,13 @@ Future<int> applyProvisioning(BuildContext context, WidgetRef ref, ProvisioningR
   if (r.settings.isNotEmpty || r.accounts.isNotEmpty) {
     await ref.read(settingsProvider.notifier).update({...r.settings, if (r.accounts.isNotEmpty) 'onboardingDone': true});
   }
-  ref.read(noticeProvider.notifier).show('Imported ${r.accounts.length} account(s)');
+  ref.read(noticeProvider.notifier).show(l.provisioningImportedAccounts(r.accounts.length));
   return r.accounts.length;
 }
 
 /// Asks for a URL or pasted JSON and imports it. Returns accounts added.
 Future<int> importProvisioningDialog(BuildContext context, WidgetRef ref) async {
-  final text = await promptText(context, title: 'Import from URL or JSON', hint: 'https://... or paste JSON', maxLines: 4);
+  final text = await promptText(context, title: context.l10n.provisioningImportFromUrlTitle, hint: context.l10n.provisioningImportFromUrlHint, maxLines: 4);
   if (text == null || text.isEmpty || !context.mounted) return 0;
   return importProvisioningText(context, ref, text);
 }
@@ -59,12 +61,14 @@ Future<int> importProvisioningDialog(BuildContext context, WidgetRef ref) async 
 /// Imports provisioning JSON, an http(s) URL or a `softphonepro://provision`
 /// link (what the QR code carries). Returns accounts added.
 Future<int> importProvisioningText(BuildContext context, WidgetRef ref, String text) async {
+  final l = context.l10n;
   try {
     final p = parseQrPayload(text);
     final r = switch (p) {
-      QrProvisionJson(:final json) => Provisioning.parse(json),
+      QrProvisionJson(:final json) => Provisioning.parse(json, l10n: l),
       QrProvisionUrl(:final url) => await Provisioning.fetch(
         url,
+        l10n: l,
         vars: await provisioningVars(
           settings: ref.read(settingsProvider).toJson(),
           save: ref.read(settingsProvider.notifier).update,
@@ -78,14 +82,14 @@ Future<int> importProvisioningText(BuildContext context, WidgetRef ref, String t
     ref.read(noticeProvider.notifier).error(e.message);
     return 0;
   } on FormatException {
-    ref.read(noticeProvider.notifier).error('That is not a valid URL, link or JSON');
+    ref.read(noticeProvider.notifier).error(l.provisioningInvalidSource);
     return 0;
   }
 }
 
 /// Opens the QR scanner (camera, with paste fallback) and imports the result.
 Future<int> scanProvisioningQr(BuildContext context, WidgetRef ref) async {
-  final code = await showQrScannerSheet(context, title: 'Scan provisioning QR', pasteHint: 'Paste JSON, a link or a URL');
+  final code = await showQrScannerSheet(context, title: context.l10n.provisioningScanTitle, pasteHint: context.l10n.provisioningPasteHint);
   if (code == null || !context.mounted) return 0;
   return importProvisioningText(context, ref, code);
 }
@@ -110,32 +114,33 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
     final acc = ref.watch(accountsProvider).profiles;
     final notice = ref.read(noticeProvider.notifier);
     final qrAcc = acc.where((a) => a.id == _qrFor).firstOrNull;
+    final l = context.l10n;
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Import',
-          footer: 'Supports JSON with accounts and settings. \${VAR} placeholders are filled with empty values unless a default is given as \${VAR:-default}.',
+          title: l.provisioningImportGroup,
+          footer: l.provisioningImportFooter,
           children: [
             NavTile(
               icon: Icons.qr_code_scanner_rounded,
-              title: 'Scan QR code',
+              title: l.provisioningScanQr,
               onTap: () => scanProvisioningQr(context, ref),
             ),
             NavTile(
               icon: Icons.link_rounded,
-              title: 'From URL or pasted JSON',
+              title: l.provisioningFromUrl,
               onTap: () => importProvisioningDialog(context, ref),
             ),
             NavTile(
               icon: Icons.folder_open_rounded,
-              title: 'From file',
+              title: l.provisioningFromFile,
               onTap: () async {
                 final r = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
                 final bytes = r?.files.single.bytes;
                 if (bytes == null || !context.mounted) return;
                 try {
-                  await applyProvisioning(context, ref, Provisioning.parse(String.fromCharCodes(bytes)));
+                  await applyProvisioning(context, ref, Provisioning.parse(String.fromCharCodes(bytes), l10n: l));
                 } on ProvisioningException catch (e) {
                   notice.error(e.message);
                 }
@@ -143,12 +148,12 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
             ),
             NavTile(
               icon: Icons.content_paste_rounded,
-              title: 'From clipboard',
+              title: l.provisioningFromClipboard,
               onTap: () async {
                 final d = await Clipboard.getData(Clipboard.kTextPlain);
                 if (!context.mounted) return;
                 try {
-                  await applyProvisioning(context, ref, Provisioning.parse(d?.text ?? ''));
+                  await applyProvisioning(context, ref, Provisioning.parse(d?.text ?? '', l10n: l));
                 } on ProvisioningException catch (e) {
                   notice.error(e.message);
                 }
@@ -157,27 +162,27 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
           ],
         ),
         SettingsGroup(
-          title: 'Export',
+          title: l.provisioningExportGroup,
           children: [
-            SwitchTile(title: 'Include passwords', subtitle: 'Anyone with the file can use your accounts', value: _passwords, onChanged: (v) => setState(() => _passwords = v)),
+            SwitchTile(title: l.provisioningIncludePasswords, subtitle: l.provisioningIncludePasswordsHint, value: _passwords, onChanged: (v) => setState(() => _passwords = v)),
             NavTile(
               icon: Icons.copy_rounded,
-              title: 'Copy configuration (JSON)',
+              title: l.provisioningCopyConfig,
               onTap: () async {
                 await Clipboard.setData(ClipboardData(text: _export()));
-                notice.show('Configuration copied');
+                notice.show(l.provisioningConfigCopied);
               },
             ),
           ],
         ),
         SettingsGroup(
-          title: 'QR code',
-          footer: 'Scan this code on another device to copy an account. Treat it like a password if it includes one.',
+          title: l.provisioningQrGroup,
+          footer: l.provisioningQrFooter,
           children: [
             SelectTile<String>(
-              title: 'Account',
+              title: l.provisioningQrAccount,
               value: _qrFor ?? '',
-              options: {'': 'Choose...', for (final a in acc) a.id: a.name},
+              options: {'': l.provisioningChoose, for (final a in acc) a.id: a.name},
               onChanged: (v) => setState(() => _qrFor = v.isEmpty ? null : v),
             ),
             if (qrAcc != null)
@@ -191,7 +196,7 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
                       data: Provisioning.export([qrAcc], const AppSettings().toJson(), includePasswords: _passwords),
                       size: 240,
                       version: QrVersions.auto,
-                      errorStateBuilder: (c, e) => const Text('Too much data for a QR code'),
+                      errorStateBuilder: (c, e) => Text(l.provisioningQrTooMuchData),
                     ),
                   ),
                 ),

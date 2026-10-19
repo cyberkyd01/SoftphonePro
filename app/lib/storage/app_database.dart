@@ -15,6 +15,16 @@ enum DbProblem { missingKey, unreadable }
 /// The database exists but cannot be opened (key missing from the keystore,
 /// wrong key, corrupt file). The app shows a recovery screen instead of
 /// crashing.
+/// A user-visible message about a failed start-up database conversion; the
+/// UI turns it into text (see main.dart).
+class DbStartupNotice {
+  const DbStartupNotice({required this.encrypt, required this.error});
+
+  /// True when switching encryption on failed, false when switching it off.
+  final bool encrypt;
+  final String error;
+}
+
 class DbRecoveryNeeded implements Exception {
   DbRecoveryNeeded(this.problem, this.path, [this.detail]);
   final DbProblem problem;
@@ -42,7 +52,7 @@ class AppDatabase {
 
   /// Set when a requested encryption change failed at startup and was rolled
   /// back (shown once as an error notice).
-  final String? startupNotice;
+  final DbStartupNotice? startupNotice;
 
   static const fileName = 'softphonepro.db';
 
@@ -164,8 +174,7 @@ class AppDatabase {
         back,
         directory: dir,
         encrypted: wasEncrypted,
-        startupNotice:
-            'Could not ${toEncrypted ? 'encrypt' : 'decrypt'} your data ($e). Nothing was changed.',
+        startupNotice: DbStartupNotice(encrypt: toEncrypted, error: '$e'),
       );
     }
   }

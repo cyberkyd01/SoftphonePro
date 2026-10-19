@@ -8,6 +8,9 @@ import 'package:softphonepro/ui/pages/audio/voice_isolation_page.dart';
 import 'package:softphonepro/ui/widgets/settings_tiles.dart';
 
 import 'audio_harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
+
+final _l = lookupAppLocalizations(const Locale('en'));
 
 Future<void> pumpVi(WidgetTester tester, AudioEnv a, {Size size = const Size(412, 915)}) async {
   tester.view.physicalSize = size * 2;
@@ -16,7 +19,7 @@ Future<void> pumpVi(WidgetTester tester, AudioEnv a, {Size size = const Size(412
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: a.container,
-      child: MaterialApp(debugShowCheckedModeBanner: false, theme: buildTheme(Brightness.light), home: const VoiceIsolationPage()),
+      child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, debugShowCheckedModeBanner: false, theme: buildTheme(Brightness.light), home: const VoiceIsolationPage()),
     ),
   );
   await tester.runAsync(() => a.flush());
@@ -25,11 +28,11 @@ Future<void> pumpVi(WidgetTester tester, AudioEnv a, {Size size = const Size(412
 
 void main() {
   test('strength labels', () {
-    expect(strengthLabel(0.1), 'Low');
-    expect(strengthLabel(0.5), 'Medium');
-    expect(strengthLabel(0.8), 'High');
-    expect(strengthLabel(1.0), 'Max');
-    expect(strengthText(0.8), 'High (80%)');
+    expect(strengthLabel(_l, 0.1), 'Low');
+    expect(strengthLabel(_l, 0.5), 'Medium');
+    expect(strengthLabel(_l, 0.8), 'High');
+    expect(strengthLabel(_l, 1.0), 'Max');
+    expect(strengthText(_l, 0.8), 'High (80%)');
   });
 
   test('settings are applied live through setVoiceIsolation', () async {

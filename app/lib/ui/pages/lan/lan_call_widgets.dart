@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../lan/lan_handoff_impl.dart';
 import '../../../lan/lan_models.dart';
 import '../../../platform/lan_handoff.dart';
@@ -20,11 +21,17 @@ class LanCallLabel extends StatelessWidget {
     final m = call.lan;
     if (m == null) return const SizedBox.shrink();
     final t = Theme.of(context);
+    final l = context.l10n;
+    final named = m.peerName.isNotEmpty;
     final text = m.isHandoff
-        ? (m.outgoing ? 'Handing over to ${m.peerName}' : m.handoffText)
+        ? (m.outgoing ? l.lanCallHandingOver(m.peerName) : m.handoffTextFor(l))
         : m.intercom
-            ? '${m.outgoing ? 'Intercom to' : 'Intercom from'} ${m.peerName.isEmpty ? 'a nearby device' : m.peerName}'
-            : '${m.outgoing ? 'LAN call to' : 'LAN call from'} ${m.peerName.isEmpty ? 'an unpaired device' : m.peerName}';
+            ? (m.outgoing
+                ? (named ? l.lanCallIntercomToNamed(m.peerName) : l.lanCallIntercomToUnnamed)
+                : (named ? l.lanCallIntercomFromNamed(m.peerName) : l.lanCallIntercomFromUnnamed))
+            : (m.outgoing
+                ? (named ? l.lanCallToNamed(m.peerName) : l.lanCallToUnpaired)
+                : (named ? l.lanCallFromNamed(m.peerName) : l.lanCallFromUnpaired));
     final icon = m.isHandoff ? Icons.swap_horiz_rounded : (m.intercom ? Icons.record_voice_over_rounded : Icons.lan_rounded);
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -53,12 +60,13 @@ class RelayedBanner extends ConsumerWidget {
     if (s == null) return const SizedBox.shrink();
     final t = Theme.of(context);
     final impl = ref.read(lanHandoffImplProvider);
+    final l = context.l10n;
     final (title, subtitle) = switch (s.phase) {
-      RelayPhase.relayed => ('Relayed to ${s.peerName}', 'The caller is talking to ${s.peerName}. You are not on the call.'),
-      RelayPhase.dialing => ('Calling ${s.peerName}...', 'The caller stays connected while ${s.peerName} answers.'),
-      RelayPhase.offering => ('Asking ${s.peerName}...', 'Waiting for them to accept the call.'),
-      RelayPhase.consulting => ('Talking to ${s.peerName}', 'The caller is on hold. Complete the hand-off when ready.'),
-      RelayPhase.takingBack => ('Taking the call back...', ''),
+      RelayPhase.relayed => (l.lanRelayedTitle(s.peerName), l.lanRelayedSubtitle(s.peerName)),
+      RelayPhase.dialing => (l.lanRelayDialingTitle(s.peerName), l.lanRelayDialingSubtitle(s.peerName)),
+      RelayPhase.offering => (l.lanRelayOfferingTitle(s.peerName), l.lanRelayOfferingSubtitle),
+      RelayPhase.consulting => (l.lanRelayConsultingTitle(s.peerName), l.lanRelayConsultingSubtitle),
+      RelayPhase.takingBack => (l.lanRelayTakingBack, ''),
     };
     return Container(
       key: const Key('relayed-banner'),
@@ -77,13 +85,13 @@ class RelayedBanner extends ConsumerWidget {
           if (s.phase == RelayPhase.relayed) ...[
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: FilledButton(key: const Key('relay-take-back'), onPressed: () => impl.takeBack(call.cid), child: const Text('Take back'))),
+              Expanded(child: FilledButton(key: const Key('relay-take-back'), onPressed: () => impl.takeBack(call.cid), child: Text(l.lanRelayTakeBack))),
               const SizedBox(width: 8),
               OutlinedButton(
                 key: const Key('relay-end'),
                 style: OutlinedButton.styleFrom(foregroundColor: context.colors.endRed),
                 onPressed: () => impl.endRelayed(call.cid),
-                child: const Text('End'),
+                child: Text(l.lanRelayEnd),
               ),
             ]),
           ],
@@ -103,15 +111,15 @@ Future<LanDevice?> pickLanDevice(BuildContext context, List<LanDevice> devices) 
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Align(alignment: Alignment.centerLeft, child: Text('Send to device', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 20, 8),
+            child: Align(alignment: AlignmentDirectional.centerStart, child: Text(ctx.l10n.lanSendToDevice, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
           ),
           for (final d in devices)
             ListTile(
               leading: const Icon(Icons.devices_rounded),
               title: Text(d.name),
-              subtitle: Text(d.busy ? 'On a call' : (d.online ? 'Available' : 'Offline')),
+              subtitle: Text(d.busy ? ctx.l10n.statusOnACall : (d.online ? ctx.l10n.statusAvailable : ctx.l10n.statusOffline)),
               enabled: d.online,
               onTap: () => Navigator.pop(ctx, d),
             ),
@@ -126,7 +134,7 @@ Future<void> forwardRingingToLan(BuildContext context, WidgetRef ref, int cid) a
   final lan = ref.read(lanHandoffProvider);
   final online = lan.devices.where((d) => d.online).toList();
   if (online.isEmpty) {
-    ref.read(noticeProvider.notifier).show('No paired device is online');
+    ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).lanNoPairedOnline);
     return;
   }
   final d = await pickLanDevice(context, online);

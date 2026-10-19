@@ -6,14 +6,14 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../services/engine_controller.dart';
 import '../services/ringtones.dart' show supportAssetFile;
 
 /// A track the app ships (synthesised by tool/gen_hold_music.py).
 class BuiltInTrack {
-  const BuiltInTrack(this.id, this.name, this.asset, {this.holdMusic = true});
+  const BuiltInTrack(this.id, this.asset, {this.holdMusic = true});
   final String id;
-  final String name;
   final String asset;
 
   /// False for short notices (the chime), which make poor hold music.
@@ -21,10 +21,18 @@ class BuiltInTrack {
 }
 
 const List<BuiltInTrack> kBuiltInTracks = [
-  BuiltInTrack('hold_calm', 'Calm (built-in)', 'assets/sounds/hold_calm.wav'),
-  BuiltInTrack('hold_breeze', 'Breeze (built-in)', 'assets/sounds/hold_breeze.wav'),
-  BuiltInTrack('chime', 'Notice chime (built-in)', 'assets/sounds/chime.wav', holdMusic: false),
+  BuiltInTrack('hold_calm', 'assets/sounds/hold_calm.wav'),
+  BuiltInTrack('hold_breeze', 'assets/sounds/hold_breeze.wav'),
+  BuiltInTrack('chime', 'assets/sounds/chime.wav', holdMusic: false),
 ];
+
+/// Display name of a built-in track.
+String builtInTrackName(AppLocalizations l, String id) => switch (id) {
+  'hold_calm' => l.audioBuiltInCalm,
+  'hold_breeze' => l.audioBuiltInBreeze,
+  'chime' => l.audioBuiltInChime,
+  _ => id,
+};
 
 const String kRefPrefixBuiltIn = 'builtin:';
 const String kRefPrefixLib = 'lib:';
@@ -133,12 +141,13 @@ class AudioLibrary {
 
   /// Built-in tracks first, then the user's files (oldest first).
   Future<List<AudioItem>> list() async {
+    final l = _ref.read(l10nProvider);
     final out = <AudioItem>[];
     for (final t in kBuiltInTracks) {
       out.add(
         AudioItem(
           ref: '$kRefPrefixBuiltIn${t.id}',
-          name: t.name,
+          name: builtInTrackName(l, t.id),
           builtin: true,
           holdMusic: t.holdMusic,
           format: 'wav',
@@ -206,11 +215,11 @@ class AudioLibrary {
   Future<AudioItem> import(String source, {String? name}) async {
     final ext = p.extension(source).toLowerCase();
     if (!extensions.contains(ext)) {
-      throw const AudioLibraryException('Only WAV and MP3 files can be used.');
+      throw AudioLibraryException(_ref.read(l10nProvider).audioErrOnlyWavMp3);
     }
     final src = File(source);
     if (!await src.exists()) {
-      throw const AudioLibraryException('That file could not be found.');
+      throw AudioLibraryException(_ref.read(l10nProvider).audioErrNotFound);
     }
     final info = await _validate(source);
     final dest = await _uniqueName(p.basenameWithoutExtension(source), ext);
@@ -223,7 +232,7 @@ class AudioLibrary {
   Future<AudioItem> addRecorded(String file, {required String name, int durationMs = 0}) async {
     final f = File(file);
     if (!await f.exists()) {
-      throw const AudioLibraryException('The recording was not saved.');
+      throw AudioLibraryException(_ref.read(l10nProvider).audioErrNotSaved);
     }
     final dir = await _dir();
     var dest = f.path;
@@ -248,7 +257,7 @@ class AudioLibrary {
     try {
       final info = await ctl.engine.fileInfo(file);
       if (info.durationMs <= 0 && info.format.isEmpty) {
-        throw const AudioLibraryException('This audio file is empty or unreadable.');
+        throw AudioLibraryException(_ref.read(l10nProvider).audioErrEmpty);
       }
       return info;
     } on EngineException catch (e) {
@@ -256,9 +265,7 @@ class AudioLibrary {
         // Old engine without media.fileInfo: trust the extension.
         return MediaFileInfo(format: p.extension(file).substring(1).toLowerCase());
       }
-      throw AudioLibraryException(
-        'This audio file cannot be used (${e.error.message}). Use PCM, mu-law or A-law WAV, or MP3.',
-      );
+      throw AudioLibraryException(_ref.read(l10nProvider).audioErrUnusable(e.error.message));
     }
   }
 

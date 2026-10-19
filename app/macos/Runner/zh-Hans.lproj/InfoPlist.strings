@@ -1,0 +1,4 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro 需要使用麦克风，以便在通话时传送您的声音。";
+"NSContactsUsageDescription" = "SoftphonePro 会在您要求时导入联系人。";
+"NSCameraUsageDescription" = "SoftphonePro 使用相机扫描配置和配对二维码。";
+"NSLocalNetworkUsageDescription" = "SoftphonePro 使用本地网络来查找并连接您的其他设备 (LAN Link)，以及与对端直接通话。";

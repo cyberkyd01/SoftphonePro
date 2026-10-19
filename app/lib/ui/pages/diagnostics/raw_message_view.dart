@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../diagnostics/redaction.dart';
+import '../../../l10n/l10n.dart';
 import '../../../diagnostics/sip_message.dart';
 import 'trace_style.dart';
 
@@ -9,7 +10,7 @@ const int _kMaxShown = 200 * 1024;
 
 /// Syntax-highlighted spans for a raw SIP message (start line, header names,
 /// body). Pure and safe on garbage.
-List<TextSpan> highlightSip(String text, ColorScheme cs, {Color? startColor}) {
+List<TextSpan> highlightSip(String text, ColorScheme cs, {Color? startColor, String Function(int chars)? truncatedLabel}) {
   final spans = <TextSpan>[];
   final shown = text.length > _kMaxShown ? text.substring(0, _kMaxShown) : text;
   final lines = shown.split(RegExp(r'\r?\n'));
@@ -38,7 +39,7 @@ List<TextSpan> highlightSip(String text, ColorScheme cs, {Color? startColor}) {
     }
   }
   if (text.length > _kMaxShown) {
-    spans.add(TextSpan(text: '\n... truncated (${text.length} chars)', style: TextStyle(color: cs.onSurfaceVariant)));
+    spans.add(TextSpan(text: '\n${truncatedLabel?.call(text.length) ?? '... truncated (${text.length} chars)'}', style: TextStyle(color: cs.onSurfaceVariant)));
   }
   return spans;
 }
@@ -71,6 +72,7 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
   @override
   Widget build(BuildContext context) {
     final m = widget.message;
+    final l = context.l10n;
     final t = Theme.of(context);
     final text = _redact ? redactSecrets(m.raw) : m.raw;
     final color = sipColor(m, context);
@@ -82,7 +84,7 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
       builder: (context, scroll) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 8),
             child: Row(
               children: [
                 Icon(m.outgoing ? Icons.north_east_rounded : Icons.south_west_rounded, size: 18, color: color),
@@ -93,7 +95,8 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
                     children: [
                       Text(m.longLabel, style: t.textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
                       Text(
-                        '${clockLabel(m.time)}  ·  ${m.outgoing ? 'sent to' : 'received from'} ${m.remote}  ·  ${m.transport}  ·  ${bytesLabel(m.size)}',
+                        '${clockLabel(m.time)}  ·  ${m.outgoing ? l.diagRawSentTo(m.remote) : l.diagRawReceivedFrom(m.remote)}  ·  ${m.transport}  ·  ${bytesLabel(m.size)}',
+                        textDirection: TextDirection.ltr,
                         style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                       ),
                     ],
@@ -113,11 +116,11 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: text));
                     if (context.mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Message copied')));
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(l.diagRawCopied)));
                     }
                   },
                   icon: const Icon(Icons.copy_rounded, size: 18),
-                  label: const Text('Copy'),
+                  label: Text(l.actionCopy),
                 ),
                 if (widget.onLadder != null)
                   TextButton.icon(
@@ -126,11 +129,11 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
                       widget.onLadder!();
                     },
                     icon: const Icon(Icons.account_tree_outlined, size: 18),
-                    label: const Text('Ladder'),
+                    label: Text(l.diagRawLadder),
                   ),
                 FilterChip(
                   key: const Key('raw-redact'),
-                  label: const Text('Redact credentials'),
+                  label: Text(l.diagRawRedact),
                   selected: _redact,
                   onSelected: (v) => setState(() => _redact = v),
                 ),
@@ -141,16 +144,20 @@ class _RawMessageSheetState extends State<RawMessageSheet> {
           Expanded(
             child: SingleChildScrollView(
               controller: scroll,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: SingleChildScrollView(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 24),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SelectableText.rich(
+                  textDirection: TextDirection.ltr,
                   TextSpan(
                     style: TextStyle(fontFamily: kMono, fontSize: 12.5, height: 1.4, color: t.colorScheme.onSurface),
-                    children: highlightSip(text, t.colorScheme, startColor: color),
+                    children: highlightSip(text, t.colorScheme, startColor: color, truncatedLabel: l.diagRawTruncated),
                   ),
                   key: const Key('raw-text'),
                 ),
+              ),
               ),
             ),
           ),

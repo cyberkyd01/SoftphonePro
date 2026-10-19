@@ -22,10 +22,14 @@ import 'ringtones.dart';
 
 /// An engine plus whether it is the in-memory simulator.
 class EngineHandle {
-  const EngineHandle(this.engine, {required this.demo, this.note});
+  const EngineHandle(this.engine, {required this.demo, this.note, this.loadError});
   final SipEngine engine;
   final bool demo;
   final String? note;
+
+  /// Why the native library could not be loaded (the engine controller turns
+  /// it into the localised demo-mode note).
+  final String? loadError;
 }
 
 typedef EngineFactory = Future<EngineHandle> Function({required bool simulator});
@@ -41,7 +45,7 @@ Future<EngineHandle> defaultEngineFactory({required bool simulator}) async {
       return EngineHandle(
         FakeSipEngine(),
         demo: true,
-        note: 'Native engine not available ($err)',
+        loadError: '$err',
       );
     }
   }

@@ -1,5 +1,7 @@
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
+
 import 'account_profile.dart';
 
 /// Prefilled settings for popular providers and PBXs.
@@ -62,6 +64,53 @@ class ProviderTemplate {
   final String serverLabel;
 
   bool get isIax => proto == SipProto.iax2;
+
+  // ---- localised display text (the English fields above are fallbacks) ----
+
+  String descriptionOf(AppLocalizations l) => switch (id) {
+    'asterisk' => l.acctTplAsteriskDescription,
+    '3cx' => l.acctTpl3cxDescription,
+    'freeswitch' => l.acctTplFreeswitchDescription,
+    'kamailio' => l.acctTplKamailioDescription,
+    'twilio' => l.acctTplTwilioDescription,
+    'telnyx' => l.acctTplTelnyxDescription,
+    'voipms' => l.acctTplVoipmsDescription,
+    'vonage' => l.acctTplVonageDescription,
+    'iax2' => l.acctTplIax2Description,
+    'webrtc' => l.acctTplWebrtcDescription,
+    'generic' => l.acctTplGenericDescription,
+    _ => description,
+  };
+
+  String notesOf(AppLocalizations l) => switch (id) {
+    'asterisk' => l.acctTplAsteriskNotes,
+    '3cx' => l.acctTpl3cxNotes,
+    'freeswitch' => l.acctTplFreeswitchNotes,
+    'kamailio' => l.acctTplKamailioNotes,
+    'twilio' => l.acctTplTwilioNotes,
+    'telnyx' => l.acctTplTelnyxNotes,
+    'voipms' => l.acctTplVoipmsNotes,
+    'vonage' => l.acctTplVonageNotes,
+    'iax2' => l.acctTplIax2Notes,
+    'webrtc' => l.acctTplWebrtcNotes,
+    _ => notes,
+  };
+
+  String usernameHintOf(AppLocalizations l) => switch (id) {
+    'asterisk' => l.acctTplAsteriskUsernameHint,
+    '3cx' => l.acctTpl3cxUsernameHint,
+    'freeswitch' => l.acctTplFreeswitchUsernameHint,
+    'twilio' => l.acctTplTwilioUsernameHint,
+    'telnyx' => l.acctTplTelnyxUsernameHint,
+    'voipms' => l.acctTplVoipmsUsernameHint,
+    'iax2' => l.acctTplIax2UsernameHint,
+    _ => l.acctTplDefaultUsernameHint,
+  };
+
+  String serverLabelOf(AppLocalizations l) => switch (id) {
+    'iax2' => l.acctFieldServerHost,
+    _ => l.acctFieldServerDomain,
+  };
 
   /// Builds a new profile (not yet persisted) from this template.
   AccountProfile build({

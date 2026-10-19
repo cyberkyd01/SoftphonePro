@@ -1,4 +1,8 @@
-/// Human-readable explanations of common SIP response codes.
+import '../l10n/l10n.dart';
+
+/// Human-readable explanations of common SIP response codes. The title is the
+/// standard SIP reason phrase (a protocol token, not translated); the
+/// explanation and suggestion are localised.
 class SipCodeHelp {
   const SipCodeHelp(this.title, this.explanation, this.suggestion);
   final String title;
@@ -6,70 +10,70 @@ class SipCodeHelp {
   final String suggestion;
 }
 
-SipCodeHelp explainSipCode(int code) {
+SipCodeHelp explainSipCode(int code, AppLocalizations l) {
   switch (code) {
     case 400:
-      return const SipCodeHelp('Bad request', 'The server could not understand the request.', 'Check the account settings (domain, username, proxy). If it persists, send a SIP trace to your provider.');
+      return SipCodeHelp('Bad request', l.diagSip400Explain, l.diagSip400Fix);
     case 401:
-      return const SipCodeHelp('Authentication required', 'The server rejected the credentials (or is asking for them).', 'Check the username, authentication username and password. Some providers use a separate "auth ID".');
+      return SipCodeHelp('Authentication required', l.diagSip401Explain, l.diagSip401Fix);
     case 403:
-      return const SipCodeHelp('Forbidden', 'The server understood the request but refuses it: wrong password, account disabled, or your IP is not allowed.', 'Re-enter the password, check the account is active, and confirm your public IP is not blocked (fail2ban/ACL).');
+      return SipCodeHelp('Forbidden', l.diagSip403Explain, l.diagSip403Fix);
     case 404:
-      return const SipCodeHelp('Not found', 'The server does not know this user or number.', 'Check the username and domain; for calls, check the dialled number and dial rules.');
+      return SipCodeHelp('Not found', l.diagSip404Explain, l.diagSip404Fix);
     case 405:
-      return const SipCodeHelp('Method not allowed', 'The server does not support this request.', 'Usually harmless for OPTIONS pings. For REGISTER, check you are talking to a SIP registrar.');
+      return SipCodeHelp('Method not allowed', l.diagSip405Explain, l.diagSip405Fix);
     case 407:
-      return const SipCodeHelp('Proxy authentication required', 'The outbound proxy needs credentials.', 'Check the account password and outbound proxy settings.');
+      return SipCodeHelp('Proxy authentication required', l.diagSip407Explain, l.diagSip407Fix);
     case 408:
-      return const SipCodeHelp('Request timeout', 'No answer from the server in time.', 'Check the server address and port, firewalls, and try TCP or TLS. Repeated timeouts on UDP only can point to SIP ALG on the router.');
+      return SipCodeHelp('Request timeout', l.diagSip408Explain, l.diagSip408Fix);
     case 410:
-      return const SipCodeHelp('Gone', 'The number no longer exists.', 'Check the dialled number.');
+      return SipCodeHelp('Gone', l.diagSip410Explain, l.diagSip410Fix);
     case 415:
-      return const SipCodeHelp('Unsupported media type', 'The other side does not accept the content type or codecs offered.', 'Enable more codecs (e.g. PCMU/PCMA) in Settings > Codecs.');
+      return SipCodeHelp('Unsupported media type', l.diagSip415Explain, l.diagSip415Fix);
     case 420:
     case 421:
-      return const SipCodeHelp('Extension not supported', 'The server requires a SIP extension this client did not offer.', 'Check the account NAT/ICE/100rel/timers options.');
+      return SipCodeHelp('Extension not supported', l.diagSip421Explain, l.diagSip421Fix);
     case 423:
-      return const SipCodeHelp('Interval too brief', 'The registration expiry is shorter than the server allows.', 'Increase the registration expiry in the account settings.');
+      return SipCodeHelp('Interval too brief', l.diagSip423Explain, l.diagSip423Fix);
     case 480:
-      return const SipCodeHelp('Temporarily unavailable', 'The user is not registered or cannot be reached right now.', 'Check the other party is registered; on registration, the server may be overloaded: retry later.');
+      return SipCodeHelp('Temporarily unavailable', l.diagSip480Explain, l.diagSip480Fix);
     case 481:
-      return const SipCodeHelp('Call/transaction does not exist', 'The server lost the dialog state (e.g. after a restart or network change).', 'Hang up and retry. If frequent, enable session timers.');
+      return SipCodeHelp('Call/transaction does not exist', l.diagSip481Explain, l.diagSip481Fix);
     case 482:
     case 483:
-      return const SipCodeHelp('Loop detected', 'The request circled between servers.', 'Check forwarding and routing configuration on the PBX.');
+      return SipCodeHelp('Loop detected', l.diagSip483Explain, l.diagSip483Fix);
     case 484:
-      return const SipCodeHelp('Address incomplete', 'The dialled number is too short.', 'Dial the full number or check dial rules.');
+      return SipCodeHelp('Address incomplete', l.diagSip484Explain, l.diagSip484Fix);
     case 486:
-      return const SipCodeHelp('Busy here', 'The other party is busy.', 'Try again later.');
+      return SipCodeHelp('Busy here', l.diagSip486Explain, l.diagSip486Fix);
     case 487:
-      return const SipCodeHelp('Request terminated', 'The call was cancelled before it was answered.', 'Normal when the caller hangs up while it rings.');
+      return SipCodeHelp('Request terminated', l.diagSip487Explain, l.diagSip487Fix);
     case 488:
-      return const SipCodeHelp('Not acceptable here', 'No common codec or encryption setting with the other side.', 'Check codecs and SRTP (a mandatory-SRTP account cannot call a plain-RTP endpoint).');
+      return SipCodeHelp('Not acceptable here', l.diagSip488Explain, l.diagSip488Fix);
     case 491:
-      return const SipCodeHelp('Request pending', 'Two re-INVITEs collided.', 'Normally retried automatically.');
+      return SipCodeHelp('Request pending', l.diagSip491Explain, l.diagSip491Fix);
     case 500:
-      return const SipCodeHelp('Server error', 'The server failed internally.', 'Retry later and contact the provider if it continues.');
+      return SipCodeHelp('Server error', l.diagSip500Explain, l.diagSip500Fix);
     case 502:
-      return const SipCodeHelp('Bad gateway', 'An upstream server returned an invalid answer.', 'Retry later; contact the provider if it continues.');
+      return SipCodeHelp('Bad gateway', l.diagSip502Explain, l.diagSip502Fix);
     case 503:
-      return const SipCodeHelp('Service unavailable', 'The server is overloaded, down, or rejecting this client (rate limit).', 'Wait and retry, check the provider status page, or try another server/port.');
+      return SipCodeHelp('Service unavailable', l.diagSip503Explain, l.diagSip503Fix);
     case 504:
-      return const SipCodeHelp('Server timeout', 'An upstream server did not answer in time.', 'Retry later.');
+      return SipCodeHelp('Server timeout', l.diagSip504Explain, l.diagSip504Fix);
     case 600:
-      return const SipCodeHelp('Busy everywhere', 'All destinations are busy.', 'Try again later.');
+      return SipCodeHelp('Busy everywhere', l.diagSip600Explain, l.diagSip600Fix);
     case 603:
-      return const SipCodeHelp('Declined', 'The other party rejected the call.', 'Nothing to fix: the call was declined.');
+      return SipCodeHelp('Declined', l.diagSip603Explain, l.diagSip603Fix);
     case 604:
-      return const SipCodeHelp('Does not exist anywhere', 'The number does not exist.', 'Check the dialled number.');
+      return SipCodeHelp('Does not exist anywhere', l.diagSip604Explain, l.diagSip604Fix);
     case 606:
-      return const SipCodeHelp('Not acceptable', 'The other party cannot accept the session as offered.', 'Check codecs and encryption settings.');
+      return SipCodeHelp('Not acceptable', l.diagSip606Explain, l.diagSip606Fix);
   }
-  if (code >= 100 && code < 200) return SipCodeHelp('Provisional ($code)', 'The request is being processed.', '');
-  if (code >= 200 && code < 300) return SipCodeHelp('Success ($code)', 'The request succeeded.', '');
-  if (code >= 300 && code < 400) return SipCodeHelp('Redirected ($code)', 'The destination moved.', 'Check forwarding settings.');
-  if (code >= 400 && code < 500) return SipCodeHelp('Client error ($code)', 'The server rejected the request.', 'Check the account and dialled number.');
-  if (code >= 500 && code < 600) return SipCodeHelp('Server error ($code)', 'The server failed to process the request.', 'Retry later or contact the provider.');
-  if (code >= 600 && code < 700) return SipCodeHelp('Global failure ($code)', 'The request cannot be fulfilled anywhere.', '');
-  return SipCodeHelp('No response', 'No SIP response was received.', 'Check the network connection and server address.');
+  if (code >= 100 && code < 200) return SipCodeHelp(l.diagSipProvisionalTitle(code), l.diagSipProvisionalExplain, '');
+  if (code >= 200 && code < 300) return SipCodeHelp(l.diagSipSuccessTitle(code), l.diagSipSuccessExplain, '');
+  if (code >= 300 && code < 400) return SipCodeHelp(l.diagSipRedirectedTitle(code), l.diagSipRedirectedExplain, l.diagSipRedirectedFix);
+  if (code >= 400 && code < 500) return SipCodeHelp(l.diagSipClientErrorTitle(code), l.diagSipClientErrorExplain, l.diagSipClientErrorFix);
+  if (code >= 500 && code < 600) return SipCodeHelp(l.diagSipServerErrorTitle(code), l.diagSipServerErrorExplain, l.diagSipServerErrorFix);
+  if (code >= 600 && code < 700) return SipCodeHelp(l.diagSipGlobalFailureTitle(code), l.diagSipGlobalFailureExplain, '');
+  return SipCodeHelp(l.diagSipNoResponseTitle, l.diagSipNoResponseExplain, l.diagSipNoResponseFix);
 }

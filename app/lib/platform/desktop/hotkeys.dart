@@ -1,15 +1,24 @@
 import 'package:flutter/services.dart';
+
+import '../../l10n/l10n.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 
 /// App-wide (system) hotkeys configurable in Settings > Shortcuts.
 enum HotkeyAction {
-  answer('Answer call', 'ctrl+alt+a'),
-  hangup('Hang up', 'ctrl+alt+h'),
-  mute('Mute / unmute', 'ctrl+alt+m'),
-  focusDialer('Focus dialer', 'ctrl+alt+d');
+  answer('ctrl+alt+a'),
+  hangup('ctrl+alt+h'),
+  mute('ctrl+alt+m'),
+  focusDialer('ctrl+alt+d');
 
-  const HotkeyAction(this.label, this.defaultBinding);
-  final String label;
+  const HotkeyAction(this.defaultBinding);
+
+  /// Display name of the action.
+  String label(AppLocalizations l) => switch (this) {
+    answer => l.hotkeyAnswerCall,
+    hangup => l.hotkeyHangUp,
+    mute => l.hotkeyMute,
+    focusDialer => l.hotkeyFocusDialer,
+  };
   final String defaultBinding;
 }
 

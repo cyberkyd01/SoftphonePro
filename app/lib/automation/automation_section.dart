@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/settings_controller.dart';
 import '../ui/widgets/settings_tiles.dart';
 import 'automation_auth.dart';
@@ -23,24 +24,24 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
     final st = ref.watch(automationServiceProvider);
     final svc = ref.read(automationServiceProvider.notifier);
     final t = Theme.of(context);
+    final l = context.l10n;
     final token = s.automationToken;
     final shownToken = token.isEmpty
-        ? 'Created when you turn the API on'
+        ? l.automationTokenPlaceholder
         : (_reveal ? token : '${token.substring(0, 4)}${'•' * 20}');
     final status = !s.automationEnabled
-        ? 'Off'
+        ? l.commonOff
         : st.running
-            ? 'Listening on http://127.0.0.1:${st.port}'
-            : (st.error ?? 'Starting...');
+            ? l.automationListening('http://127.0.0.1:${st.port}')
+            : (st.error ?? l.automationStarting);
     return SettingsGroup(
-      title: 'Local automation API',
-      footer:
-          'For CRM and helpdesk integrations on this computer. It listens on 127.0.0.1 only and every request needs the access token. See docs/AUTOMATION_API.md.',
+      title: l.automationTitle,
+      footer: l.automationFooter,
       children: [
         SwitchTile(
           key: const Key('automation-enabled'),
           icon: Icons.api_rounded,
-          title: 'Enable local automation API',
+          title: l.automationEnable,
           subtitle: status,
           value: s.automationEnabled,
           onChanged: (v) => svc.setEnabled(v),
@@ -54,13 +55,13 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
         TextTile(
           key: const Key('automation-port'),
           icon: Icons.numbers_rounded,
-          title: 'Port',
-          subtitle: 'Default 7771. Choose a free port between 1024 and 65535.',
+          title: l.automationPort,
+          subtitle: l.automationPortHint,
           value: '${s.automationPort}',
           keyboardType: TextInputType.number,
           validator: (v) {
             final n = int.tryParse(v.trim());
-            return n == null || n < 1024 || n > 65535 ? 'Enter a port from 1024 to 65535' : null;
+            return n == null || n < 1024 || n > 65535 ? l.automationPortInvalid : null;
           },
           onChanged: (v) {
             final n = int.tryParse(v.trim());
@@ -72,7 +73,7 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
         ListTile(
           key: const Key('automation-token'),
           leading: const Icon(Icons.key_rounded),
-          title: const Text('Access token'),
+          title: Text(l.automationAccessToken),
           subtitle: SelectableText(
             shownToken,
             maxLines: 1,
@@ -83,13 +84,13 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
             children: [
               IconButton(
                 key: const Key('automation-token-reveal'),
-                tooltip: _reveal ? 'Hide token' : 'Show token',
+                tooltip: _reveal ? l.automationHideToken : l.automationShowToken,
                 icon: Icon(_reveal ? Icons.visibility_off_rounded : Icons.visibility_rounded),
                 onPressed: token.isEmpty ? null : () => setState(() => _reveal = !_reveal),
               ),
               IconButton(
                 key: const Key('automation-token-copy'),
-                tooltip: 'Copy token',
+                tooltip: l.automationCopyToken,
                 icon: const Icon(Icons.copy_rounded),
                 onPressed: token.isEmpty
                     ? null
@@ -97,27 +98,27 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
                         await Clipboard.setData(ClipboardData(text: token));
                         if (context.mounted) {
                           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                            const SnackBar(content: Text('Token copied')),
+                            SnackBar(content: Text(l.automationTokenCopied)),
                           );
                         }
                       },
               ),
               IconButton(
                 key: const Key('automation-token-regenerate'),
-                tooltip: 'Generate a new token',
+                tooltip: l.automationGenerateToken,
                 icon: const Icon(Icons.refresh_rounded),
                 onPressed: () async {
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (c) => AlertDialog(
-                      title: const Text('Generate a new token?'),
-                      content: const Text('Programs using the old token stop working until you give them the new one.'),
+                      title: Text(l.automationGenerateTitle),
+                      content: Text(l.automationGenerateBody),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(l.actionCancel)),
                         FilledButton(
                           key: const Key('automation-token-regenerate-yes'),
                           onPressed: () => Navigator.pop(c, true),
-                          child: const Text('Generate'),
+                          child: Text(l.automationGenerate),
                         ),
                       ],
                     ),
@@ -131,13 +132,13 @@ class _AutomationSettingsGroupState extends ConsumerState<AutomationSettingsGrou
         TextTile(
           key: const Key('automation-origins'),
           icon: Icons.public_rounded,
-          title: 'Allowed browser origins',
-          subtitle: 'Comma separated, for example https://crm.example.com. Programs without a browser (curl, scripts) do not need this.',
-          hint: 'None',
+          title: l.automationOrigins,
+          subtitle: l.automationOriginsHint,
+          hint: l.commonNone,
           value: s.automationOrigins.join(', '),
           validator: (v) {
             for (final o in v.split(RegExp(r'[,\s]+')).where((e) => e.isNotEmpty)) {
-              if (normalizeOrigin(o) == null) return 'Not an http(s) origin: $o';
+              if (normalizeOrigin(o) == null) return l.automationNotOrigin(o);
             }
             return null;
           },

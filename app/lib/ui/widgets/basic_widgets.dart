@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/presence_controller.dart';
 
@@ -22,12 +23,12 @@ Color statusColor(BuildContext context, AccountStatus s) {
   }
 }
 
-String statusLabel(AccountStatus s) => switch (s) {
-  AccountStatus.registered => 'Registered',
-  AccountStatus.registering => 'Registering',
-  AccountStatus.failed => 'Registration failed',
-  AccountStatus.offline => 'Offline',
-  AccountStatus.disabled => 'Disabled',
+String statusLabel(AccountStatus s, AppLocalizations l) => switch (s) {
+  AccountStatus.registered => l.uiStatusRegistered,
+  AccountStatus.registering => l.uiStatusRegistering,
+  AccountStatus.failed => l.uiStatusRegFailed,
+  AccountStatus.offline => l.statusOffline,
+  AccountStatus.disabled => l.uiStatusDisabled,
 };
 
 class StatusDot extends StatelessWidget {
@@ -116,10 +117,10 @@ class AccountChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tip = reason ?? statusLabel(status);
+    final tip = reason ?? statusLabel(status, context.l10n);
     return Semantics(
       button: true,
-      label: '$name, ${statusLabel(status)}${reason != null ? ', $reason' : ''}',
+      label: '$name, ${statusLabel(status, context.l10n)}${reason != null ? ', $reason' : ''}',
       child: Tooltip(
         message: tip,
         child: Material(
@@ -299,7 +300,7 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Padding(
-      padding: padding ?? const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: padding ?? const EdgeInsetsDirectional.fromSTEB(16, 20, 16, 8),
       child: Row(
         children: [
           Expanded(
@@ -334,7 +335,7 @@ class PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 8, 4),
       child: Row(
         children: [
           ?leading,
@@ -374,9 +375,9 @@ class QualityIndicator extends StatelessWidget {
     return 1;
   }
 
-  static String labelFor(double mos) {
+  static String labelFor(double mos, AppLocalizations l) {
     final b = barsFor(mos);
-    return switch (b) { 0 => 'Measuring', 5 => 'Excellent', 4 => 'Good', 3 => 'Fair', 2 => 'Poor', _ => 'Bad' };
+    return switch (b) { 0 => l.uiQualityMeasuring, 5 => l.uiQualityExcellent, 4 => l.uiQualityGood, 3 => l.uiQualityFair, 2 => l.uiQualityPoor, _ => l.uiQualityBad };
   }
 
   @override
@@ -386,10 +387,10 @@ class QualityIndicator extends StatelessWidget {
     final color = bars >= 4 ? c.regOk : (bars == 3 ? c.regWarn : (bars == 0 ? c.disabled : c.regFail));
     final off = Theme.of(context).colorScheme.outlineVariant;
     return Semantics(
-      label: 'Call quality ${labelFor(mos)}${mos > 0 ? ', MOS ${mos.toStringAsFixed(1)}' : ''}',
+      label: mos > 0 ? context.l10n.uiQualitySemanticsMos(labelFor(mos, context.l10n), mos.toStringAsFixed(1)) : context.l10n.uiQualitySemantics(labelFor(mos, context.l10n)),
       button: onTap != null,
       child: Tooltip(
-        message: tooltip ?? 'Call quality: ${labelFor(mos)}',
+        message: tooltip ?? context.l10n.uiQualityTooltip(labelFor(mos, context.l10n)),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
@@ -401,7 +402,7 @@ class QualityIndicator extends StatelessWidget {
               children: [
                 for (var i = 0; i < 5; i++)
                   Padding(
-                    padding: const EdgeInsets.only(right: 2.5),
+                    padding: const EdgeInsetsDirectional.only(end: 2.5),
                     child: Container(
                       width: 4.5,
                       height: 6.0 + i * 3.5,
@@ -482,12 +483,13 @@ class SecureBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final full = srtp && tls;
-    final label = full ? 'Encrypted' : (srtp ? 'Media encrypted' : (tls ? 'Signalling encrypted' : 'Not encrypted'));
+    final l = context.l10n;
+    final label = full ? l.uiSecureFull : (srtp ? l.uiSecureMedia : (tls ? l.uiSecureSignalling : l.uiSecureNone));
     final color = full ? c.regOk : (srtp || tls ? c.regWarn : c.disabled);
     return Semantics(
       label: label,
       child: Tooltip(
-        message: '$label${srtp ? '\nSRTP media' : ''}${tls ? '\nTLS signalling' : ''}',
+        message: '$label${srtp ? '\n${l.uiSecureSrtpLine}' : ''}${tls ? '\n${l.uiSecureTlsLine}' : ''}',
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(

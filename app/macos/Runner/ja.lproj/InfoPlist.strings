@@ -1,0 +1,4 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro は通話中にあなたの声を伝えるためにマイクを使用します。";
+"NSContactsUsageDescription" = "SoftphonePro は、ご要望に応じて連絡先を読み込みます。";
+"NSCameraUsageDescription" = "SoftphonePro はプロビジョニングおよびペアリング用の QR コードを読み取るためにカメラを使用します。";
+"NSLocalNetworkUsageDescription" = "SoftphonePro は、ローカルネットワークを使って他のデバイスを検出して連携し (LAN Link)、相手と直接通話します。";

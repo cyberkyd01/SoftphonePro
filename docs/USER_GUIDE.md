@@ -404,6 +404,10 @@ it automatically. A red **REC** marker shows while recording.
 
 **Announcements.** *Settings → Calls → Announcements*: play a file when a call connects (incoming, outgoing or both, optionally muting your microphone and letting you hear it; a *Skip* button appears in the call), a notice before recording starts, and a notice before a caller is transferred (blind, attended or LAN hand-off; it is played to the caller, then the transfer happens, after at most 15 seconds).
 
+## Language
+
+SoftphonePro follows your system language by default. To change it, open **Settings > Appearance > Language** and pick a language; each language is listed by its own name (English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية, 简体中文, 日本語). The change applies immediately, without restarting. Arabic switches the whole layout to right-to-left. Phone numbers, SIP addresses, log and trace contents, and codec names always stay in their original form.
+
 ## 10. Platform notes
 
 * **Windows**

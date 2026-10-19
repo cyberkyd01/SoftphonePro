@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
 import '../../services/engine_controller.dart';
@@ -18,30 +19,41 @@ import '../widgets/call_widgets.dart';
 import '../widgets/update_banner.dart';
 
 class _Dest {
-  const _Dest(this.path, this.label, this.icon, this.selectedIcon);
+  const _Dest(this.path, this.icon, this.selectedIcon);
   final String path;
-  final String label;
   final IconData icon;
   final IconData selectedIcon;
+
+  String label(AppLocalizations l) => switch (path) {
+    '/keypad' => l.shellTabKeypad,
+    '/recents' => l.shellTabRecents,
+    '/contacts' => l.shellTabContacts,
+    '/messages' => l.shellTabMessages,
+    '/presence' => l.shellTabPresence,
+    '/lan' => l.shellTabLan,
+    '/recordings' => l.shellTabRecordings,
+    '/settings' => l.actionSettings,
+    _ => l.actionMore,
+  };
 }
 
 const _compact = [
-  _Dest('/keypad', 'Keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
-  _Dest('/recents', 'Recents', Icons.history_rounded, Icons.history_rounded),
-  _Dest('/contacts', 'Contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
-  _Dest('/messages', 'Messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
-  _Dest('/more', 'More', Icons.more_horiz_rounded, Icons.more_horiz_rounded),
+  _Dest('/keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
+  _Dest('/recents', Icons.history_rounded, Icons.history_rounded),
+  _Dest('/contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
+  _Dest('/messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
+  _Dest('/more', Icons.more_horiz_rounded, Icons.more_horiz_rounded),
 ];
 
 const _wide = [
-  _Dest('/keypad', 'Keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
-  _Dest('/recents', 'Recents', Icons.history_rounded, Icons.history_rounded),
-  _Dest('/contacts', 'Contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
-  _Dest('/messages', 'Messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
-  _Dest('/presence', 'Presence', Icons.grid_view_rounded, Icons.grid_view_rounded),
-  _Dest('/lan', 'LAN', Icons.lan_outlined, Icons.lan_rounded),
-  _Dest('/recordings', 'Recordings', Icons.graphic_eq_rounded, Icons.graphic_eq_rounded),
-  _Dest('/settings', 'Settings', Icons.settings_outlined, Icons.settings_rounded),
+  _Dest('/keypad', Icons.dialpad_outlined, Icons.dialpad_rounded),
+  _Dest('/recents', Icons.history_rounded, Icons.history_rounded),
+  _Dest('/contacts', Icons.people_outline_rounded, Icons.people_alt_rounded),
+  _Dest('/messages', Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded),
+  _Dest('/presence', Icons.grid_view_rounded, Icons.grid_view_rounded),
+  _Dest('/lan', Icons.lan_outlined, Icons.lan_rounded),
+  _Dest('/recordings', Icons.graphic_eq_rounded, Icons.graphic_eq_rounded),
+  _Dest('/settings', Icons.settings_outlined, Icons.settings_rounded),
 ];
 
 int _indexFor(String loc, List<_Dest> dests, {required bool compact}) {
@@ -108,8 +120,8 @@ class AppShell extends ConsumerWidget {
                   NavigationDestination(
                     icon: _badge(_compact[i].icon, i == 1 ? missed : (i == 3 ? unread : 0)),
                     selectedIcon: _badge(_compact[i].selectedIcon, i == 1 ? missed : (i == 3 ? unread : 0)),
-                    label: _compact[i].label,
-                    tooltip: _compact[i].label,
+                    label: _compact[i].label(context.l10n),
+                    tooltip: _compact[i].label(context.l10n),
                   ),
               ],
             ),
@@ -145,7 +157,7 @@ class AppShell extends ConsumerWidget {
                       ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset('assets/branding/icon_1024.png', width: 36, height: 36, errorBuilder: (_, __, ___) => const Icon(Icons.phone_rounded))),
                       if (extended) ...[
                         const SizedBox(width: 10),
-                        Text('SoftphonePro', style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(context.l10n.appName, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                       ],
                     ],
                   ),
@@ -161,7 +173,7 @@ class AppShell extends ConsumerWidget {
                     NavigationRailDestination(
                       icon: _badge(_wide[i].icon, i == 1 ? missed : (i == 3 ? unread : 0)),
                       selectedIcon: _badge(_wide[i].selectedIcon, i == 1 ? missed : (i == 3 ? unread : 0)),
-                      label: Text(_wide[i].label),
+                      label: Text(_wide[i].label(context.l10n)),
                     ),
                 ],
               ),
@@ -212,7 +224,7 @@ class _TopBar extends ConsumerWidget {
               constraints: const BoxConstraints(maxWidth: 420),
               child: Semantics(
                 button: true,
-                label: 'Search contacts, history or dial a number',
+                label: context.l10n.shellSearchSemantics,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(kRadius),
                   onTap: () => showGlobalSearch(context),
@@ -224,7 +236,7 @@ class _TopBar extends ConsumerWidget {
                       children: [
                         Icon(Icons.search_rounded, size: 20, color: t.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 8),
-                        Expanded(child: Text('Search or dial', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
+                        Expanded(child: Text(context.l10n.shellSearchHint, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))),
                         Text(mac ? '⌘K' : 'Ctrl+K', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                       ],
                     ),
@@ -239,7 +251,7 @@ class _TopBar extends ConsumerWidget {
             child: SizedBox(
               height: 52,
               child: acc.profiles.isEmpty
-                  ? const Align(alignment: Alignment.centerRight, child: AccountStrip(padding: EdgeInsets.zero))
+                  ? const Align(alignment: AlignmentDirectional.centerEnd, child: AccountStrip(padding: EdgeInsets.zero))
                   : ListView.separated(
                       scrollDirection: Axis.horizontal,
                       reverse: true,
@@ -255,7 +267,7 @@ class _TopBar extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           Tooltip(
-            message: vm > 0 ? '$vm new voicemail${vm == 1 ? '' : 's'}. Click to call voicemail' : 'Voicemail',
+            message: vm > 0 ? context.l10n.shellVoicemailNewTooltip(vm) : context.l10n.shellVoicemailTooltip,
             child: IconButton(
               onPressed: () => dialVoicemail(context, ref),
               icon: vm > 0 ? Badge.count(count: vm, child: const Icon(Icons.voicemail_rounded)) : const Icon(Icons.voicemail_rounded),
@@ -274,19 +286,20 @@ class _StatusSelector extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final c = context.colors;
+    final l = context.l10n;
     final (label, color) = switch (s.globalStatus) {
-      'away' => ('Away', c.holdAmber),
-      'dnd' => ('Do not disturb', c.regFail),
-      _ => ('Available', c.regOk),
+      'away' => (l.shellStatusAway, c.holdAmber),
+      'dnd' => (l.statusDoNotDisturb, c.regFail),
+      _ => (l.statusAvailable, c.regOk),
     };
     return PopupMenuButton<String>(
-      tooltip: 'Your status',
+      tooltip: l.shellStatusTooltip,
       position: PopupMenuPosition.over,
       onSelected: (v) => ref.read(settingsProvider.notifier).update({'globalStatus': v}),
       itemBuilder: (_) => [
-        PopupMenuItem(value: 'available', child: Row(children: [StatusDot(color: c.regOk), const SizedBox(width: 10), const Text('Available')])),
-        PopupMenuItem(value: 'away', child: Row(children: [StatusDot(color: c.holdAmber), const SizedBox(width: 10), const Text('Away')])),
-        PopupMenuItem(value: 'dnd', child: Row(children: [StatusDot(color: c.regFail), const SizedBox(width: 10), const Text('Do not disturb')])),
+        PopupMenuItem(value: 'available', child: Row(children: [StatusDot(color: c.regOk), const SizedBox(width: 10), Text(l.statusAvailable)])),
+        PopupMenuItem(value: 'away', child: Row(children: [StatusDot(color: c.holdAmber), const SizedBox(width: 10), Text(l.shellStatusAway)])),
+        PopupMenuItem(value: 'dnd', child: Row(children: [StatusDot(color: c.regFail), const SizedBox(width: 10), Text(l.statusDoNotDisturb)])),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -320,7 +333,7 @@ class _DemoBanner extends ConsumerWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Demo mode: calls are simulated, nothing reaches a real network.',
+                context.l10n.shellDemoBanner,
                 style: t.textTheme.labelMedium,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -330,7 +343,7 @@ class _DemoBanner extends ConsumerWidget {
             TextButton(
               style: TextButton.styleFrom(minimumSize: const Size(0, 28), padding: const EdgeInsets.symmetric(horizontal: 8)),
               onPressed: () => context.go('/settings/advanced'),
-              child: const Text('Settings'),
+              child: Text(context.l10n.actionSettings),
             ),
           ],
         ),

@@ -8,6 +8,7 @@ import 'package:lan_link/lan_link.dart' as ll;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
 import '../models/chat.dart';
 import '../services/accounts_controller.dart';
@@ -388,9 +389,9 @@ class LanController extends Notifier<LanState> {
     }
   }
 
-  static String _friendly(Object e) {
+  String _friendly(Object e) {
     if (e is ll.LanLinkException) return e.message;
-    if (e is SocketException) return 'Network error: ${e.message}';
+    if (e is SocketException) return ref.read(l10nProvider).lanNetworkError(e.message);
     return '$e';
   }
 
@@ -518,13 +519,14 @@ class LanController extends Notifier<LanState> {
   /// Connects to a device by `host:port` or QR payload. Returns the peer.
   Future<ll.LanPeer> connectManual(String raw) async {
     final l = _link;
-    if (l == null) throw ll.LanLinkException('not_running', 'Turn on LAN Link first');
+    final l10n = ref.read(l10nProvider);
+    if (l == null) throw ll.LanLinkException('not_running', l10n.lanErrNotRunning);
     final t = LanTarget.parse(raw);
-    if (t == null) throw ll.LanLinkException('bad_address', 'Enter an address like 192.168.1.20:4711 or paste the QR code text');
+    if (t == null) throw ll.LanLinkException('bad_address', l10n.lanErrBadAddress);
     if (t.deviceId != null) {
       final info = await ll.fetchDeviceInfo(t.host, t.port);
       if (info.deviceId != t.deviceId) {
-        throw ll.LanLinkException('fingerprint_mismatch', 'That device does not match the scanned code. Did the QR code come from another device?');
+        throw ll.LanLinkException('fingerprint_mismatch', l10n.lanErrFingerprint);
       }
     }
     return l.connectManual(t.host, t.port);
@@ -763,14 +765,15 @@ class LanController extends Notifier<LanState> {
       } catch (_) {}
     }
     final notices = ref.read(noticeProvider.notifier);
+    final l10n = ref.read(l10nProvider);
     if (ok && t.incoming) {
-      notices.show('Received ${entry.name} from ${entry.peerName}');
+      notices.show(l10n.lanNoticeReceived(entry.name, entry.peerName));
     } else if (ok) {
-      notices.show('Sent ${entry.name} to ${entry.peerName}');
+      notices.show(l10n.lanNoticeSent(entry.name, entry.peerName));
     } else if (t.state == ll.TransferState.declined && !t.incoming) {
-      notices.error('${entry.peerName} declined ${t.name}');
+      notices.error(l10n.lanNoticeDeclined(entry.peerName, t.name));
     } else if (t.state == ll.TransferState.failed) {
-      notices.error('File transfer failed: ${entry.error}');
+      notices.error(l10n.lanNoticeTransferFailed(entry.error));
     }
   }
 
@@ -857,28 +860,29 @@ class LanController extends Notifier<LanState> {
   Future<int?> callPeer(String peerId, {bool intercom = false}) async {
     final l = _link;
     final notices = ref.read(noticeProvider.notifier);
+    final l10n = ref.read(l10nProvider);
     if (l == null) {
-      notices.error('Turn on LAN Link to call nearby devices');
+      notices.error(l10n.lanNoticeNeedLanOn);
       return null;
     }
     final peer = l.peerById(peerId);
     final uri = peer?.sipUri;
     if (peer == null || !peer.trusted) {
-      notices.error('Pair with this device first');
+      notices.error(l10n.lanNoticePairFirst);
       return null;
     }
     if (uri == null || !peer.online) {
-      notices.error('${peer.name} is not reachable for calls right now');
+      notices.error(l10n.lanNoticeNotReachable(peer.name));
       return null;
     }
     if (intercom) {
-      notices.show('Asking ${peer.name}…');
+      notices.show(l10n.lanNoticeAsking(peer.name));
       var allowed = false;
       try {
         allowed = (await l.requestIntercom(peerId, timeout: intercomRequestTimeout)).allowed;
       } catch (_) {}
       if (!allowed) {
-        notices.error('${peer.name} did not allow intercom (or did not answer)');
+        notices.error(l10n.lanNoticeIntercomDenied(peer.name));
         return null;
       }
     }

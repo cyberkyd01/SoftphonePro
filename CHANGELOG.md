@@ -5,6 +5,7 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 ## [Unreleased]
 
 ### Added
+* Localisation: the whole interface (screens, dialogs, notices, notifications, SIP error explanations) in 13 languages - English, Spanish, French, German, Brazilian Portuguese, Italian, Dutch, Russian, Turkish, Hindi, Arabic, Simplified Chinese and Japanese - with full right-to-left layout for Arabic. New Settings > Appearance > Language picker (default: follow the system). Android declares RTL support; iOS and macOS declare their languages and localise the permission prompts.
 * Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore. Safe migration both ways with a verified copy, a backup until the next start, and a recovery screen if the key is missing.
 * Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
 * Desktop headset / media play-pause button answers and hangs up (or mutes), claimed only while a call rings or is active (macOS and Windows).

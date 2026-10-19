@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../audio/audio_library.dart';
+import '../../../l10n/l10n.dart';
 import '../../widgets/settings_tiles.dart';
 
 /// Dropdown of the audio library for settings. [leading] adds fixed
@@ -34,7 +35,7 @@ class AudioRefTile extends ConsumerWidget {
         if (!holdMusicOnly || i.holdMusic) i.ref: i.name,
     };
     if (value.isNotEmpty && !opts.containsKey(value) && items.isNotEmpty) {
-      opts[value] = 'Missing file';
+      opts[value] = context.l10n.audioMissingFile;
     }
     return SelectTile<String>(
       icon: icon,

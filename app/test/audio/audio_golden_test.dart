@@ -8,6 +8,7 @@ import 'package:softphonepro/ui/pages/audio/voice_isolation_page.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import 'audio_harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 Future<void> _io(WidgetTester tester) async {
   for (var i = 0; i < 40; i++) {
@@ -28,7 +29,7 @@ Future<AudioEnv> _pump(WidgetTester tester, Widget page, Map<String, dynamic> se
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: a.container,
-      child: MaterialApp(debugShowCheckedModeBanner: false, theme: buildTheme(b), home: page),
+      child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, debugShowCheckedModeBanner: false, theme: buildTheme(b), home: page),
     ),
   );
   await _io(tester);

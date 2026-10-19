@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 
 /// The schemes SoftphonePro can handle as the system dialler.
 const kHandlerSchemes = ['sip', 'tel', 'callto'];
@@ -22,7 +23,11 @@ class SchemeHandler {
   final String bundleId;
   final bool isSelf;
 
-  String get label => name.isNotEmpty ? name : (bundleId.isNotEmpty ? bundleId : 'none');
+  /// English name (tests / logs).
+  String get label => labelOr('none');
+
+  /// Name shown to the user; [noneLabel] when nothing handles the scheme.
+  String labelOr(String noneLabel) => name.isNotEmpty ? name : (bundleId.isNotEmpty ? bundleId : noneLabel);
 }
 
 /// Outcome of [DefaultHandlerService.makeDefault].
@@ -145,11 +150,12 @@ class _DefaultHandlerTileState extends ConsumerState<DefaultHandlerTile> {
     final r = await svc.makeDefault();
     if (!mounted) return;
     setState(() => _busy = false);
+    final l = context.l10n;
     final msg = r.openedSettings
-        ? 'Choose SoftphonePro for SIP, TEL and CALLTO in Default apps'
+        ? l.defaultHandlerChooseInSettings
         : r.ok
-            ? 'SoftphonePro now opens sip:, tel: and callto: links'
-            : 'Could not change the default for ${r.failed.join(', ')}';
+            ? l.defaultHandlerNowOpens
+            : l.defaultHandlerCouldNotChange(r.failed.join(', '));
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(msg)));
     await _refresh();
   }
@@ -158,16 +164,17 @@ class _DefaultHandlerTileState extends ConsumerState<DefaultHandlerTile> {
   Widget build(BuildContext context) {
     final svc = ref.watch(defaultHandlerServiceProvider);
     if (!svc.supported) return const SizedBox.shrink();
+    final l = context.l10n;
     final allSelf = _handlers.isNotEmpty && _handlers.every((h) => h.isSelf);
     final status = _handlers.isEmpty
-        ? 'Opens sip:, tel: and callto: links from browsers and other apps'
+        ? l.defaultHandlerIntro
         : (allSelf
-              ? 'SoftphonePro handles sip:, tel: and callto: links'
-              : 'Now: ${[for (final h in _handlers) '${h.scheme}: ${h.label}'].join('  |  ')}');
+              ? l.defaultHandlerIsSelf
+              : l.defaultHandlerNow([for (final h in _handlers) '${h.scheme}: ${h.labelOr(l.commonNone)}'].join('  |  ')));
     return ListTile(
       key: const Key('make-default-handler'),
       leading: const Icon(Icons.link_rounded),
-      title: const Text('Make SoftphonePro the default app for sip:, tel: and callto: links'),
+      title: Text(l.defaultHandlerTitle),
       subtitle: Text(status),
       trailing: _busy
           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))

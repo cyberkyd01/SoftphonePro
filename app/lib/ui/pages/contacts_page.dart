@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../models/contact.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
@@ -47,7 +48,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
 
     final items = <Object>[];
     if (!_favOnly && favs.isNotEmpty && _q.isEmpty) {
-      items.add('★ Favorites');
+      items.add(context.l10n.contactsFavoritesHeader);
       items.addAll(favs);
     }
     String? lastLetter;
@@ -63,56 +64,56 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
     final listPane = Column(
       children: [
         PageHeader(
-          title: 'Contacts',
+          title: context.l10n.shellTabContacts,
           actions: [
             IconButton(
-              tooltip: _favOnly ? 'Show all' : 'Favorites only',
+              tooltip: _favOnly ? context.l10n.contactsShowAll : context.l10n.contactsFavoritesOnly,
               onPressed: () => setState(() => _favOnly = !_favOnly),
               icon: Icon(_favOnly ? Icons.star_rounded : Icons.star_outline_rounded),
             ),
             PopupMenuButton<String>(
-              tooltip: 'Import and export',
+              tooltip: context.l10n.contactsImportExportTooltip,
               onSelected: (v) => _menu(v),
               itemBuilder: (_) => [
                 if (ref.read(deviceContactsSourceProvider) != null)
-                  const PopupMenuItem(value: 'device', child: Text('Import from device')),
-                const PopupMenuItem(value: 'import', child: Text('Import vCard / CSV file')),
-                const PopupMenuItem(value: 'paste', child: Text('Import from clipboard')),
-                const PopupMenuItem(value: 'vcf', child: Text('Copy as vCard')),
-                const PopupMenuItem(value: 'csv', child: Text('Copy as CSV')),
+                  PopupMenuItem(value: 'device', child: Text(context.l10n.contactsMenuDevice)),
+                PopupMenuItem(value: 'import', child: Text(context.l10n.contactsMenuFile)),
+                PopupMenuItem(value: 'paste', child: Text(context.l10n.contactsMenuClipboard)),
+                PopupMenuItem(value: 'vcf', child: Text(context.l10n.contactsMenuCopyVcard)),
+                PopupMenuItem(value: 'csv', child: Text(context.l10n.contactsMenuCopyCsv)),
               ],
             ),
             IconButton(
-              tooltip: 'New contact',
+              tooltip: context.l10n.contactsNewTooltip,
               onPressed: () => context.push('/contacts/new'),
               icon: const Icon(Icons.person_add_alt_1_rounded),
             ),
           ],
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 16, 8),
           child: TextField(
             onChanged: (v) => setState(() => _q = v),
-            decoration: const InputDecoration(hintText: 'Search contacts', prefixIcon: Icon(Icons.search_rounded)),
+            decoration: InputDecoration(hintText: context.l10n.contactsSearchHint, prefixIcon: const Icon(Icons.search_rounded)),
           ),
         ),
         Expanded(
           child: all.isEmpty
               ? EmptyState(
                   icon: Icons.people_alt_rounded,
-                  title: 'No contacts yet',
-                  subtitle: 'Add people you call often, or import a vCard or CSV file.',
-                  actionLabel: 'Add a contact',
+                  title: context.l10n.contactsEmptyTitle,
+                  subtitle: context.l10n.contactsEmptySubtitle,
+                  actionLabel: context.l10n.contactsEmptyAction,
                   onAction: () => context.push('/contacts/new'),
                 )
               : list.isEmpty
-              ? const EmptyState(icon: Icons.search_off_rounded, title: 'No matches')
+              ? EmptyState(icon: Icons.search_off_rounded, title: context.l10n.contactsNoMatches)
               : ListView.builder(
                   padding: const EdgeInsets.only(bottom: 24),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final it = items[i];
-                    if (it is String) return SectionHeader(it, padding: const EdgeInsets.fromLTRB(16, 14, 16, 2));
+                    if (it is String) return SectionHeader(it, padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 2));
                     final c = it as Contact;
                     return ListTile(
                       key: ValueKey('${c.id}-$i'),
@@ -128,7 +129,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
                       trailing: c.addresses.isEmpty
                           ? null
                           : IconButton(
-                              tooltip: 'Call ${c.displayName}',
+                              tooltip: context.l10n.contactsCallName(c.displayName),
                               icon: Icon(Icons.call_rounded, color: context.colors.callGreen),
                               onPressed: () => _callContact(context, ref, c),
                             ),
@@ -152,7 +153,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
         VerticalDivider(width: 1, color: Theme.of(context).colorScheme.outlineVariant),
         Expanded(
           child: _selected == null || !all.any((c) => c.id == _selected)
-              ? const EmptyState(icon: Icons.touch_app_rounded, title: 'Select a contact')
+              ? EmptyState(icon: Icons.touch_app_rounded, title: context.l10n.contactsSelect)
               : ContactDetailView(contactId: _selected!, embedded: true),
         ),
       ],
@@ -160,15 +161,16 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
   }
 
   Future<void> _menu(String v) async {
+    final l = ref.read(l10nProvider);
     final ctl = ref.read(contactsProvider.notifier);
     final notice = ref.read(noticeProvider.notifier);
     switch (v) {
       case 'vcf':
         await Clipboard.setData(ClipboardData(text: ctl.exportVCard()));
-        notice.show('Contacts copied as vCard');
+        notice.show(l.contactsCopiedVcard);
       case 'csv':
         await Clipboard.setData(ClipboardData(text: ctl.exportCsv()));
-        notice.show('Contacts copied as CSV');
+        notice.show(l.contactsCopiedCsv);
       case 'device':
         await _importDevice();
       case 'paste':
@@ -182,42 +184,52 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
   }
 
   Future<void> _importDevice() async {
+    final l = ref.read(l10nProvider);
     final src = ref.read(deviceContactsSourceProvider);
     final notice = ref.read(noticeProvider.notifier);
     if (src == null) return;
     if (!await src.requestPermission()) {
-      notice.show('Contacts access was denied. Allow it in system settings to import.', isError: true);
+      notice.show(l.contactsDeviceDenied, isError: true);
       return;
     }
     final device = await src.read();
     final plan = planDeviceImport(ref.read(contactsProvider), device);
     if (!mounted) return;
     if (plan.isEmpty) {
-      notice.show(device.isEmpty ? 'No contacts found on this device' : 'Nothing new to import (${plan.skipped} already present)');
+      notice.show(device.isEmpty ? l.contactsDeviceNone : l.contactsNothingNew(plan.skipped));
       return;
     }
     final ok = await confirm(
       context,
-      title: 'Import from device?',
-      message:
-          '${plan.added.length} new contact${plan.added.length == 1 ? '' : 's'}'
-          '${plan.updated.isEmpty ? '' : ', ${plan.updated.length} updated with extra numbers'}'
-          '${plan.skipped == 0 ? '' : ', ${plan.skipped} skipped (duplicates or no phone number)'}.',
-      confirmLabel: 'Import',
+      title: l.contactsImportDeviceTitle,
+      message: [
+        l.contactsImportNew(plan.added.length),
+        if (plan.updated.isNotEmpty) l.contactsImportUpdated(plan.updated.length),
+        if (plan.skipped != 0) l.contactsImportSkipped(plan.skipped),
+      ].join('\n'),
+      confirmLabel: l.actionImport,
       destructive: false,
     );
     if (!ok) return;
     final n = await ref.read(contactsProvider.notifier).applyImport(plan);
-    notice.show('Imported $n contact${n == 1 ? '' : 's'}');
+    notice.show(l.contactsImportedCount(n));
   }
 
   Future<void> _import(String text, {String name = ''}) async {
     final isCsv = name.toLowerCase().endsWith('.csv') || (!text.contains('BEGIN:VCARD'));
     final parsed = isCsv ? ContactIo.fromCsv(text) : ContactIo.fromVCard(text);
     final n = await ref.read(contactsProvider.notifier).importAll(parsed);
-    ref.read(noticeProvider.notifier).show(parsed.isEmpty ? 'No contacts found in that data' : 'Imported $n contacts');
+    ref.read(noticeProvider.notifier).show(parsed.isEmpty ? ref.read(l10nProvider).contactsImportNone : ref.read(l10nProvider).contactsImportedCount(n));
   }
 }
+
+String contactLabelText(AppLocalizations l, String raw) => switch (raw) {
+  'mobile' => l.contactsLabelMobile,
+  'work' => l.contactsLabelWork,
+  'home' => l.contactsLabelHome,
+  'other' => l.contactsLabelOther,
+  _ => raw,
+};
 
 Future<void> _callContact(BuildContext context, WidgetRef ref, Contact c) async {
   if (c.addresses.length <= 1) {
@@ -231,8 +243,8 @@ Future<void> _callContact(BuildContext context, WidgetRef ref, Contact c) async 
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final n in c.numbers)
-            ListTile(leading: const Icon(Icons.phone_rounded), title: Text(n.value), subtitle: Text(n.label), onTap: () => Navigator.pop(ctx, n.value)),
-          for (final u in c.sipUris) ListTile(leading: const Icon(Icons.alternate_email_rounded), title: Text(u), subtitle: const Text('SIP'), onTap: () => Navigator.pop(ctx, u)),
+            ListTile(leading: const Icon(Icons.phone_rounded), title: Text(n.value, textDirection: TextDirection.ltr), subtitle: Text(contactLabelText(ctx.l10n, n.label)), onTap: () => Navigator.pop(ctx, n.value)),
+          for (final u in c.sipUris) ListTile(leading: const Icon(Icons.alternate_email_rounded), title: Text(u, textDirection: TextDirection.ltr), subtitle: Text(ctx.l10n.contactsSip), onTap: () => Navigator.pop(ctx, u)),
         ],
       ),
     ),
@@ -249,12 +261,12 @@ class ContactDetailView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final contacts = ref.watch(contactsProvider);
     final c = contacts.where((e) => e.id == contactId).firstOrNull;
-    if (c == null) return const EmptyState(icon: Icons.person_off_rounded, title: 'Contact not found');
+    if (c == null) return EmptyState(icon: Icons.person_off_rounded, title: context.l10n.contactsNotFound);
     final t = Theme.of(context);
     final colors = context.colors;
     final acc = ref.watch(accountsProvider);
     final body = ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 32),
       children: [
         Column(
           children: [
@@ -267,21 +279,21 @@ class ContactDetailView extends ConsumerWidget {
               spacing: 16,
               alignment: WrapAlignment.center,
               children: [
-                _CircleAction(icon: Icons.call_rounded, label: 'Call', color: colors.callGreen, onTap: c.addresses.isEmpty ? null : () => _callContact(context, ref, c)),
+                _CircleAction(icon: Icons.call_rounded, label: context.l10n.uiCall, color: colors.callGreen, onTap: c.addresses.isEmpty ? null : () => _callContact(context, ref, c)),
                 _CircleAction(
                   icon: Icons.message_rounded,
-                  label: 'Message',
+                  label: context.l10n.uiMessage,
                   onTap: c.addresses.isEmpty || acc.defaultProfile == null
                       ? null
                       : () => context.push('/thread?acc=${acc.defaultProfile!.id}&peer=${Uri.encodeQueryComponent(c.primary)}'),
                 ),
                 _CircleAction(
                   icon: c.favorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                  label: 'Favorite',
+                  label: context.l10n.contactsActionFavorite,
                   color: c.favorite ? colors.holdAmber : null,
                   onTap: () => ref.read(contactsProvider.notifier).toggleFavorite(c.id),
                 ),
-                _CircleAction(icon: Icons.edit_rounded, label: 'Edit', onTap: () => context.push('/contacts/${c.id}/edit')),
+                _CircleAction(icon: Icons.edit_rounded, label: context.l10n.actionEdit, onTap: () => context.push('/contacts/${c.id}/edit')),
               ],
             ),
           ],
@@ -289,31 +301,31 @@ class ContactDetailView extends ConsumerWidget {
         const SizedBox(height: 8),
         if (c.numbers.isNotEmpty || c.sipUris.isNotEmpty)
           SettingsGroup(
-            title: 'Numbers',
+            title: context.l10n.contactsNumbersHeader,
             children: [
               for (final n in c.numbers)
                 ListTile(
                   leading: const Icon(Icons.phone_rounded),
-                  title: Text(n.value, style: tabular(null)),
-                  subtitle: Text(n.label),
-                  trailing: IconButton(tooltip: 'Call ${n.value}', icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(n.value)),
+                  title: Text(n.value, style: tabular(null), textDirection: TextDirection.ltr),
+                  subtitle: Text(contactLabelText(context.l10n, n.label)),
+                  trailing: IconButton(tooltip: context.l10n.contactsCallName(n.value), icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(n.value)),
                 ),
               for (final u in c.sipUris)
                 ListTile(
                   leading: const Icon(Icons.alternate_email_rounded),
-                  title: Text(u),
-                  subtitle: const Text('SIP address'),
-                  trailing: IconButton(tooltip: 'Call $u', icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(u)),
+                  title: Text(u, textDirection: TextDirection.ltr),
+                  subtitle: Text(context.l10n.contactsSipAddress),
+                  trailing: IconButton(tooltip: context.l10n.contactsCallName(u), icon: Icon(Icons.call_rounded, color: colors.callGreen), onPressed: () => ref.read(callsProvider.notifier).dial(u)),
                 ),
             ],
           ),
         if (c.email.isNotEmpty || c.notes.isNotEmpty || c.blf || c.autoRecord)
           SettingsGroup(
-            title: 'Details',
+            title: context.l10n.contactsDetailsHeader,
             children: [
               if (c.email.isNotEmpty) ListTile(leading: const Icon(Icons.email_outlined), title: Text(c.email)),
-              if (c.blf) const ListTile(leading: Icon(Icons.grid_view_rounded), title: Text('Shown on the BLF board')),
-              if (c.autoRecord) const ListTile(leading: Icon(Icons.fiber_manual_record_rounded), title: Text('Calls are always recorded')),
+              if (c.blf) ListTile(leading: const Icon(Icons.grid_view_rounded), title: Text(context.l10n.contactsOnBlf)),
+              if (c.autoRecord) ListTile(leading: const Icon(Icons.fiber_manual_record_rounded), title: Text(context.l10n.contactsAlwaysRecorded)),
               if (c.notes.isNotEmpty) ListTile(leading: const Icon(Icons.notes_rounded), title: Text(c.notes)),
             ],
           ),
@@ -321,20 +333,20 @@ class ContactDetailView extends ConsumerWidget {
         Align(
           child: TextButton.icon(
             onPressed: () async {
-              if (await confirm(context, title: 'Delete ${c.displayName}?', message: 'This contact will be removed from this device.')) {
+              if (await confirm(context, title: context.l10n.contactsDeleteTitle(c.displayName), message: context.l10n.contactsDeleteMessage)) {
                 await ref.read(contactsProvider.notifier).delete(c.id);
                 if (!embedded && context.mounted) context.pop();
               }
             },
             style: TextButton.styleFrom(foregroundColor: t.colorScheme.error),
             icon: const Icon(Icons.delete_outline_rounded),
-            label: const Text('Delete contact'),
+            label: Text(context.l10n.contactsDeleteButton),
           ),
         ),
       ],
     );
     if (embedded) return body;
-    return Scaffold(appBar: AppBar(title: const Text('Contact')), body: body);
+    return Scaffold(appBar: AppBar(title: Text(context.l10n.contactsDetailTitle)), body: body);
   }
 }
 
@@ -449,7 +461,7 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
     ];
     final sips = [for (final s in _sips) if (s.text.trim().isNotEmpty) s.text.trim()];
     if (_name.text.trim().isEmpty && _company.text.trim().isEmpty && nums.isEmpty && sips.isEmpty) {
-      ref.read(noticeProvider.notifier).error('Enter a name or a number');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).contactsErrorNameOrNumber);
       return;
     }
     final name = _name.text.trim().isEmpty ? (nums.isNotEmpty ? nums.first.value : (sips.isNotEmpty ? sips.first : _company.text.trim())) : _name.text.trim();
@@ -480,8 +492,8 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
     final t = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(isNew ? 'New contact' : 'Edit contact'),
-        actions: [TextButton(onPressed: _save, child: const Text('Save')), const SizedBox(width: 8)],
+        title: Text(isNew ? context.l10n.contactsNewTooltip : context.l10n.contactsEditTitle),
+        actions: [TextButton(onPressed: _save, child: Text(context.l10n.actionSave)), const SizedBox(width: 8)],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -489,10 +501,10 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TextField(controller: _name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(Icons.person_rounded))),
+              TextField(controller: _name, textCapitalization: TextCapitalization.words, decoration: InputDecoration(labelText: context.l10n.contactsFieldName, prefixIcon: const Icon(Icons.person_rounded))),
               const SizedBox(height: 12),
-              TextField(controller: _company, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Company', prefixIcon: Icon(Icons.business_rounded))),
-              const SectionHeader('Numbers', padding: EdgeInsets.fromLTRB(4, 20, 4, 8)),
+              TextField(controller: _company, textCapitalization: TextCapitalization.words, decoration: InputDecoration(labelText: context.l10n.contactsFieldCompany, prefixIcon: const Icon(Icons.business_rounded))),
+              SectionHeader(context.l10n.contactsNumbersHeader, padding: const EdgeInsetsDirectional.fromSTEB(4, 20, 4, 8)),
               for (var i = 0; i < _nums.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -504,49 +516,49 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                           value: _nums[i].label,
                           isExpanded: true,
                           decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14)),
-                          items: [for (final l in const ['mobile', 'work', 'home', 'other']) DropdownMenuItem(value: l, child: Text(l))],
+                          items: [for (final l in const ['mobile', 'work', 'home', 'other']) DropdownMenuItem(value: l, child: Text(contactLabelText(context.l10n, l)))],
                           onChanged: (v) => setState(() => _nums[i].label = v ?? 'other'),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Expanded(child: TextField(controller: _nums[i].ctl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Number'))),
-                      IconButton(tooltip: 'Remove number', onPressed: () => setState(() => _nums.removeAt(i)), icon: const Icon(Icons.remove_circle_outline_rounded)),
+                      Expanded(child: TextField(controller: _nums[i].ctl, keyboardType: TextInputType.phone, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: context.l10n.contactsFieldNumber))),
+                      IconButton(tooltip: context.l10n.contactsRemoveNumber, onPressed: () => setState(() => _nums.removeAt(i)), icon: const Icon(Icons.remove_circle_outline_rounded)),
                     ],
                   ),
                 ),
               Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(onPressed: () => setState(() => _nums.add(_NumRow('mobile', TextEditingController()))), icon: const Icon(Icons.add_rounded), label: const Text('Add number')),
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(onPressed: () => setState(() => _nums.add(_NumRow('mobile', TextEditingController()))), icon: const Icon(Icons.add_rounded), label: Text(context.l10n.contactsAddNumber)),
               ),
-              const SectionHeader('SIP addresses', padding: EdgeInsets.fromLTRB(4, 12, 4, 8)),
+              SectionHeader(context.l10n.contactsSipHeader, padding: const EdgeInsetsDirectional.fromSTEB(4, 12, 4, 8)),
               for (var i = 0; i < _sips.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      Expanded(child: TextField(controller: _sips[i], keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'sip:user@domain'))),
-                      IconButton(tooltip: 'Remove address', onPressed: () => setState(() => _sips.removeAt(i)), icon: const Icon(Icons.remove_circle_outline_rounded)),
+                      Expanded(child: TextField(controller: _sips[i], keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'sip:user@domain'))),
+                      IconButton(tooltip: context.l10n.contactsRemoveAddress, onPressed: () => setState(() => _sips.removeAt(i)), icon: const Icon(Icons.remove_circle_outline_rounded)),
                     ],
                   ),
                 ),
               Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(onPressed: () => setState(() => _sips.add(TextEditingController())), icon: const Icon(Icons.add_rounded), label: const Text('Add SIP address')),
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(onPressed: () => setState(() => _sips.add(TextEditingController())), icon: const Icon(Icons.add_rounded), label: Text(context.l10n.contactsAddSip)),
               ),
               const SizedBox(height: 12),
-              TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined))),
+              TextField(controller: _email, keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: context.l10n.contactsFieldEmail, prefixIcon: const Icon(Icons.email_outlined))),
               const SizedBox(height: 12),
-              TextField(controller: _notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes_rounded))),
+              TextField(controller: _notes, maxLines: 3, decoration: InputDecoration(labelText: context.l10n.contactsFieldNotes, prefixIcon: const Icon(Icons.notes_rounded))),
               const SizedBox(height: 12),
               Card(
                 child: Column(
                   children: [
-                    SwitchListTile(secondary: const Icon(Icons.star_outline_rounded), title: const Text('Favorite'), value: _fav, onChanged: (v) => setState(() => _fav = v)),
+                    SwitchListTile(secondary: const Icon(Icons.star_outline_rounded), title: Text(context.l10n.contactsFieldFavorite), value: _fav, onChanged: (v) => setState(() => _fav = v)),
                     const Divider(height: 1),
                     SwitchListTile(
                       secondary: const Icon(Icons.grid_view_rounded),
-                      title: const Text('Show on BLF board'),
-                      subtitle: const Text('Watch this extension\'s presence and busy lamp'),
+                      title: Text(context.l10n.contactsShowOnBlf),
+                      subtitle: Text(context.l10n.contactsShowOnBlfSub),
                       value: _blf,
                       onChanged: (v) => setState(() => _blf = v),
                     ),
@@ -554,21 +566,21 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                     SwitchListTile(
                       key: const Key('contact-auto-record'),
                       secondary: const Icon(Icons.fiber_manual_record_rounded),
-                      title: const Text('Always record calls with this contact'),
-                      subtitle: const Text('Overrides the automatic recording rules'),
+                      title: Text(context.l10n.contactsAlwaysRecordTitle),
+                      subtitle: Text(context.l10n.contactsAlwaysRecordSub),
                       value: _autoRecord,
                       onChanged: (v) => setState(() => _autoRecord = v),
                     ),
                     const Divider(height: 1),
                     ListTile(
                       leading: const Icon(Icons.music_note_rounded),
-                      title: const Text('Ringtone'),
+                      title: Text(context.l10n.contactsRingtone),
                       trailing: DropdownButton<String>(
                         value: _ring,
                         underline: const SizedBox.shrink(),
                         items: [
-                          for (final e in kRingtoneOptions.entries)
-                            DropdownMenuItem(value: e.key, child: Text(e.key == 'default' ? 'Default' : e.value)),
+                          for (final e in ringtoneOptions(context.l10n).entries)
+                            DropdownMenuItem(value: e.key, child: Text(e.key == 'default' ? context.l10n.commonDefault : e.value)),
                         ],
                         onChanged: (v) => setState(() => _ring = v ?? 'default'),
                       ),
@@ -577,13 +589,13 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.dns_rounded),
-                        title: const Text('Presence via account'),
+                        title: Text(context.l10n.contactsPresenceVia),
                         trailing: DropdownButton<String>(
                           key: const Key('presence-account'),
                           value: _presenceAcc,
                           underline: const SizedBox.shrink(),
                           items: [
-                            const DropdownMenuItem(value: '', child: Text('Default account')),
+                            DropdownMenuItem(value: '', child: Text(context.l10n.contactsDefaultAccount)),
                             for (final p in ref.watch(accountsProvider).profiles) DropdownMenuItem(value: p.id, child: Text(p.name)),
                           ],
                           onChanged: (v) => setState(() => _presenceAcc = v ?? ''),
@@ -598,13 +610,13 @@ class _ContactEditorPageState extends ConsumerState<ContactEditorPage> {
                 TextButton.icon(
                   style: TextButton.styleFrom(foregroundColor: t.colorScheme.error),
                   onPressed: () async {
-                    if (await confirm(context, title: 'Delete contact?', message: 'This cannot be undone.')) {
+                    if (await confirm(context, title: context.l10n.contactsDeleteContactTitle, message: context.l10n.contactsCannotUndo)) {
                       await ref.read(contactsProvider.notifier).delete(_id);
                       if (context.mounted) context.go('/contacts');
                     }
                   },
                   icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Delete contact'),
+                  label: Text(context.l10n.contactsDeleteButton),
                 ),
               ],
               const SizedBox(height: 32),

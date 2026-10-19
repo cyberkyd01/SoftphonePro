@@ -6,6 +6,7 @@ import '../../../diagnostics/sip_dialogs.dart';
 import '../../../diagnostics/sip_message.dart';
 import '../../../diagnostics/sip_trace_controller.dart';
 import '../../../diagnostics/trace_export.dart';
+import '../../../l10n/l10n.dart';
 import '../../../models/account_profile.dart';
 import '../../../services/accounts_controller.dart';
 import '../../../services/settings_controller.dart';
@@ -103,6 +104,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
     final stats = ref.read(sipTraceProvider);
     final account = _f.accountId == null ? null : accounts.where((a) => a.id == _f.accountId).firstOrNull;
     final shown = filterMessages(all, _f, account: account);
+    final l = context.l10n;
     final methods = {for (final m in all) if (m.isRequest && m.method.isNotEmpty) m.method}.toList()..sort();
     final t = Theme.of(context);
 
@@ -110,25 +112,27 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
       children: [
         SwitchListTile(
           key: const Key('trace-toggle'),
-          title: const Text('Capture SIP messages'),
+          title: Text(l.diagTraceCapture),
           subtitle: Text(
             enabled
-                ? '${stats.count} messages  ·  ${bytesLabel(stats.bytes)}${stats.dropped > 0 ? '  ·  ${stats.dropped} older dropped' : ''}'
-                : 'Off. Turn on, then register or make a call.',
+                ? (stats.dropped > 0
+                      ? l.diagTraceStatsDropped(stats.count, bytesLabel(stats.bytes), stats.dropped)
+                      : l.diagTraceStats(stats.count, bytesLabel(stats.bytes)))
+                : l.diagTraceOffHint,
           ),
           value: enabled,
           onChanged: (v) => ctl.setEnabled(v),
           secondary: PopupMenuButton<String>(
             key: const Key('trace-menu'),
-            tooltip: 'Export or clear',
+            tooltip: l.diagTraceExportOrClear,
             icon: const Icon(Icons.more_vert_rounded),
             onSelected: (v) => _menu(v, shown.isEmpty ? all : shown),
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'log', child: ListTile(leading: Icon(Icons.description_outlined), title: Text('Save as .log'), dense: true)),
-              const PopupMenuItem(value: 'pcap', child: ListTile(leading: Icon(Icons.hub_outlined), title: Text('Save as .pcap'), dense: true)),
-              const PopupMenuItem(value: 'copy', child: ListTile(leading: Icon(Icons.copy_rounded), title: Text('Copy as text'), dense: true)),
+              PopupMenuItem(value: 'log', child: ListTile(leading: const Icon(Icons.description_outlined), title: Text(l.diagSaveAsLog), dense: true)),
+              PopupMenuItem(value: 'pcap', child: ListTile(leading: const Icon(Icons.hub_outlined), title: Text(l.diagTraceSaveAsPcap), dense: true)),
+              PopupMenuItem(value: 'copy', child: ListTile(leading: const Icon(Icons.copy_rounded), title: Text(l.diagTraceCopyAsText), dense: true)),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'clear', child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Clear'), dense: true)),
+              PopupMenuItem(value: 'clear', child: ListTile(leading: const Icon(Icons.delete_outline_rounded), title: Text(l.actionClear), dense: true)),
             ],
           ),
         ),
@@ -140,7 +144,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search_rounded),
-              hintText: 'Search text, number or Call-ID',
+              hintText: l.diagTraceSearchHint,
               suffixIcon: _f.text.isEmpty
                   ? null
                   : IconButton(
@@ -164,7 +168,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
               _chip(
                 FilterChip(
                   key: const Key('filter-errors'),
-                  label: const Text('Errors only'),
+                  label: Text(l.diagTraceErrorsOnly),
                   selected: _f.errorsOnly,
                   onSelected: (v) => setState(() => _f = _f.copyWith(errorsOnly: v)),
                 ),
@@ -172,15 +176,15 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
               _chip(
                 PopupMenuButton<String?>(
                   key: const Key('filter-method'),
-                  tooltip: 'Filter by method',
+                  tooltip: l.diagTraceFilterMethod,
                   onSelected: (v) => setState(() => _f = _f.copyWith(method: v == '' ? null : v)),
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: '', child: Text('All methods')),
+                    PopupMenuItem(value: '', child: Text(l.diagTraceAllMethods)),
                     for (final m in methods) PopupMenuItem(value: m, child: Text(m)),
                   ],
                   child: Chip(
                     avatar: const Icon(Icons.filter_list_rounded, size: 18),
-                    label: Text(_f.method ?? 'Method'),
+                    label: Text(_f.method ?? l.diagTraceMethod),
                   ),
                 ),
               ),
@@ -188,15 +192,15 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
                 _chip(
                   PopupMenuButton<String>(
                     key: const Key('filter-account'),
-                    tooltip: 'Filter by account',
+                    tooltip: l.diagTraceFilterAccount,
                     onSelected: (v) => setState(() => _f = _f.copyWith(accountId: v == '' ? null : v)),
                     itemBuilder: (_) => [
-                      const PopupMenuItem(value: '', child: Text('All accounts')),
+                      PopupMenuItem(value: '', child: Text(l.diagTraceAllAccounts)),
                       for (final a in accounts) PopupMenuItem(value: a.id, child: Text(a.name)),
                     ],
                     child: Chip(
                       avatar: const Icon(Icons.dns_rounded, size: 18),
-                      label: Text(account?.name ?? 'Account'),
+                      label: Text(account?.name ?? l.diagTraceAccount),
                     ),
                   ),
                 ),
@@ -212,7 +216,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
                 FilterChip(
                   key: const Key('filter-redact'),
                   avatar: const Icon(Icons.visibility_off_outlined, size: 18),
-                  label: const Text('Redact'),
+                  label: Text(l.diagTraceRedact),
                   selected: _redact,
                   onSelected: (v) => setState(() => _redact = v),
                 ),
@@ -225,9 +229,9 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
           child: SegmentedButton<bool>(
             key: const Key('trace-mode'),
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, icon: Icon(Icons.list_rounded), label: Text('List')),
-              ButtonSegment(value: true, icon: Icon(Icons.account_tree_outlined), label: Text('Ladder')),
+            segments: [
+              ButtonSegment(value: false, icon: const Icon(Icons.list_rounded), label: Text(l.diagTraceList)),
+              ButtonSegment(value: true, icon: const Icon(Icons.account_tree_outlined), label: Text(l.diagRawLadder)),
             ],
             selected: {_ladder},
             onSelectionChanged: (s) => setState(() {
@@ -241,13 +245,13 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
           child: all.isEmpty
               ? EmptyState(
                   icon: Icons.account_tree_outlined,
-                  title: enabled ? 'Waiting for SIP traffic' : 'SIP trace is off',
+                  title: enabled ? l.diagTraceWaiting : l.diagTraceOff,
                   subtitle: enabled
-                      ? 'Register an account or make a call and the messages appear here.'
-                      : 'Turn on capture to see every SIP request and response, as a list or a ladder diagram.',
+                      ? l.diagTraceWaitingSub
+                      : l.diagTraceOffSub,
                 )
               : shown.isEmpty
-              ? const EmptyState(icon: Icons.filter_alt_off_rounded, title: 'No messages match the filters')
+              ? EmptyState(icon: Icons.filter_alt_off_rounded, title: l.diagTraceNoMatch)
               : _ladder
               ? _ladderBody(shown, t)
               : _listBody(shown),
@@ -256,7 +260,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
     );
   }
 
-  Widget _chip(Widget c) => Padding(padding: const EdgeInsets.only(right: 8), child: Center(child: c));
+  Widget _chip(Widget c) => Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Center(child: c));
 
   Widget _listBody(List<SipMessage> shown) {
     final t = Theme.of(context);
@@ -291,6 +295,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
                       ),
                       Text(
                         m.valid ? '${m.fromUri.isEmpty ? '?' : _short(m.fromUri)} → ${m.toUri.isEmpty ? _short(m.requestUri) : _short(m.toUri)}' : m.startLine,
+                        textDirection: TextDirection.ltr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
@@ -321,6 +326,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
     final dialogs = groupDialogs(shown);
     SipDialog? sel;
     if (_ladderId != null) sel = dialogs.where((d) => d.callId == _ladderId).firstOrNull;
+    final l = context.l10n;
     if (sel != null) {
       final d = sel;
       return Column(
@@ -329,16 +335,16 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
             dense: true,
             leading: IconButton(
               key: const Key('ladder-back'),
-              tooltip: 'All dialogs',
+              tooltip: l.diagTraceAllDialogs,
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => setState(() => _ladderId = null),
             ),
-            title: Text('${d.kind}  ·  ${d.summary}', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-            subtitle: Text('${_short(d.from)} → ${_short(d.to)}  ·  ${d.messages.length} messages  ·  ${deltaLabel(d.duration).substring(1)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text('${d.kind}  ·  ${d.hasResponse ? d.summary : l.diagTraceNoResponse}', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            subtitle: Text('${_short(d.from)} → ${_short(d.to)}  ·  ${l.diagTraceMessageCount(d.messages.length)}  ·  ${deltaLabel(d.duration).substring(1)}', textDirection: TextDirection.ltr, maxLines: 1, overflow: TextOverflow.ellipsis),
             trailing: IconButton(
-              tooltip: 'Copy this dialog',
+              tooltip: l.diagTraceCopyDialog,
               icon: const Icon(Icons.copy_rounded),
-              onPressed: () => ref.read(diagnosticsExporterProvider).copy(buildTraceText(d.messages, redact: _redact), what: 'Dialog'),
+              onPressed: () => ref.read(diagnosticsExporterProvider).copy(buildTraceText(d.messages, redact: _redact), confirmation: l.diagCopiedDialog),
             ),
           ),
           Expanded(
@@ -366,9 +372,10 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
               backgroundColor: color.withValues(alpha: 0.15),
               child: Icon(d.hasError ? Icons.error_outline_rounded : Icons.swap_horiz_rounded, color: color),
             ),
-            title: Text('${d.kind}  ·  ${d.summary}', style: TextStyle(fontWeight: FontWeight.w700, color: color)),
+            title: Text('${d.kind}  ·  ${d.hasResponse ? d.summary : l.diagTraceNoResponse}', style: TextStyle(fontWeight: FontWeight.w700, color: color)),
             subtitle: Text(
-              '${_short(d.from)} → ${_short(d.to)}\n${clockLabel(d.start)}  ·  ${d.messages.length} messages  ·  ${d.callId.isEmpty ? 'no Call-ID' : shortId(d.callId, 16)}',
+              '${_short(d.from)} → ${_short(d.to)}\n${clockLabel(d.start)}  ·  ${l.diagTraceMessageCount(d.messages.length)}  ·  ${d.callId.isEmpty ? l.diagTraceNoCallId : shortId(d.callId, 16)}',
+              textDirection: TextDirection.ltr,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -383,6 +390,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
   Future<void> _menu(String v, List<SipMessage> msgs) async {
     final ctl = ref.read(sipTraceProvider.notifier);
     final ex = ref.read(diagnosticsExporterProvider);
+    final l = ref.read(l10nProvider);
     switch (v) {
       case 'clear':
         ctl.clear();
@@ -391,7 +399,7 @@ class _SipTraceViewState extends ConsumerState<SipTraceView> {
       case 'pcap':
         await ex.saveBytes('sip-trace-${stamp()}.pcap', buildPcap(msgs, redact: _redact));
       case 'copy':
-        await ex.copy(buildTraceText(msgs, redact: _redact), what: 'Trace');
+        await ex.copy(buildTraceText(msgs, redact: _redact), confirmation: l.diagCopiedTrace);
     }
   }
 }

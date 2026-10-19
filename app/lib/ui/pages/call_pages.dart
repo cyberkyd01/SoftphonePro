@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../platform/platform_services.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
@@ -38,15 +39,16 @@ class _InCallPageState extends ConsumerState<InCallPage> {
     final c = s.focused;
     final t = Theme.of(context);
     final colors = context.colors;
+    final l = context.l10n;
 
     if (c == null) {
       return Scaffold(
         body: Center(
-          child: TextButton(onPressed: () => context.go('/keypad'), child: const Text('Back')),
+          child: TextButton(onPressed: () => context.go('/keypad'), child: Text(context.l10n.actionBack)),
         ),
       );
     }
-    final title = callTitle(c, contacts);
+    final title = callTitle(c, contacts, context.l10n);
     final profile = acc.byId(c.accountId);
     final others = s.ongoing.where((o) => o.cid != c.cid).toList();
     final waiting = s.ringing;
@@ -67,20 +69,20 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                   child: Row(
                     children: [
                       IconButton(
-                        tooltip: 'Back to app (call stays active)',
+                        tooltip: l.callBackToApp,
                         onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
                       ),
                       const Spacer(),
                       if (profile != null)
                         Padding(
-                          padding: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsetsDirectional.only(end: 12),
                           child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
                         ),
                     ],
                   ),
                 ),
-                for (final w in waiting) _WaitingBanner(call: w, title: callTitle(w, contacts)),
+                for (final w in waiting) _WaitingBanner(call: w, title: callTitle(w, contacts, context.l10n)),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -92,6 +94,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             title == c.number ? formatPhone(title) : title,
                             maxLines: 2,
                             textAlign: TextAlign.center,
+                            textDirection: title == c.number ? TextDirection.ltr : null,
                             overflow: TextOverflow.ellipsis,
                             style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
                           ),
@@ -101,7 +104,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             CallTimer(call: c, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))
                           else
                             Text(
-                              callStateText(c),
+                              callStateText(c, l),
                               style: t.textTheme.titleMedium?.copyWith(
                                 color: c.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
@@ -121,7 +124,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                                 if (c.recording)
                                   Row(mainAxisSize: MainAxisSize.min, children: [
                                     Icon(Icons.fiber_manual_record_rounded, size: 14, color: colors.endRed),
-                                    Text(' REC', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
+                                    Text(' ${l.callRecBadge}', style: t.textTheme.labelSmall?.copyWith(color: colors.endRed, fontWeight: FontWeight.w700)),
                                   ]),
                               ],
                             ),
@@ -134,8 +137,8 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             const SizedBox(height: 12),
                             for (final o in others)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _StackedCall(call: o, title: callTitle(o, contacts)),
+                                padding: const EdgeInsetsDirectional.only(bottom: 8),
+                                child: _StackedCall(call: o, title: callTitle(o, contacts, context.l10n)),
                               ),
                           ],
                           if (_keypad && c.isConfirmed) ...[
@@ -153,62 +156,62 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                               key: const Key('keypad-hide'),
                               onPressed: () => setState(() => _keypad = false),
                               icon: const Icon(Icons.keyboard_hide_rounded),
-                              label: const Text('Hide keypad'),
+                              label: Text(l.callHideKeypad),
                             )
                           else
                           _ActionGrid(
                             children: [
                               CallActionButton(
                                 icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                                label: 'Mute',
+                                label: l.callMute,
                                 active: c.muted,
                                 onPressed: c.isConfirmed ? () => calls.toggleMute(c.cid) : null,
                               ),
                               CallActionButton(
                                 icon: Icons.dialpad_rounded,
-                                label: 'Keypad',
+                                label: l.callKeypad,
                                 active: _keypad,
                                 onPressed: c.isConfirmed ? () => setState(() => _keypad = !_keypad) : null,
                               ),
                               CallActionButton(
                                 icon: audioRouteIcon(speakerOn ? AudioRoute.speaker : route),
-                                label: speakerOn ? 'Speaker' : (route == AudioRoute.earpiece ? 'Speaker' : _routeName(route)),
+                                label: speakerOn ? l.callSpeaker : (route == AudioRoute.earpiece ? l.callSpeaker : _routeName(l, route)),
                                 active: speakerOn || route == AudioRoute.bluetooth || route == AudioRoute.wired,
                                 onPressed: () => _onSpeaker(context, ref, route),
                               ),
                               CallActionButton(
                                 icon: Icons.pause_rounded,
-                                label: c.isHeld ? 'Resume' : 'Hold',
+                                label: c.isHeld ? l.callResume : l.callHold,
                                 active: c.isHeld,
                                 activeColor: colors.holdAmber,
                                 onPressed: c.isConfirmed ? () => calls.toggleHold(c.cid) : null,
                               ),
                               CallActionButton(
                                 icon: Icons.person_add_alt_1_rounded,
-                                label: 'Add call',
+                                label: l.callAddCall,
                                 onPressed: () => context.canPop() ? context.pop() : context.go('/keypad'),
                               ),
                               CallActionButton(
                                 icon: Icons.phone_forwarded_rounded,
-                                label: 'Transfer',
+                                label: l.callTransfer,
                                 onPressed: c.isConfirmed ? () => showTransferSheet(context, c.cid) : null,
                               ),
                               CallActionButton(
                                 icon: Icons.fiber_manual_record_rounded,
-                                label: c.recording ? 'Stop' : 'Record',
+                                label: c.recording ? l.callStop : l.callRecord,
                                 active: c.recording,
                                 activeColor: colors.endRed,
                                 onPressed: c.isConfirmed ? () => calls.toggleRecording(c.cid) : null,
                               ),
                               CallActionButton(
                                 icon: c.isConference ? Icons.call_split_rounded : Icons.call_merge_rounded,
-                                label: c.isConference ? 'Split' : 'Merge',
+                                label: c.isConference ? l.callSplit : l.callMerge,
                                 active: c.isConference,
                                 onPressed: c.isConference ? () => calls.split() : (mergeable ? () => calls.merge() : null),
                               ),
                               CallActionButton(
                                 icon: Icons.more_horiz_rounded,
-                                label: 'More',
+                                label: l.actionMore,
                                 onPressed: () => showMoreSheet(context, c.cid),
                               ),
                             ],
@@ -221,12 +224,12 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 20, top: 4),
+                  padding: const EdgeInsetsDirectional.only(bottom: 20, top: 4),
                   child: RoundCallButton(
                     key: const Key('end-call'),
                     icon: Icons.call_end_rounded,
                     color: colors.endRed,
-                    label: 'End call',
+                    label: l.callEndCall,
                     size: 72,
                     onPressed: () => calls.hangup(c.cid),
                   ),
@@ -239,10 +242,10 @@ class _InCallPageState extends ConsumerState<InCallPage> {
     );
   }
 
-  String _routeName(AudioRoute r) => switch (r) {
-    AudioRoute.bluetooth => 'Bluetooth',
-    AudioRoute.wired => 'Headset',
-    _ => 'Speaker',
+  String _routeName(AppLocalizations l, AudioRoute r) => switch (r) {
+    AudioRoute.bluetooth => l.callRouteBluetooth,
+    AudioRoute.wired => l.callRouteHeadset,
+    _ => l.callSpeaker,
   };
 
   Future<void> _onSpeaker(BuildContext context, WidgetRef ref, AudioRoute cur) async {
@@ -286,6 +289,7 @@ class _StackedCall extends ConsumerWidget {
     final calls = ref.read(callsProvider.notifier);
     final t = Theme.of(context);
     final colors = context.colors;
+    final l = context.l10n;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -302,16 +306,16 @@ class _StackedCall extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                Text(callStateText(call), style: t.textTheme.bodySmall?.copyWith(color: call.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant)),
+                Text(callStateText(call, l), style: t.textTheme.bodySmall?.copyWith(color: call.isHeld ? colors.holdAmber : t.colorScheme.onSurfaceVariant)),
               ],
             ),
           ),
           if (call.isConfirmed) ...[
-            TextButton(onPressed: () => calls.swap(), child: const Text('Swap')),
-            TextButton(onPressed: () => calls.merge(), child: const Text('Merge')),
+            TextButton(onPressed: () => calls.swap(), child: Text(l.callSwap)),
+            TextButton(onPressed: () => calls.merge(), child: Text(l.callMerge)),
           ],
           IconButton(
-            tooltip: 'End call with $title',
+            tooltip: l.callEndCallWith(title),
             onPressed: () => calls.hangup(call.cid),
             icon: Icon(Icons.call_end_rounded, color: colors.endRed),
           ),
@@ -328,8 +332,9 @@ class _ConsultBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final calls = ref.read(callsProvider.notifier);
     final t = Theme.of(context);
+    final l = context.l10n;
     return Container(
-      margin: const EdgeInsets.only(top: 12),
+      margin: const EdgeInsetsDirectional.only(top: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: t.colorScheme.primary.withValues(alpha: 0.08),
@@ -337,7 +342,7 @@ class _ConsultBanner extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          Text('Attended transfer. The original caller is on hold.', style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+          Text(l.callAttendedTransferHint, style: t.textTheme.bodySmall, textAlign: TextAlign.center),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -345,11 +350,11 @@ class _ConsultBanner extends ConsumerWidget {
                 child: FilledButton(
                   key: const Key('complete-transfer'),
                   onPressed: call.isConfirmed ? () => calls.completeAttended(call.cid) : null,
-                  child: const Text('Complete transfer'),
+                  child: Text(l.callCompleteTransfer),
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton(key: const Key('cancel-transfer'), onPressed: () => calls.cancelConsult(call.cid), child: const Text('Cancel')),
+              OutlinedButton(key: const Key('cancel-transfer'), onPressed: () => calls.cancelConsult(call.cid), child: Text(l.actionCancel)),
             ],
           ),
         ],
@@ -366,9 +371,10 @@ class _WaitingBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final calls = ref.read(callsProvider.notifier);
     final colors = context.colors;
+    final l = context.l10n;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 8, 10),
       decoration: BoxDecoration(
         color: colors.raised,
         borderRadius: BorderRadius.circular(16),
@@ -380,21 +386,21 @@ class _WaitingBanner extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Call waiting', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                Text(l.callWaiting, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
               ],
             ),
           ),
           IconButton.filled(
             key: Key('waiting-answer-${call.cid}'),
-            tooltip: 'Hold current call and answer',
+            tooltip: l.callHoldAndAnswer,
             style: IconButton.styleFrom(backgroundColor: colors.callGreen),
             onPressed: () => calls.answer(call.cid),
             icon: const Icon(Icons.call_rounded),
           ),
           const SizedBox(width: 4),
           IconButton.filled(
-            tooltip: 'Decline',
+            tooltip: l.callDecline,
             style: IconButton.styleFrom(backgroundColor: colors.endRed),
             onPressed: () => calls.decline(call.cid),
             icon: const Icon(Icons.call_end_rounded),
@@ -421,10 +427,11 @@ class IncomingCallPage extends ConsumerWidget {
     final c = s.ringing.isEmpty ? null : s.ringing.first;
     final t = Theme.of(context);
     final colors = context.colors;
+    final l = context.l10n;
     if (c == null) {
-      return Scaffold(body: Center(child: TextButton(onPressed: () => context.go('/keypad'), child: const Text('Back'))));
+      return Scaffold(body: Center(child: TextButton(onPressed: () => context.go('/keypad'), child: Text(l.actionBack))));
     }
-    final title = callTitle(c, contacts);
+    final title = callTitle(c, contacts, context.l10n);
     final profile = acc.byId(c.accountId);
     final hasVoicemail = (profile?.effectiveVoicemail ?? '').isNotEmpty;
 
@@ -437,12 +444,12 @@ class IncomingCallPage extends ConsumerWidget {
               children: [
                 const SizedBox(height: 24),
                 Text(
-                  'Incoming call',
+                  l.callIncomingCall,
                   style: t.textTheme.titleMedium?.copyWith(color: t.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                 ),
                 if (profile != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsetsDirectional.only(top: 8),
                     child: AccountChip(name: profile.name, status: acc.statusOf(profile.id)),
                   ),
                 const Spacer(),
@@ -453,6 +460,7 @@ class IncomingCallPage extends ConsumerWidget {
                   child: Text(
                     title == c.number ? formatPhone(title) : title,
                     textAlign: TextAlign.center,
+                    textDirection: title == c.number ? TextDirection.ltr : null,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -464,11 +472,11 @@ class IncomingCallPage extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    CallActionButton(icon: Icons.message_rounded, label: 'Reply', size: 54, onPressed: () => _reply(context, ref, c)),
-                    CallActionButton(icon: Icons.voicemail_rounded, label: 'Voicemail', size: 54, onPressed: hasVoicemail ? () => calls.redirectToVoicemail(c.cid) : null),
+                    CallActionButton(icon: Icons.message_rounded, label: l.callReply, size: 54, onPressed: () => _reply(context, ref, c)),
+                    CallActionButton(icon: Icons.voicemail_rounded, label: l.callVoicemail, size: 54, onPressed: hasVoicemail ? () => calls.redirectToVoicemail(c.cid) : null),
                     CallActionButton(
                       icon: Icons.devices_rounded,
-                      label: 'To device',
+                      label: l.callToDevice,
                       size: 54,
                       onPressed: lan.available && lan.devices.any((d) => d.online) ? () => forwardRingingToLan(context, ref, c.cid) : null,
                     ),
@@ -482,7 +490,7 @@ class IncomingCallPage extends ConsumerWidget {
                       key: const Key('decline-call'),
                       icon: Icons.call_end_rounded,
                       color: colors.endRed,
-                      label: 'Decline',
+                      label: l.callDecline,
                       showLabel: true,
                       size: 76,
                       onPressed: () => calls.decline(c.cid),
@@ -491,7 +499,7 @@ class IncomingCallPage extends ConsumerWidget {
                       key: const Key('answer-call'),
                       icon: Icons.call_rounded,
                       color: colors.callGreen,
-                      label: 'Answer',
+                      label: l.callAnswer,
                       showLabel: true,
                       size: 76,
                       onPressed: () => calls.answer(c.cid),
@@ -510,7 +518,8 @@ class IncomingCallPage extends ConsumerWidget {
   Future<void> _reply(BuildContext context, WidgetRef ref, UiCall c) async {
     final calls = ref.read(callsProvider.notifier);
     final msgs = ref.read(messagesProvider.notifier);
-    const quick = ["Can't talk now, I'll call you back.", "I'm in a meeting. Text me?", 'On my way.'];
+    final l = ref.read(l10nProvider);
+    final quick = [l.callQuickReplyBusy, l.callQuickReplyMeeting, l.callQuickReplyOnMyWay];
     final text = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -540,10 +549,10 @@ class CallBar extends ConsumerWidget {
     final contacts = ref.watch(contactsProvider);
     final colors = context.colors;
     final shown = c ?? ringing.first;
-    final title = callTitle(shown, contacts);
+    final title = callTitle(shown, contacts, context.l10n);
     return Semantics(
       button: true,
-      label: 'Return to call with $title',
+      label: context.l10n.callReturnToCallWith(title),
       child: Material(
         color: colors.callGreen,
         child: InkWell(
@@ -556,7 +565,7 @@ class CallBar extends ConsumerWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    c == null ? 'Incoming: $title' : 'In call with $title',
+                    c == null ? context.l10n.callBarIncoming(title) : context.l10n.callBarInCallWith(title),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),

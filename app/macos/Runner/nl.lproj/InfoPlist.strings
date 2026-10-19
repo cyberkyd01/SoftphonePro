@@ -1,0 +1,4 @@
+"NSMicrophoneUsageDescription" = "SoftphonePro heeft de microfoon nodig om je stem tijdens gesprekken door te geven.";
+"NSContactsUsageDescription" = "SoftphonePro importeert je contacten wanneer je dat vraagt.";
+"NSCameraUsageDescription" = "SoftphonePro gebruikt de camera om QR-codes voor configuratie en koppeling te scannen.";
+"NSLocalNetworkUsageDescription" = "SoftphonePro gebruikt het lokale netwerk om je andere apparaten te vinden en te koppelen (LAN Link) en om rechtstreeks te bellen.";

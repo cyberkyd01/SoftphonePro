@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/settings_controller.dart';
 import '../pages/audio/audio_files_page.dart';
 import '../pages/audio/audio_ref_tile.dart';
@@ -18,23 +19,24 @@ class HoldMusicGroup extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final custom = s.holdMusic != 'pbx';
+    final l = context.l10n;
     return SettingsGroup(
-      title: 'Hold',
-      footer: 'With "PBX default" the call is simply put on hold and your phone system may play its own music. Any other choice is played to the caller by this app.',
+      title: l.callSettingsHoldGroupTitle,
+      footer: l.callSettingsHoldFooter,
       children: [
         AudioRefTile(
           key: const Key('hold-music'),
           icon: Icons.music_note_rounded,
-          title: 'Hold music',
+          title: l.callSettingsHoldMusic,
           value: s.holdMusic,
           holdMusicOnly: true,
-          leading: const {'pbx': 'PBX default'},
+          leading: {'pbx': l.callSettingsHoldPbxDefault},
           onChanged: (v) => _set(ref, {'holdMusic': v}),
         ),
         SliderTile(
           key: const Key('hold-music-volume'),
           icon: Icons.volume_up_rounded,
-          title: 'Hold music volume',
+          title: l.callSettingsHoldMusicVolume,
           value: s.holdMusicVolume,
           divisions: 10,
           format: (v) => '${(v * 100).round()}%',
@@ -43,8 +45,8 @@ class HoldMusicGroup extends ConsumerWidget {
         NavTile(
           key: const Key('hold-music-library'),
           icon: Icons.library_music_rounded,
-          title: 'Audio files',
-          subtitle: 'Import or record hold music',
+          title: l.callSettingsHoldAudioFiles,
+          subtitle: l.callSettingsHoldAudioFilesHint,
           onTap: () => openAudioFiles(context),
         ),
       ],
@@ -58,43 +60,44 @@ class AnnouncementsGroup extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
-    const none = {'': 'None'};
+    final l = context.l10n;
+    final none = {'': l.commonNone};
     return SettingsGroup(
-      title: 'Announcements',
-      footer: 'Announcements are played to the other party. Everything is skipped silently if the file is missing.',
+      title: l.callSettingsAnnounceTitle,
+      footer: l.callSettingsAnnounceFooter,
       children: [
         SwitchTile(
           key: const Key('announce-opening'),
           icon: Icons.campaign_rounded,
-          title: 'Opening announcement',
-          subtitle: 'Play a message when a call connects',
+          title: l.callSettingsAnnounceOpening,
+          subtitle: l.callSettingsAnnounceOpeningHint,
           value: s.announceOpening,
           onChanged: (v) => _set(ref, {'announceOpening': v}),
         ),
         if (s.announceOpening) ...[
           AudioRefTile(
             key: const Key('announce-opening-file'),
-            title: 'Announcement file',
+            title: l.callSettingsAnnounceFile,
             value: s.announceOpeningFile,
-            leading: const {'': 'Choose a file'},
+            leading: {'': l.callSettingsAnnounceChooseFile},
             onChanged: (v) => _set(ref, {'announceOpeningFile': v}),
           ),
           SelectTile<String>(
             key: const Key('announce-direction'),
-            title: 'Play for',
+            title: l.callSettingsAnnouncePlayFor,
             value: s.announceDirection,
-            options: const {'both': 'Incoming and outgoing', 'incoming': 'Incoming calls', 'outgoing': 'Outgoing calls'},
+            options: {'both': l.callSettingsAnnounceBoth, 'incoming': l.callSettingsAnnounceIncoming, 'outgoing': l.callSettingsAnnounceOutgoing},
             onChanged: (v) => _set(ref, {'announceDirection': v}),
           ),
           SwitchTile(
             key: const Key('announce-mute-mic'),
-            title: 'Mute my microphone while it plays',
+            title: l.callSettingsAnnounceMuteMic,
             value: s.announceMuteMic,
             onChanged: (v) => _set(ref, {'announceMuteMic': v}),
           ),
           SwitchTile(
             key: const Key('announce-monitor'),
-            title: 'Also let me hear it',
+            title: l.callSettingsAnnounceMonitor,
             value: s.announceMonitor,
             onChanged: (v) => _set(ref, {'announceMonitor': v}),
           ),
@@ -102,7 +105,7 @@ class AnnouncementsGroup extends ConsumerWidget {
         AudioRefTile(
           key: const Key('announce-recording-notice'),
           icon: Icons.fiber_manual_record_rounded,
-          title: 'Before recording starts, play',
+          title: l.callSettingsAnnounceBeforeRecording,
           value: s.recordingNoticeFile,
           leading: none,
           onChanged: (v) => _set(ref, {'recordingNoticeFile': v}),
@@ -110,7 +113,7 @@ class AnnouncementsGroup extends ConsumerWidget {
         AudioRefTile(
           key: const Key('announce-transfer'),
           icon: Icons.phone_forwarded_rounded,
-          title: 'Before transferring a caller, play',
+          title: l.callSettingsAnnounceBeforeTransfer,
           value: s.transferNoticeFile,
           leading: none,
           onChanged: (v) => _set(ref, {'transferNoticeFile': v}),

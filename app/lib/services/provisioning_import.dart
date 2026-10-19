@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../l10n/l10n.dart';
 import 'accounts_controller.dart';
 import 'providers.dart';
 import 'provisioning.dart';
@@ -63,7 +64,7 @@ Future<int> importProvisioningResult(
   if (changes.isNotEmpty) {
     await ref.read(settingsProvider.notifier).update(changes);
   }
-  ref.read(noticeProvider.notifier).show('Imported ${r.accounts.length} account(s)');
+  ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).provisioningImportedAccounts(r.accounts.length));
   return r.accounts.length;
 }
 
@@ -75,12 +76,12 @@ Future<ProvisioningResult> loadProvisioningSource(Ref ref, String source) async 
   );
   final u = Uri.tryParse(source);
   if (u != null && (u.scheme == 'http' || u.scheme == 'https')) {
-    return Provisioning.fetch(u, vars: vars, client: ref.read(provisioningClientProvider));
+    return Provisioning.fetch(u, vars: vars, client: ref.read(provisioningClientProvider), l10n: ref.read(l10nProvider));
   }
   try {
     final path = u != null && u.scheme == 'file' ? u.toFilePath() : source;
-    return Provisioning.parse(await File(path).readAsString(), vars: vars);
+    return Provisioning.parse(await File(path).readAsString(), vars: vars, l10n: ref.read(l10nProvider));
   } on FileSystemException catch (e) {
-    throw ProvisioningException('Could not read ${e.path ?? source}');
+    throw ProvisioningException(ref.read(l10nProvider).provisioningCouldNotRead(e.path ?? source));
   }
 }

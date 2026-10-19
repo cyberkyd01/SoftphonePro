@@ -11,6 +11,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 import '../audio/announcement_service.dart';
 import '../audio/hold_music.dart';
 import '../core/format.dart';
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../models/app_settings.dart';
 import '../models/call_record.dart';
@@ -283,36 +284,36 @@ const Duration kTransferConfirmTimeout = Duration(seconds: 10);
 /// Interval of the recording beep while a call is being recorded.
 const Duration kRecordBeepInterval = Duration(seconds: 15);
 
-String describeCallFailure(int code, String reason) {
+String describeCallFailure(AppLocalizations l, int code, String reason) {
   switch (code) {
     case 400:
-      return 'Invalid number (400)';
+      return l.callFailInvalidNumber;
     case 401:
     case 403:
-      return 'Call not authorised ($code)';
+      return l.callFailNotAuthorised('$code');
     case 404:
-      return 'Number not found (404)';
+      return l.callFailNumberNotFound;
     case 408:
-      return 'No answer from server (408)';
+      return l.callFailNoAnswerFromServer;
     case 480:
-      return 'Temporarily unavailable (480)';
+      return l.callFailTemporarilyUnavailable;
     case 484:
-      return 'Incomplete number (484)';
+      return l.callFailIncompleteNumber;
     case 486:
     case 600:
-      return 'Busy ($code)';
+      return l.callFailBusy('$code');
     case 487:
-      return 'Call cancelled (487)';
+      return l.callFailCancelled;
     case 488:
     case 606:
-      return 'No compatible codec ($code)';
+      return l.callFailNoCompatibleCodec('$code');
     case 503:
-      return 'Service unavailable (503)';
+      return l.callFailServiceUnavailable;
     case 603:
-      return 'Call declined (603)';
+      return l.callFailDeclined;
   }
-  if (code == 0) return reason.isEmpty ? 'Call failed' : reason;
-  return reason.isEmpty ? 'Call failed ($code)' : '$reason ($code)';
+  if (code == 0) return reason.isEmpty ? l.callFailGeneric : reason;
+  return reason.isEmpty ? l.callFailGenericWithCode('$code') : l.callFailReasonWithCode(reason, '$code');
 }
 
 class CallsController extends Notifier<CallsState> {
@@ -423,7 +424,7 @@ class CallsController extends Notifier<CallsState> {
     final any = live.isNotEmpty;
     if (any && !_fgService) {
       _fgService = true;
-      unawaited(_guard(() => _platform.startForegroundService(text: 'Call in progress')));
+      unawaited(_guard(() => _platform.startForegroundService(text: ref.read(l10nProvider).callForegroundServiceText)));
     } else if (!any && _fgService) {
       _fgService = false;
       unawaited(_guard(() => _platform.stopForegroundService()));
@@ -446,7 +447,7 @@ class CallsController extends Notifier<CallsState> {
             missedCalls: 0,
             inCall: connected,
             ringing: ringingNow.isNotEmpty,
-            tooltip: connected ? 'In a call' : null,
+            tooltip: connected ? ref.read(l10nProvider).callTrayInCall : null,
           ),
         ),
       );
@@ -815,7 +816,7 @@ class CallsController extends Notifier<CallsState> {
       // A LAN hand-off owns this call: it decides (relay fallback / keep call).
     } else {
       ref.read(noticeProvider.notifier).error(
-        'Transfer failed: ${e.reason} (${e.code})',
+        ref.read(l10nProvider).callErrTransferFailedWithReason(e.reason, e.code),
       );
       unawaited(_guard(() => _engine.unhold(e.cid)));
     }
@@ -889,10 +890,12 @@ class CallsController extends Notifier<CallsState> {
     // A transferred call we agreed to take is answered without further ado.
     final lanForce = lan?.handoffAccepted ?? false;
 
-    Future<void> reject(int code, String reason, CallResult result) async {
+    // [reason] goes on the wire (SIP reason phrase, English); [shown] is the
+    // localised text kept in the call history.
+    Future<void> reject(int code, String reason, CallResult result, String shown) async {
       c.hidden = true;
       c.forcedResult = result;
-      c.forcedReason = reason;
+      c.forcedReason = shown;
       c.forcedCode = code;
       await _guard(() => _engine.reject(ev.cid, code: code, reason: reason));
     }
@@ -912,36 +915,36 @@ class CallsController extends Notifier<CallsState> {
 
     // 1. blocklist / anonymous
     if (!lanForce && _isBlocked(info)) {
-      unawaited(reject(603, 'Blocked', CallResult.rejected));
+      unawaited(reject(603, 'Blocked', CallResult.rejected, ref.read(l10nProvider).callHistoryBlocked));
       _emit();
       return;
     }
     if (!lanForce && s.rejectAnonymous && _isAnonymous(info)) {
-      unawaited(reject(433, 'Anonymity disallowed', CallResult.rejected));
+      unawaited(reject(433, 'Anonymity disallowed', CallResult.rejected, ref.read(l10nProvider).callHistoryAnonymityDisallowed));
       _emit();
       return;
     }
     // 2. DND (global, status, account)
     if (!lanForce && (s.dnd || s.globalStatus == 'dnd' || (profile?.dnd ?? false))) {
-      unawaited(reject(s.dndRejectCode, 'Do not disturb', CallResult.rejected));
+      unawaited(reject(s.dndRejectCode, 'Do not disturb', CallResult.rejected, ref.read(l10nProvider).callHistoryDoNotDisturb));
       _emit();
       return;
     }
     // 3. forward always
     if (!lanForce && fwd != null && fwd.mode == ForwardMode.always && fwd.active) {
-      unawaited(redirect(fwd.target, 'Forwarded (always)'));
+      unawaited(redirect(fwd.target, ref.read(l10nProvider).callHistoryForwardedAlways));
       _emit();
       return;
     }
     // 4. busy handling
     if (others.isNotEmpty && !lanForce) {
       if (fwd != null && fwd.mode == ForwardMode.busy && fwd.active) {
-        unawaited(redirect(fwd.target, 'Forwarded (busy)'));
+        unawaited(redirect(fwd.target, ref.read(l10nProvider).callHistoryForwardedBusy));
         _emit();
         return;
       }
       if (!s.callWaiting) {
-        unawaited(reject(s.busyRejectCode, 'Busy', CallResult.busy));
+        unawaited(reject(s.busyRejectCode, 'Busy', CallResult.busy, ref.read(l10nProvider).callHistoryBusy));
         _emit();
         return;
       }
@@ -983,7 +986,7 @@ class CallsController extends Notifier<CallsState> {
     if (fwd != null && fwd.mode == ForwardMode.noAnswer && fwd.active) {
       c.noAnswerTimer = Timer(Duration(seconds: max(1, fwd.noAnswerSec)), () {
         if (_calls[ev.cid]?.isRingingIn ?? false) {
-          unawaited(redirect(fwd.target, 'Forwarded (no answer)'));
+          unawaited(redirect(fwd.target, ref.read(l10nProvider).callHistoryForwardedNoAnswer));
         }
       });
     }
@@ -1012,7 +1015,9 @@ class CallsController extends Notifier<CallsState> {
           () => _platform.showIncomingCallNotification(
             callKey: '${ev.cid}',
             title: name,
-            body: 'Incoming call${profile != null ? ' on ${profile.name}' : ''}',
+            body: profile != null
+                ? ref.read(l10nProvider).callIncomingNotificationBodyOnAccount(profile.name)
+                : ref.read(l10nProvider).callIncomingNotificationBody,
             accountName: profile?.name,
           ),
         ),
@@ -1104,7 +1109,7 @@ class CallsController extends Notifier<CallsState> {
       unawaited(
         _guard(
           () => _platform.showMissedCallNotification(
-            title: 'Missed call',
+            title: ref.read(l10nProvider).callMissedNotificationTitle,
             body: display.isNotEmpty ? display : number,
           ),
         ),
@@ -1116,7 +1121,7 @@ class CallsController extends Notifier<CallsState> {
         c.forcedResult == null &&
         !forceEnded) {
       ref.read(noticeProvider.notifier).error(
-        describeCallFailure(c.info.lastCode, c.info.stateReason),
+        describeCallFailure(ref.read(l10nProvider), c.info.lastCode, c.info.stateReason),
         details: 'SIP ${c.info.lastCode} ${c.info.stateReason}',
       );
     }
@@ -1155,7 +1160,7 @@ class CallsController extends Notifier<CallsState> {
   }) async {
     final notices = ref.read(noticeProvider.notifier);
     if (!_ctl.hasEngine) {
-      notices.error('The call engine is not running yet');
+      notices.error(ref.read(l10nProvider).callErrEngineNotRunning);
       return null;
     }
     final res = applyRules ? dialRules().apply(input) : DialResult(input.trim());
@@ -1193,7 +1198,7 @@ class CallsController extends Notifier<CallsState> {
           res.isUri ||
           RegExp(r'^\d{1,3}(\.\d{1,3}){3}').hasMatch(res.target);
       if (!looksDirect) {
-        notices.error('Add an account to place calls');
+        notices.error(ref.read(l10nProvider).callErrAddAccount);
         return null;
       }
       ref0 = const AccountRef.direct();
@@ -1201,7 +1206,7 @@ class CallsController extends Notifier<CallsState> {
       final st = accState.statusOf(profile.id);
       if (!res.emergency && (st == AccountStatus.failed || st == AccountStatus.disabled)) {
         notices.error(
-          '${profile.name} is not registered',
+          ref.read(l10nProvider).callErrAccountNotRegistered(profile.name),
           details: accState.errorOf(profile.id),
         );
         return null;
@@ -1224,7 +1229,7 @@ class CallsController extends Notifier<CallsState> {
       _emit();
       return r.cid;
     } on EngineException catch (e) {
-      notices.error('Could not place the call', details: e.toString());
+      notices.error(ref.read(l10nProvider).callErrCouldNotPlace, details: e.toString());
       return null;
     }
   }
@@ -1263,7 +1268,7 @@ class CallsController extends Notifier<CallsState> {
       await _engine.answer(cid);
       _focused = cid;
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not answer', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotAnswer, details: '$e');
     }
     _emit();
   }
@@ -1283,11 +1288,11 @@ class CallsController extends Notifier<CallsState> {
     final profile = ref.read(accountsProvider).byId(c.accountId);
     final vm = profile?.effectiveVoicemail ?? '';
     if (vm.isEmpty) {
-      ref.read(noticeProvider.notifier).error('No voicemail number set for this account');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrNoVoicemailNumber);
       return;
     }
     c.forcedResult = CallResult.forwarded;
-    c.forcedReason = 'Sent to voicemail';
+    c.forcedReason = ref.read(l10nProvider).callHistorySentToVoicemail;
     c.forcedCode = 302;
     await _guard(() => _engine.redirect(cid, [_uriFor(vm, profile)]));
   }
@@ -1297,7 +1302,7 @@ class CallsController extends Notifier<CallsState> {
     if (c == null) return;
     final profile = ref.read(accountsProvider).byId(c.accountId);
     c.forcedResult = CallResult.forwarded;
-    c.forcedReason = 'Redirected';
+    c.forcedReason = ref.read(l10nProvider).callHistoryRedirected;
     c.forcedCode = 302;
     await _guard(() => _engine.redirect(cid, [_uriFor(target, profile)]));
   }
@@ -1418,7 +1423,7 @@ class CallsController extends Notifier<CallsState> {
       return true;
     } on EngineException catch (e) {
       c.transferPending = false;
-      ref.read(noticeProvider.notifier).error('Transfer failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrTransferFailed, details: '$e');
       return false;
     }
   }
@@ -1482,7 +1487,7 @@ class CallsController extends Notifier<CallsState> {
       return true;
     } on EngineException catch (e) {
       orig.transferPending = false;
-      ref.read(noticeProvider.notifier).error('Transfer failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrTransferFailed, details: '$e');
       return false;
     }
   }
@@ -1509,7 +1514,7 @@ class CallsController extends Notifier<CallsState> {
     try {
       await _engine.conference(cids);
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not merge calls', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotMerge, details: '$e');
     }
     for (final id in cids) {
       await _refresh(id);
@@ -1678,7 +1683,7 @@ class CallsController extends Notifier<CallsState> {
       unawaited(_journalStart(c, answered: c.answered));
       _emit();
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not start recording', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStartRecording, details: '$e');
     } finally {
       _recStarting.remove(cid);
     }
@@ -1695,7 +1700,7 @@ class CallsController extends Notifier<CallsState> {
       unawaited(_persistRecording(c, result: r));
       _emit();
     } on EngineException catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not stop recording', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStopRecording, details: '$e');
     }
   }
 
@@ -1761,10 +1766,10 @@ class CallsController extends Notifier<CallsState> {
     try {
       c.transferPending = true;
       await _engine.transfer(cid, code);
-      ref.read(noticeProvider.notifier).show('Parking call (dial $code)');
+      ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).callParkingNotice(code));
     } on EngineException catch (e) {
       c.transferPending = false;
-      ref.read(noticeProvider.notifier).error('Park failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrParkFailed, details: '$e');
     }
   }
 
@@ -1862,7 +1867,7 @@ class CallsController extends Notifier<CallsState> {
   }) async {
     final notices = ref.read(noticeProvider.notifier);
     if (!_ctl.hasEngine) {
-      notices.error('The call engine is not running yet');
+      notices.error(ref.read(l10nProvider).callErrEngineNotRunning);
       return null;
     }
     if (holdOthers) await _holdActive();
@@ -1889,7 +1894,7 @@ class CallsController extends Notifier<CallsState> {
       _emit();
       return r.cid;
     } on EngineException catch (e) {
-      notices.error('Could not place the call', details: e.toString());
+      notices.error(ref.read(l10nProvider).callErrCouldNotPlace, details: e.toString());
       return null;
     }
   }
@@ -1947,7 +1952,7 @@ class CallsController extends Notifier<CallsState> {
     } on LanHandoffException catch (e) {
       ref.read(noticeProvider.notifier).show(e.message);
     } catch (e) {
-      ref.read(noticeProvider.notifier).error('Hand-off failed', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrHandoffFailed, details: '$e');
     }
   }
 
@@ -1957,7 +1962,7 @@ class CallsController extends Notifier<CallsState> {
     } on LanHandoffException catch (e) {
       ref.read(noticeProvider.notifier).show(e.message);
     } catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not send to device', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotSendToDevice, details: '$e');
     }
   }
 }

@@ -1,3 +1,7 @@
+import 'package:flutter/widgets.dart' show Locale;
+
+import '../l10n/l10n.dart';
+
 enum CallDirection { incoming, outgoing }
 
 enum CallResult {
@@ -11,16 +15,19 @@ enum CallResult {
   handedOff,
   interrupted;
 
-  String get label => switch (this) {
-    answered => 'Answered',
-    missed => 'Missed',
-    rejected => 'Declined',
-    failed => 'Failed',
-    busy => 'Busy',
-    forwarded => 'Forwarded',
-    transferred => 'Transferred',
-    handedOff => 'Handed off',
-    interrupted => 'Interrupted',
+  /// English label (tests / logs); the UI uses [localized].
+  String get label => localized(lookupAppLocalizations(const Locale('en')));
+
+  String localized(AppLocalizations l) => switch (this) {
+    answered => l.callResultAnswered,
+    missed => l.callResultMissed,
+    rejected => l.callResultRejected,
+    failed => l.callResultFailed,
+    busy => l.callResultBusy,
+    forwarded => l.callResultForwarded,
+    transferred => l.callResultTransferred,
+    handedOff => l.callResultHandedOff,
+    interrupted => l.callResultInterrupted,
   };
 }
 

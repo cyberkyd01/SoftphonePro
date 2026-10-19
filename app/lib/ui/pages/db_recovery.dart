@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/l10n.dart';
 import '../../storage/app_database.dart';
 import '../../storage/secrets_store.dart';
 
@@ -33,6 +34,8 @@ class DbRecoveryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SoftphonePro',
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: const Color(0xFF3F51E0), useMaterial3: true),
       home: DbRecoveryScreen(problem: problem, onRetry: onRetry, onStartFresh: onStartFresh),
@@ -62,28 +65,26 @@ class DbRecoveryScreen extends StatelessWidget {
                 Icon(Icons.lock_reset_rounded, size: 48, color: t.colorScheme.primary),
                 const SizedBox(height: 16),
                 Text(
-                  missing ? 'Your data is locked' : 'Your data cannot be opened',
+                  missing ? context.l10n.appDbLockedTitle : context.l10n.appDbUnreadableTitle,
                   style: t.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   missing
-                      ? 'Call history, contacts and messages are encrypted on this device, but the encryption key is no longer in the system keychain / keystore (for example after a keychain reset or a restore to a new device).'
-                      : 'The local database could not be read. It may be damaged, or the encryption key does not match.',
+                      ? context.l10n.appDbLockedBody
+                      : context.l10n.appDbUnreadableBody,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Try again if you expect the key to come back (unlock the keychain, sign in to the right user). Starting fresh keeps the old file next to the app data but begins with an empty history, contacts and messages; you will need to add your accounts again.',
-                ),
+                Text(context.l10n.appDbRecoveryAdvice),
                 if (problem.detail != null) ...[
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: Text(problem.detail!, maxLines: 3, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
+                        child: Text(problem.detail!, textDirection: TextDirection.ltr, maxLines: 3, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
                       ),
                       IconButton(
-                        tooltip: 'Copy details',
+                        tooltip: context.l10n.appDbCopyDetails,
                         icon: const Icon(Icons.copy_rounded, size: 18),
                         onPressed: () => Clipboard.setData(ClipboardData(text: '${problem.problem.name}: ${problem.detail}')),
                       ),
@@ -91,9 +92,9 @@ class DbRecoveryScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 24),
-                FilledButton.icon(key: const Key('db-retry'), onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Try again')),
+                FilledButton.icon(key: const Key('db-retry'), onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: Text(context.l10n.appDbTryAgain)),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(key: const Key('db-fresh'), onPressed: onStartFresh, icon: const Icon(Icons.delete_sweep_rounded), label: const Text('Start fresh')),
+                OutlinedButton.icon(key: const Key('db-fresh'), onPressed: onStartFresh, icon: const Icon(Icons.delete_sweep_rounded), label: Text(context.l10n.appDbStartFresh)),
               ],
             ),
           ),

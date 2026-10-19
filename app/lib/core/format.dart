@@ -1,5 +1,7 @@
 import 'package:intl/intl.dart';
 
+import '../l10n/l10n.dart';
+
 String formatDuration(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -45,18 +47,18 @@ int hashColor(String seed) {
   return kAvatarPalette[h % kAvatarPalette.length];
 }
 
-String dayLabel(DateTime t, [DateTime? now]) {
+String dayLabel(DateTime t, AppLocalizations l, [DateTime? now]) {
   now ??= DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final d = DateTime(t.year, t.month, t.day);
   final diff = today.difference(d).inDays;
-  if (diff == 0) return 'Today';
-  if (diff == 1) return 'Yesterday';
-  if (diff < 7) return DateFormat('EEEE').format(t);
-  return DateFormat.yMMMd().format(t);
+  if (diff == 0) return l.uiToday;
+  if (diff == 1) return l.uiYesterday;
+  if (diff < 7) return DateFormat('EEEE', l.localeName).format(t);
+  return DateFormat.yMMMd(l.localeName).format(t);
 }
 
-String timeLabel(DateTime t) => DateFormat.jm().format(t);
+String timeLabel(DateTime t, AppLocalizations l) => DateFormat.jm(l.localeName).format(t);
 
 /// `sip:1002@pbx` -> `1002`; `"Bob" <sip:bob@x>` -> `bob`.
 String userPart(String uri) {

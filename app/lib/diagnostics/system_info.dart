@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../services/accounts_controller.dart';
 import '../services/engine_controller.dart';
 import '../services/settings_controller.dart';
@@ -38,6 +39,16 @@ class SystemInfo {
     ('pjsip', pjsip.isEmpty ? '--' : pjsip),
     ('Accounts', '$registered of $accounts registered'),
     ('LAN Link', lan),
+  ];
+
+  /// Localised row labels for the UI (the exported text stays English).
+  List<(String, String)> localizedRows(AppLocalizations l) => [
+    (l.diagSysAppVersion, appVersion),
+    (l.diagSysPlatform, platform),
+    (l.diagSysEngine, engineState),
+    ('pjsip', pjsip.isEmpty ? '--' : pjsip),
+    (l.diagSysAccounts, l.diagSysAccountsRegistered(registered, accounts)),
+    (l.diagSysLanLink, lan),
   ];
 
   String toText() {

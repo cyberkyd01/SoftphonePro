@@ -5,6 +5,7 @@ import '../../../core/theme.dart';
 import '../../../diagnostics/diagnostics_hub.dart';
 import '../../../diagnostics/export_service.dart';
 import '../../../diagnostics/redaction.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/settings_controller.dart';
 import 'trace_style.dart';
 
@@ -33,6 +34,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
     final settings = ref.watch(settingsProvider);
     final ctl = ref.read(logsProvider.notifier);
     final t = Theme.of(context);
+    final l10n = context.l10n;
     final c = context.colors;
     final q = _q.trim().toLowerCase();
     final all = ctl.lines;
@@ -42,8 +44,8 @@ class _LogsViewState extends ConsumerState<LogsView> {
       children: [
         SwitchListTile(
           key: const Key('logs-forward'),
-          title: const Text('Forward engine logs'),
-          subtitle: const Text('Send pjsip log lines to this viewer'),
+          title: Text(l10n.diagLogsForward),
+          subtitle: Text(l10n.diagLogsForwardSub),
           value: ctl.forward,
           onChanged: (v) => ctl.setForward(v),
           secondary: PopupMenuButton<String>(
@@ -55,15 +57,15 @@ class _LogsViewState extends ConsumerState<LogsView> {
                 case 'save':
                   await ex.saveText('engine-log-${stamp()}.log', formatLogs(lines, redact: _redact));
                 case 'copy':
-                  await ex.copy(formatLogs(lines, redact: _redact), what: 'Logs');
+                  await ex.copy(formatLogs(lines, redact: _redact), confirmation: l10n.diagCopiedLogs);
                 case 'clear':
                   ctl.clear();
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'save', child: Text('Save as .log')),
-              PopupMenuItem(value: 'copy', child: Text('Copy')),
-              PopupMenuItem(value: 'clear', child: Text('Clear')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'save', child: Text(l10n.diagSaveAsLog)),
+              PopupMenuItem(value: 'copy', child: Text(l10n.actionCopy)),
+              PopupMenuItem(value: 'clear', child: Text(l10n.actionClear)),
             ],
           ),
         ),
@@ -74,13 +76,13 @@ class _LogsViewState extends ConsumerState<LogsView> {
               DropdownButton<int>(
                 key: const Key('logs-level'),
                 value: settings.logLevel.clamp(0, 6),
-                items: [for (var i = 0; i <= 6; i++) DropdownMenuItem(value: i, child: Text('Level $i (${LogLine.names[i]})'))],
+                items: [for (var i = 0; i <= 6; i++) DropdownMenuItem(value: i, child: Text(l10n.diagLogsLevel(i, LogLine.names[i])))],
                 onChanged: (v) => v == null ? null : ctl.setLevel(v),
               ),
               const Spacer(),
               FilterChip(
                 key: const Key('logs-redact'),
-                label: const Text('Redact on export'),
+                label: Text(l10n.diagLogsRedact),
                 selected: _redact,
                 onSelected: (v) => setState(() => _redact = v),
               ),
@@ -94,7 +96,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search_rounded),
-              hintText: 'Search logs',
+              hintText: l10n.diagLogsSearch,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onChanged: (v) => setState(() => _q = v),
@@ -107,7 +109,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      all.isEmpty ? (ctl.forward ? 'No log lines yet.' : 'Log forwarding is off. Turn it on to capture engine logs.') : 'No lines match the search.',
+                      all.isEmpty ? (ctl.forward ? l10n.diagLogsEmpty : l10n.diagLogsForwardingOff) : l10n.diagLogsNoMatch,
                       textAlign: TextAlign.center,
                       style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
                     ),
@@ -122,6 +124,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                       child: SelectableText(
                         '${clockLabel(l.time)} ${l.levelName.padRight(5)} ${l.msg}',
+                        textDirection: TextDirection.ltr,
                         style: TextStyle(fontFamily: kMono, fontSize: 11.5, color: lc(l.level)),
                       ),
                     );

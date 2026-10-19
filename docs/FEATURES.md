@@ -11,7 +11,7 @@ Status as of v1.0.0 (2026-10-19). Every status below is backed by the evidence i
 | ☐ | Not implemented, or deferred | **8** |
 | | Total rows | **111** |
 
-Not implemented: video calls (M8), ZRTP (S6) and localisation (U5), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat, a Linux desktop app).
+Not implemented: video calls (M8) and ZRTP (S6), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat, a Linux desktop app).
 
 How to read this list:
 
@@ -147,7 +147,7 @@ How to read this list:
 | U2 | Full-screen incoming-call UI and notifications with Answer/Decline actions | P0 | D/P | ✅ | A: `flows_test.dart` "incoming call -> answer", `desktop_layout_test.dart` "desktop incoming banner answers via button", `recordings/qa_leftovers_test.dart` (foreground vs background notification); device: QA_ANDROID C (heads-up and screen-off full-screen), QA_MACOS 8 (banner). |
 | U3 | Desktop: tray icon, minimise to tray, start at login, global hotkeys | P1 | P | ◐ | Logic only: A: `desktop_platform_test.dart` (hotkey parsing and defaults, window bounds, tray menu structure, link and command-line parsing). Missing: the tray icon, login item and global hotkey registration are not tested; QA_MACOS did not check them. |
 | U4 | Keyboard shortcuts, full keyboard navigation, screen-reader labels | P1 | D | ◐ | Implemented (`ui/shortcuts.dart`, `Semantics` labels on the keypad, call, list and settings widgets). Missing: no test and no screen-reader pass. |
-| U5 | Localisation framework (English first) with RTL support | P1 | D | ☐ | Not implemented: no `flutter_localizations`, ARB files or locale list in `app/`. The UI is English only. |
+| U5 | Localisation framework (English first) with RTL support | P1 | D | ✅ | `flutter_localizations` + gen-l10n (`app/l10n.yaml`, `app/lib/l10n/app_*.arb`); 13 languages (en, es, fr, de, pt-BR, it, nl, ru, tr, hi, ar, zh-Hans, ja) chosen in Settings > Appearance > Language or by system locale; RTL via Arabic with directional layout. Tests: `app/test/l10n/arb_consistency_test.dart` (same keys and placeholders in every ARB), `app/test/l10n/l10n_layout_test.dart` (shell, keypad, in-call, settings, LAN, recordings under ar/de/ja at phone and desktop size without overflow; live language switch). |
 | U6 | Onboarding wizard (QR, URL, provider templates, manual) | P1 | D | ✅ | A: `flows_test.dart` "onboarding -> add account -> registered chip", `polish_a1_test.dart` "cold-start provision link during onboarding shows the confirm dialog and finishes onboarding"; QA_ANDROID A. |
 | U7 | Browser click-to-dial extension (Chrome, Edge, Brave, Firefox; Manifest V3) | P1 | P | ✅ | E: `phone.test.js` (65 tests with `node --test`: number detection, settings, site lists); `test/e2e/e2e.js` is a puppeteer script run by hand (Chrome only, not in CI). Not tested in Firefox or on the stores. |
 | U8 | QR codes: scan provisioning and LAN pairing QR codes; show your own QR | P1 | D/P | ◐ | Payload parsing and the paste fallback: A: `qr_scanner_test.dart` (the camera detection callback is simulated). Missing: no run with a real camera on any platform. |
@@ -227,7 +227,7 @@ This comparison uses only the claims in [research/COMPETITOR_FEATURES.md](resear
 | SIP log viewer | ✅ (D2) | P | P | P | P (log file) | P |
 | Push notifications (needs a server) | ☐ (Z1) | Y (Zoiper proxy) | Y (CounterPath/Stretto) | Y (Acrobits cloud) | N/A | Y (Linphone accounts) |
 | Screen reader | ◐ (U4) | ? | ? | iOS VoiceOver ? | Y (NVDA) | ? |
-| Right-to-left languages | ☐ (U5) | ? | ? | ? | Y | ? |
+| Right-to-left languages | ✅ (U5) | ? | ? | ? | Y | ? |
 
 Not covered by the research document, so no comparison is made: voice isolation (M9), the audio library and announcements (C20-C22), recording formats (C23), caller identity display (P5), and LAN Link (L1-L8). The document lists RNNoise-style local noise suppression as an idea for differentiation, not as a competitor feature.
 

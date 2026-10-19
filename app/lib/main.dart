@@ -9,6 +9,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'l10n/l10n.dart';
 import 'platform/android/android_background.dart';
 import 'platform/android/android_platform_services.dart';
 import 'platform/desktop/window_state.dart';
@@ -97,7 +98,7 @@ Future<void> main(List<String> args) async {
 
   final startupNotice = db.startupNotice;
   if (startupNotice != null) {
-    Future<void>.delayed(const Duration(seconds: 1), () => container.read(noticeProvider.notifier).error(startupNotice));
+    Future<void>.delayed(const Duration(seconds: 1), () => container.read(noticeProvider.notifier).error(container.read(l10nProvider).appDbConversionFailed(startupNotice.encrypt ? 'encrypt' : 'decrypt', startupNotice.error)));
   }
 
   runApp(UncontrolledProviderScope(container: container, child: const SoftphoneApp()));

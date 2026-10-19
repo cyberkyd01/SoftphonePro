@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../models/chat.dart';
 import '../../lan/lan_controller.dart';
 import '../../services/accounts_controller.dart';
@@ -47,10 +48,11 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
     }
     final acc = ref.read(accountsProvider);
     if (acc.profiles.isEmpty) {
-      ref.read(noticeProvider.notifier).error('Add an account to send messages');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).recentsAddAccountToMessage);
       return;
     }
-    final to = await promptText(context, title: 'New message', hint: 'Number or SIP address', keyboardType: TextInputType.emailAddress);
+    final l = ref.read(l10nProvider);
+    final to = await promptText(context, title: l.messagesNewMessage, hint: l.messagesNumberOrSip, keyboardType: TextInputType.emailAddress);
     if (to == null || to.isEmpty || !mounted) return;
     final accId = acc.defaultProfile?.id ?? acc.profiles.first.id;
     _openThread(kChannelSip, accId, to);
@@ -77,16 +79,16 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
     final listPane = Column(
       children: [
         PageHeader(
-          title: 'Messages',
-          actions: [IconButton(tooltip: 'New message', onPressed: _newMessage, icon: const Icon(Icons.edit_square))],
+          title: context.l10n.shellTabMessages,
+          actions: [IconButton(tooltip: context.l10n.messagesNewMessage, onPressed: _newMessage, icon: const Icon(Icons.edit_square))],
         ),
         Expanded(
           child: convs.isEmpty
               ? EmptyState(
                   icon: Icons.chat_bubble_outline_rounded,
-                  title: 'No conversations',
-                  subtitle: 'Send a SIP message to any extension or address on your accounts.',
-                  actionLabel: 'New message',
+                  title: context.l10n.messagesNoConversations,
+                  subtitle: context.l10n.messagesEmptySubtitle,
+                  actionLabel: context.l10n.messagesNewMessage,
                   onAction: _newMessage,
                 )
               : ListView.separated(
@@ -108,7 +110,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         ],
                       ),
                       subtitle: Text(
-                        ms.typing.contains(c.key) ? 'typing...' : '${c.last.outgoing ? 'You: ' : ''}${c.last.body}',
+                        ms.typing.contains(c.key) ? context.l10n.messagesTyping : '${c.last.outgoing ? context.l10n.messagesYouPrefix : ''}${c.last.body}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontWeight: c.unread > 0 ? FontWeight.w600 : null),
@@ -117,7 +119,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(timeLabel(c.last.time), style: t.textTheme.bodySmall),
+                          Text(timeLabel(c.last.time, context.l10n), style: t.textTheme.bodySmall),
                           const SizedBox(height: 4),
                           if (c.unread > 0)
                             Container(
@@ -155,7 +157,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
         VerticalDivider(width: 1, color: t.colorScheme.outlineVariant),
         Expanded(
           child: _selected == null
-              ? const EmptyState(icon: Icons.forum_outlined, title: 'Select a conversation')
+              ? EmptyState(icon: Icons.forum_outlined, title: context.l10n.messagesSelect)
               : ThreadView(
                   key: ValueKey(_selected),
                   channel: sel?.channel ?? _selected!.split('|').first,
@@ -286,9 +288,9 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
               ),
               Text(
                 typing
-                    ? 'typing...'
+                    ? context.l10n.messagesTyping
                     : _lan
-                        ? ((lanPeer?.online ?? false) ? 'Online on your network' : 'Offline. Messages are sent when it is back.')
+                        ? ((lanPeer?.online ?? false) ? context.l10n.messagesLanOnline : context.l10n.messagesLanOffline)
                         : '${userPart(widget.peer)} · ${acc.byId(widget.accountId)?.name ?? ''}',
                 style: t.textTheme.bodySmall?.copyWith(color: typing ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant),
                 maxLines: 1,
@@ -300,26 +302,26 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
         if (_lan)
           IconButton(
             key: const Key('lan-thread-file'),
-            tooltip: 'Send a file to $title',
+            tooltip: context.l10n.messagesSendFileTo(title),
             onPressed: () => pickAndSendLanFile(context, ref, widget.peer),
             icon: const Icon(Icons.attach_file_rounded),
           ),
         IconButton(
-          tooltip: 'Call $title',
+          tooltip: context.l10n.messagesCallName(title),
           onPressed: () => _lan
               ? ref.read(lanControllerProvider.notifier).callPeer(widget.peer)
               : ref.read(callsProvider.notifier).dial(widget.peer, accountId: widget.accountId.isEmpty ? null : widget.accountId),
           icon: Icon(Icons.call_rounded, color: context.colors.callGreen),
         ),
         PopupMenuButton<String>(
-          tooltip: 'More',
+          tooltip: context.l10n.actionMore,
           onSelected: (v) async {
-            if (v == 'delete' && await confirm(context, title: 'Delete conversation?', message: 'All messages with $title will be removed.')) {
+            if (v == 'delete' && await confirm(context, title: context.l10n.messagesDeleteTitle, message: context.l10n.messagesDeleteMessage(title))) {
               await ref.read(messagesProvider.notifier).deleteConversation(_key);
               if (!widget.embedded && context.mounted) context.pop();
             }
           },
-          itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('Delete conversation'))],
+          itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text(context.l10n.messagesDeleteMenu))],
         ),
       ],
     );
@@ -330,24 +332,24 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
           child: thread.isEmpty
               ? EmptyState(
                   icon: Icons.waving_hand_outlined,
-                  title: 'Say hello',
-                  subtitle: _lan ? 'Messages go straight to this device over your network, end-to-end encrypted.' : 'Messages are sent with SIP MESSAGE through your account.',
+                  title: context.l10n.messagesSayHello,
+                  subtitle: _lan ? context.l10n.messagesLanEmptySub : context.l10n.messagesSipEmptySub,
                 )
               : ListView.builder(
                   controller: _scroll,
                   reverse: true,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 12, 8),
                   itemCount: reversed.length,
                   itemBuilder: (context, i) {
                     final m = reversed[i];
                     final older = i + 1 < reversed.length ? reversed[i + 1] : null;
-                    final showDay = older == null || dayLabel(older.time) != dayLabel(m.time);
+                    final showDay = older == null || dayLabel(older.time, context.l10n) != dayLabel(m.time, context.l10n);
                     return Column(
                       children: [
                         if (showDay)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Text(dayLabel(m.time), style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                            child: Text(dayLabel(m.time, context.l10n), style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                           ),
                         _Bubble(
                           message: m,
@@ -361,7 +363,7 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
         SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -384,13 +386,13 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
                       }
                     },
                     onSubmitted: (_) => _send(),
-                    decoration: const InputDecoration(hintText: 'Message', contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                    decoration: InputDecoration(hintText: context.l10n.messagesInputHint, contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
                   key: const Key('send-message'),
-                  tooltip: 'Send',
+                  tooltip: context.l10n.messagesSend,
                   onPressed: _send,
                   icon: const Icon(Icons.send_rounded),
                 ),
@@ -402,7 +404,7 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
     );
 
     if (widget.embedded) {
-      return Column(children: [Padding(padding: const EdgeInsets.fromLTRB(16, 10, 8, 6), child: header), const Divider(height: 1), Expanded(child: body)]);
+      return Column(children: [Padding(padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 8, 6), child: header), const Divider(height: 1), Expanded(child: body)]);
     }
     return Scaffold(
       appBar: AppBar(titleSpacing: 0, title: header),
@@ -424,18 +426,18 @@ class _Bubble extends StatelessWidget {
     final fg = out ? t.colorScheme.onPrimary : t.colorScheme.onSurface;
     final failed = message.status == MessageStatus.failed;
     return Align(
-      alignment: out ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: out ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 3),
         constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78 > 520 ? 520 : MediaQuery.sizeOf(context).width * 0.78),
-        padding: const EdgeInsets.fromLTRB(14, 9, 12, 7),
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 9, 12, 7),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(out ? 18 : 4),
-            bottomRight: Radius.circular(out ? 4 : 18),
+          borderRadius: BorderRadiusDirectional.only(
+            topStart: const Radius.circular(18),
+            topEnd: const Radius.circular(18),
+            bottomStart: Radius.circular(out ? 18 : 4),
+            bottomEnd: Radius.circular(out ? 4 : 18),
           ),
           border: out ? null : Border.all(color: t.colorScheme.outlineVariant),
         ),
@@ -443,21 +445,21 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Align(alignment: Alignment.centerLeft, child: SelectableText(message.body, style: TextStyle(color: fg, fontSize: 15, height: 1.3))),
+            Align(alignment: AlignmentDirectional.centerStart, child: SelectableText(message.body, style: TextStyle(color: fg, fontSize: 15, height: 1.3))),
             const SizedBox(height: 3),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(timeLabel(message.time), style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11)),
+                Text(timeLabel(message.time, context.l10n), style: TextStyle(color: fg.withValues(alpha: 0.7), fontSize: 11)),
                 if (out) ...[
                   const SizedBox(width: 4),
                   Semantics(
                     label: switch (message.status) {
-                      MessageStatus.sending => 'Sending',
-                      MessageStatus.sent => 'Sent',
-                      MessageStatus.delivered => 'Delivered',
-                      MessageStatus.read => 'Read',
-                      MessageStatus.failed => 'Failed',
+                      MessageStatus.sending => context.l10n.messagesStatusSending,
+                      MessageStatus.sent => context.l10n.messagesStatusSent,
+                      MessageStatus.delivered => context.l10n.messagesStatusDelivered,
+                      MessageStatus.read => context.l10n.messagesStatusRead,
+                      MessageStatus.failed => context.l10n.messagesStatusFailed,
                       _ => '',
                     },
                     child: Icon(
@@ -484,8 +486,8 @@ class _Bubble extends StatelessWidget {
               InkWell(
                 onTap: onRetry,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('Not delivered. Tap to retry', style: TextStyle(color: const Color(0xFFFFB4AB), fontSize: 11, fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsetsDirectional.only(top: 4),
+                  child: Text(context.l10n.messagesNotDelivered, style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ),
           ],

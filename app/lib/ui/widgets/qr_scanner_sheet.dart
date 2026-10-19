@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../l10n/l10n.dart';
+
 /// Builds the live camera preview; calls [onCode] for every decoded QR text.
 typedef QrCameraBuilder = Widget Function(BuildContext context, ValueChanged<String> onCode);
 
@@ -14,8 +16,8 @@ bool get qrCameraSupported => Platform.isAndroid || Platform.isIOS || Platform.i
 /// text (null when dismissed). Always offers a paste fallback.
 Future<String?> showQrScannerSheet(
   BuildContext context, {
-  String title = 'Scan QR code',
-  String pasteHint = 'Paste the code text',
+  String? title,
+  String? pasteHint,
   QrCameraBuilder? cameraBuilder,
   bool? cameraSupported,
 }) => showModalBottomSheet<String>(
@@ -34,13 +36,13 @@ Future<String?> showQrScannerSheet(
 class QrScannerSheet extends StatefulWidget {
   const QrScannerSheet({
     super.key,
-    this.title = 'Scan QR code',
-    this.pasteHint = 'Paste the code text',
+    this.title,
+    this.pasteHint,
     this.cameraBuilder,
     required this.cameraSupported,
   });
-  final String title;
-  final String pasteHint;
+  final String? title;
+  final String? pasteHint;
   final QrCameraBuilder? cameraBuilder;
   final bool cameraSupported;
 
@@ -76,12 +78,12 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.title, style: t.textTheme.titleLarge),
+            Text(widget.title ?? context.l10n.uiQrScanTitle, style: t.textTheme.titleLarge),
             const SizedBox(height: 12),
             if (widget.cameraSupported)
               ClipRRect(
@@ -90,7 +92,7 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
               )
             else
               Text(
-                'Camera scanning is not available on this device. Paste the code text instead.',
+                context.l10n.uiQrNoCamera,
                 key: const Key('qr-no-camera'),
                 style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
               ),
@@ -100,7 +102,7 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
               controller: _text,
               minLines: 1,
               maxLines: 4,
-              decoration: InputDecoration(hintText: widget.pasteHint, prefixIcon: const Icon(Icons.content_paste_rounded)),
+              decoration: InputDecoration(hintText: widget.pasteHint ?? context.l10n.uiQrPasteHint, prefixIcon: const Icon(Icons.content_paste_rounded)),
               onSubmitted: _finish,
             ),
             const SizedBox(height: 8),
@@ -113,12 +115,12 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
                     if (d?.text != null) setState(() => _text.text = d!.text!);
                   },
                   icon: const Icon(Icons.paste_rounded),
-                  label: const Text('Paste'),
+                  label: Text(context.l10n.uiQrPaste),
                 ),
                 const Spacer(),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(context.l10n.actionCancel)),
                 const SizedBox(width: 8),
-                FilledButton(key: const Key('qr-use-text'), onPressed: () => _finish(_text.text), child: const Text('Use')),
+                FilledButton(key: const Key('qr-use-text'), onPressed: () => _finish(_text.text), child: Text(context.l10n.uiQrUse)),
               ],
             ),
           ],
@@ -165,9 +167,7 @@ class _LiveCameraState extends State<_LiveCamera> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                denied
-                    ? 'Camera access is off. Allow it in system settings, or paste the code text below.'
-                    : 'The camera is not available. Paste the code text below.',
+                denied ? context.l10n.uiQrCameraDenied : context.l10n.uiQrCameraUnavailable,
                 textAlign: TextAlign.center,
               ),
             ),

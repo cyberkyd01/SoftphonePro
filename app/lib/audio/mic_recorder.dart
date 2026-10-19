@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import '../l10n/l10n.dart';
 import '../services/engine_controller.dart';
 import 'audio_library.dart';
 
@@ -71,8 +72,9 @@ class MicRecorderController extends Notifier<RecorderState> {
 
   Future<void> start() async {
     final c = ref.read(engineProvider.notifier);
+    final l10n = ref.read(l10nProvider);
     if (!c.hasEngine) {
-      state = state.copyWith(error: 'The call engine is not running.');
+      state = state.copyWith(error: l10n.audioRecEngineOff);
       return;
     }
     if (state.recording) return;
@@ -82,8 +84,8 @@ class MicRecorderController extends Notifier<RecorderState> {
     } on EngineException catch (e) {
       state = state.copyWith(
         error: e.code == ErrorCode.unsupported
-            ? 'This version of the call engine cannot record the microphone.'
-            : 'Could not start recording: ${e.error.message}',
+            ? l10n.audioRecUnsupported
+            : l10n.audioRecStartFailed(e.error.message),
       );
       return;
     }
@@ -113,7 +115,7 @@ class MicRecorderController extends Notifier<RecorderState> {
       final r = await c.engine.recordMicStop();
       state = RecorderState(file: r.file, durationMs: r.durationMs);
     } on EngineException catch (e) {
-      state = RecorderState(error: 'Recording failed: ${e.error.message}');
+      state = RecorderState(error: ref.read(l10nProvider).audioRecFailed(e.error.message));
     }
   }
 

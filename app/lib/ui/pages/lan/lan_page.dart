@@ -8,6 +8,7 @@ import 'package:lan_link/lan_link.dart' as ll;
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../lan/lan_controller.dart';
 import '../../../lan/lan_models.dart';
 import '../../../models/chat.dart';
@@ -57,6 +58,7 @@ class _LanPageState extends ConsumerState<LanPage> {
     final lan = ref.watch(lanControllerProvider);
     final settings = ref.watch(settingsProvider);
     final t = Theme.of(context);
+    final l = context.l10n;
     ref.listen<LanState>(lanControllerProvider, (prev, next) {
       for (final p in next.paired.where((p) => p.online && p.connected)) {
         if (_queried.add(p.deviceId)) ref.read(lanControllerProvider.notifier).requestCalls(p.deviceId);
@@ -65,12 +67,12 @@ class _LanPageState extends ConsumerState<LanPage> {
     });
 
     final header = PageHeader(
-      title: 'LAN Link',
-      subtitle: 'Your devices, talking directly',
+      title: l.lanPageTitle,
+      subtitle: l.lanPageSubtitle,
       actions: [
         if (lan.running)
-          IconButton(key: const Key('lan-connect'), tooltip: 'Connect by address', onPressed: () => showManualConnect(context, ref), icon: const Icon(Icons.add_link_rounded)),
-        IconButton(tooltip: 'LAN settings', onPressed: () => context.push('/settings/lan'), icon: const Icon(Icons.tune_rounded)),
+          IconButton(key: const Key('lan-connect'), tooltip: l.lanConnectByAddress, onPressed: () => showManualConnect(context, ref), icon: const Icon(Icons.add_link_rounded)),
+        IconButton(tooltip: l.lanSettingsTooltip, onPressed: () => context.push('/settings/lan'), icon: const Icon(Icons.tune_rounded)),
       ],
     );
 
@@ -80,9 +82,9 @@ class _LanPageState extends ConsumerState<LanPage> {
         Expanded(
           child: EmptyState(
             icon: Icons.lan_rounded,
-            title: 'LAN Link is off',
-            subtitle: 'Find your other SoftphonePro devices, chat, drop files and hand calls over, without any server.',
-            actionLabel: 'Turn on LAN Link',
+            title: l.lanOffTitle,
+            subtitle: l.lanOffSubtitle,
+            actionLabel: l.lanTurnOn,
             onAction: () => ref.read(settingsProvider.notifier).update({'lanEnabled': true}),
           ),
         ),
@@ -96,14 +98,14 @@ class _LanPageState extends ConsumerState<LanPage> {
         header,
         if (lan.error != null)
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: t.colorScheme.errorContainer, borderRadius: BorderRadius.circular(kRadius)),
             child: Row(children: [
               Icon(Icons.error_outline_rounded, color: t.colorScheme.onErrorContainer),
               const SizedBox(width: 10),
-              Expanded(child: Text('LAN Link could not start: ${lan.error}', style: TextStyle(color: t.colorScheme.onErrorContainer))),
-              TextButton(onPressed: () => ref.read(lanControllerProvider.notifier).restart(), child: const Text('Retry')),
+              Expanded(child: Text(l.lanCouldNotStart(lan.error!), style: TextStyle(color: t.colorScheme.onErrorContainer))),
+              TextButton(onPressed: () => ref.read(lanControllerProvider.notifier).restart(), child: Text(l.actionRetry)),
             ]),
           ),
         Expanded(
@@ -112,8 +114,8 @@ class _LanPageState extends ConsumerState<LanPage> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 360, child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 8, 24), children: [selfCard])),
-                  Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(8, 0, 16, 24), children: [devices])),
+                  SizedBox(width: 360, child: ListView(padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 24), children: [selfCard])),
+                  Expanded(child: ListView(padding: const EdgeInsetsDirectional.fromSTEB(8, 0, 16, 24), children: [devices])),
                 ],
               );
             }
@@ -126,21 +128,23 @@ class _LanPageState extends ConsumerState<LanPage> {
 }
 
 Future<void> showManualConnect(BuildContext context, WidgetRef ref) async {
+  final l = context.l10n;
   final ctl = TextEditingController();
   final text = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
       key: const Key('manual-connect-dialog'),
-      title: const Text('Connect by address'),
+      title: Text(l.lanConnectByAddress),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Type host:port, or paste the text of the QR code shown on the other device.'),
+          Text(l.lanConnectHelp),
           const SizedBox(height: 12),
           TextField(
             key: const Key('manual-connect-field'),
             controller: ctl,
+            textDirection: TextDirection.ltr,
             autofocus: true,
             decoration: const InputDecoration(hintText: '192.168.1.20:4711', prefixIcon: Icon(Icons.link_rounded)),
             onSubmitted: (v) => Navigator.pop(ctx, v),
@@ -151,20 +155,20 @@ Future<void> showManualConnect(BuildContext context, WidgetRef ref) async {
         TextButton(
           key: const Key('manual-connect-scan'),
           onPressed: () async {
-            final code = await showQrScannerSheet(ctx, title: 'Scan LAN pairing QR', pasteHint: 'softphonepro://lan?... or host:port');
+            final code = await showQrScannerSheet(ctx, title: l.lanScanTitle, pasteHint: 'softphonepro://lan?... or host:port');
             if (code != null && ctx.mounted) Navigator.pop(ctx, code);
           },
-          child: const Text('Scan QR'),
+          child: Text(l.lanScanQr),
         ),
         TextButton(
           onPressed: () async {
             final d = await Clipboard.getData(Clipboard.kTextPlain);
             if (d?.text != null) ctl.text = d!.text!;
           },
-          child: const Text('Paste'),
+          child: Text(l.lanPaste),
         ),
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(key: const Key('manual-connect-go'), onPressed: () => Navigator.pop(ctx, ctl.text), child: const Text('Connect')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.actionCancel)),
+        FilledButton(key: const Key('manual-connect-go'), onPressed: () => Navigator.pop(ctx, ctl.text), child: Text(l.lanConnect)),
       ],
     ),
   );
@@ -176,12 +180,12 @@ Future<void> showManualConnect(BuildContext context, WidgetRef ref) async {
     if (!peer.trusted) {
       await startPairing(context, ref, peer.deviceId);
     } else {
-      ref.read(noticeProvider.notifier).show('Connected to ${peer.name}');
+      ref.read(noticeProvider.notifier).show(l.lanConnectedTo(peer.name));
     }
   } on ll.LanLinkException catch (e) {
     ref.read(noticeProvider.notifier).error(e.message);
   } catch (e) {
-    ref.read(noticeProvider.notifier).error('Could not connect', details: '$e');
+    ref.read(noticeProvider.notifier).error(l.lanCouldNotConnect, details: '$e');
   }
 }
 
@@ -191,7 +195,7 @@ Future<void> startPairing(BuildContext context, WidgetRef ref, String peerId) as
     final session = lan.pair(peerId);
     await showPairingDialog(context, session, isTrusted: (id) => lan.link?.peerById(id)?.trusted ?? false);
   } catch (e) {
-    ref.read(noticeProvider.notifier).error('Could not start pairing', details: '$e');
+    ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).lanCouldNotStartPairing, details: '$e');
   }
 }
 
@@ -211,6 +215,7 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
   Widget build(BuildContext context) {
     final st = widget.state;
     final t = Theme.of(context);
+    final l = context.l10n;
     final colors = context.colors;
     final self = st.self;
     final name = ref.read(lanControllerProvider.notifier).deviceName;
@@ -235,15 +240,15 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('This device', style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                      Text(l.lanThisDevice, style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                       Text(name, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Rename',
+                  tooltip: l.actionRename,
                   onPressed: () async {
-                    final v = await promptText(context, title: 'Device name', initial: name, hint: 'This device');
+                    final v = await promptText(context, title: l.lanDeviceNameTitle, initial: name, hint: l.lanThisDevice);
                     if (v != null && v.trim().isNotEmpty) ref.read(settingsProvider.notifier).update({'lanDeviceName': v.trim()});
                   },
                   icon: const Icon(Icons.edit_rounded, size: 20),
@@ -258,18 +263,18 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
               children: [
                 _Pill(
                   icon: running ? Icons.wifi_tethering_rounded : Icons.wifi_tethering_off_rounded,
-                  text: st.starting ? 'Starting...' : (running ? 'Visible on your network' : 'Not running'),
+                  text: st.starting ? l.lanStarting : (running ? l.lanVisible : l.lanNotRunning),
                   color: running ? colors.regOk : colors.disabled,
                 ),
                 if (host != null) _Pill(icon: Icons.router_rounded, text: host),
                 if (self != null && self.sipPort > 0) _Pill(icon: Icons.call_rounded, text: 'SIP ${self.sipPort}'),
-                if (self != null && self.aors.isNotEmpty) _Pill(icon: Icons.alternate_email_rounded, text: '${self.aors.length} account${self.aors.length == 1 ? '' : 's'} shared'),
+                if (self != null && self.aors.isNotEmpty) _Pill(icon: Icons.alternate_email_rounded, text: l.lanAccountsShared(self.aors.length)),
               ],
             ),
             if (self != null) ...[
               const SizedBox(height: 10),
-              Text('Fingerprint', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-              SelectableText(fingerprintOf(self.deviceId), key: const Key('lan-fingerprint'), style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()], fontWeight: FontWeight.w600)),
+              Text(l.lanFingerprint, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+              SelectableText(fingerprintOf(self.deviceId), key: const Key('lan-fingerprint'), textDirection: TextDirection.ltr, style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()], fontWeight: FontWeight.w600)),
             ],
             if (payload != null) ...[
               const SizedBox(height: 6),
@@ -277,7 +282,7 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
                 key: const Key('lan-show-qr'),
                 onPressed: () => setState(() => _qr = !_qr),
                 icon: Icon(_qr ? Icons.expand_less_rounded : Icons.qr_code_2_rounded),
-                label: Text(_qr ? 'Hide QR code' : 'Show QR code to connect another device'),
+                label: Text(_qr ? l.lanHideQr : l.lanShowQr),
               ),
               if (_qr)
                 Center(
@@ -289,13 +294,13 @@ class _ThisDeviceCardState extends ConsumerState<_ThisDeviceCard> {
                         child: QrImageView(data: payload, size: 180, backgroundColor: Colors.white),
                       ),
                       const SizedBox(height: 8),
-                      SelectableText('$host:${self!.linkPort}', key: const Key('lan-address'), style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      SelectableText('$host:${self!.linkPort}', key: const Key('lan-address'), textDirection: TextDirection.ltr, style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                       TextButton(
                         onPressed: () async {
                           await Clipboard.setData(ClipboardData(text: payload));
-                          ref.read(noticeProvider.notifier).show('Connection text copied');
+                          ref.read(noticeProvider.notifier).show(l.lanConnectionTextCopied);
                         },
-                        child: const Text('Copy connection text'),
+                        child: Text(l.lanCopyConnectionText),
                       ),
                     ],
                   ),
@@ -344,36 +349,37 @@ class _DevicesColumn extends ConsumerWidget {
         for (final c in e.value) (peer: state.peer(e.key), call: c),
     ].where((e) => e.peer != null).toList();
     final transfers = state.transfers;
+    final l = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (remote.isNotEmpty) ...[
-          const SectionHeader('Active on your other devices', padding: EdgeInsets.fromLTRB(4, 8, 4, 8)),
+          SectionHeader(l.lanActiveOnOthers, padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8)),
           for (final r in remote) _RemoteCallTile(peer: r.peer!, call: r.call),
         ],
-        SectionHeader('Paired devices', padding: const EdgeInsets.fromLTRB(4, 8, 4, 8), trailing: Text('${paired.length}')),
+        SectionHeader(l.lanPairedDevices, padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), trailing: Text('${paired.length}')),
         if (paired.isEmpty)
-          const _Hint('No paired devices yet. Pair a nearby device to chat, send files and hand calls over.')
+          _Hint(l.lanNoPaired)
         else
           for (final p in paired) _DeviceTile(peer: p, typing: state.typing.contains(p.deviceId)),
         SectionHeader(
-          'Nearby',
+          l.lanNearby,
           padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
           trailing: state.running ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : null,
         ),
         if (nearby.isEmpty)
-          const _Hint('Looking for SoftphonePro on your network. Other devices need LAN Link turned on. You can also connect by address with the link button above.')
+          _Hint(l.lanNearbyHint)
         else
           for (final p in nearby) _DeviceTile(peer: p),
         if (transfers.isNotEmpty) ...[
-          const SectionHeader('Transfers', padding: EdgeInsets.fromLTRB(4, 16, 4, 8)),
+          SectionHeader(l.lanTransfers, padding: const EdgeInsets.fromLTRB(4, 16, 4, 8)),
           for (final t in transfers) _TransferTile(transfer: t),
         ],
         if (state.history.isNotEmpty) ...[
           SectionHeader(
-            'Files',
+            l.lanFiles,
             padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-            trailing: TextButton(onPressed: () => ref.read(lanControllerProvider.notifier).clearHistory(), child: const Text('Clear')),
+            trailing: TextButton(onPressed: () => ref.read(lanControllerProvider.notifier).clearHistory(), child: Text(l.actionClear)),
           ),
           for (final h in state.history.take(20)) _FileTile(entry: h),
         ],
@@ -403,6 +409,7 @@ class _DeviceTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final lan = ref.read(lanControllerProvider.notifier);
     final platform = peer.info?.platform ?? '';
     final online = peer.online;
@@ -418,7 +425,7 @@ class _DeviceTile extends ConsumerWidget {
       key: Key('lan-device-${peer.deviceId}'),
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 10, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -440,7 +447,7 @@ class _DeviceTile extends ConsumerWidget {
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(Icons.verified_user_rounded, size: 12, color: t.colorScheme.primary),
                               const SizedBox(width: 3),
-                              Text('Paired', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w700)),
+                              Text(l.lanPairedBadge, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w700)),
                             ]),
                           ),
                         ],
@@ -451,7 +458,7 @@ class _DeviceTile extends ConsumerWidget {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            [typing ? 'typing...' : statusLabelOf(peer), if (peer.address != null && online) peer.address!.address].join('  ·  '),
+                            [typing ? l.lanTyping : statusLabelOf(l, peer), if (peer.address != null && online) peer.address!.address].join('  ·  '),
                             style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -466,19 +473,19 @@ class _DeviceTile extends ConsumerWidget {
                     key: Key('lan-pair-${peer.deviceId}'),
                     onPressed: () => startPairing(context, ref, peer.deviceId),
                     icon: const Icon(Icons.link_rounded, size: 18),
-                    label: const Text('Pair'),
+                    label: Text(l.lanPair),
                   )
                 else
                   PopupMenuButton<String>(
                     key: Key('lan-menu-${peer.deviceId}'),
-                    tooltip: 'More',
+                    tooltip: l.actionMore,
                     onSelected: (v) async {
                       if (v == 'unpair') {
-                        final ok = await confirm(context, title: 'Unpair ${peer.name}?', message: 'You will have to pair again to chat, send files or hand over calls.', confirmLabel: 'Unpair');
+                        final ok = await confirm(context, title: l.lanUnpairTitle(peer.name), message: l.lanUnpairMessage, confirmLabel: l.lanUnpair);
                         if (ok) await lan.unpair(peer.deviceId);
                       }
                     },
-                    itemBuilder: (_) => [PopupMenuItem(key: Key('lan-unpair-${peer.deviceId}'), value: 'unpair', child: const Text('Unpair'))],
+                    itemBuilder: (_) => [PopupMenuItem(key: Key('lan-unpair-${peer.deviceId}'), value: 'unpair', child: Text(l.lanUnpair))],
                   ),
               ],
             ),
@@ -488,10 +495,10 @@ class _DeviceTile extends ConsumerWidget {
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  action(Key('lan-msg-${peer.deviceId}'), Icons.chat_bubble_rounded, 'Message', () => context.push('/thread?acc=${peer.deviceId}&peer=${peer.deviceId}&ch=$kChannelLan')),
-                  action(Key('lan-file-${peer.deviceId}'), Icons.attach_file_rounded, 'Send file', online ? () => pickAndSendLanFile(context, ref, peer.deviceId) : null),
-                  action(Key('lan-call-${peer.deviceId}'), Icons.call_rounded, 'Call', sip ? () => lan.callPeer(peer.deviceId) : null),
-                  action(Key('lan-intercom-${peer.deviceId}'), Icons.record_voice_over_rounded, 'Intercom', intercomOk ? () => lan.callPeer(peer.deviceId, intercom: true) : null),
+                  action(Key('lan-msg-${peer.deviceId}'), Icons.chat_bubble_rounded, l.lanActionMessage, () => context.push('/thread?acc=${peer.deviceId}&peer=${peer.deviceId}&ch=$kChannelLan')),
+                  action(Key('lan-file-${peer.deviceId}'), Icons.attach_file_rounded, l.lanActionSendFile, online ? () => pickAndSendLanFile(context, ref, peer.deviceId) : null),
+                  action(Key('lan-call-${peer.deviceId}'), Icons.call_rounded, l.lanActionCall, sip ? () => lan.callPeer(peer.deviceId) : null),
+                  action(Key('lan-intercom-${peer.deviceId}'), Icons.record_voice_over_rounded, l.lanActionIntercom, intercomOk ? () => lan.callPeer(peer.deviceId, intercom: true) : null),
                 ],
               ),
             ],
@@ -509,7 +516,8 @@ class _RemoteCallTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
-    final who = call.remoteName.isNotEmpty ? call.remoteName : (call.remoteNumber.isNotEmpty ? call.remoteNumber : 'Unknown');
+    final l = context.l10n;
+    final who = call.remoteName.isNotEmpty ? call.remoteName : (call.remoteNumber.isNotEmpty ? call.remoteNumber : l.commonUnknown);
     return Card(
       key: Key('lan-remote-call-${peer.deviceId}-${call.callId}'),
       margin: const EdgeInsets.only(bottom: 8),
@@ -517,11 +525,11 @@ class _RemoteCallTile extends ConsumerWidget {
       child: ListTile(
         leading: Icon(Icons.phone_in_talk_rounded, color: context.colors.callGreen),
         title: Text('$who  ·  ${call.remoteNumber}'.replaceAll(RegExp(r'\s+·\s+$'), ''), maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text('Active on ${peer.name}${call.accountName.isEmpty ? '' : '  ·  ${call.accountName}'}'),
+        subtitle: Text(call.accountName.isEmpty ? l.lanRemoteActiveOn(peer.name) : l.lanRemoteActiveOnAccount(peer.name, call.accountName)),
         trailing: FilledButton(
           key: Key('lan-pull-${peer.deviceId}-${call.callId}'),
           onPressed: () => ref.read(lanControllerProvider.notifier).pull(peer.deviceId, call),
-          child: const Text('Pull'),
+          child: Text(l.lanPull),
         ),
       ),
     );
@@ -534,22 +542,23 @@ class _TransferTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final lan = ref.read(lanControllerProvider.notifier);
     ref.watch(lanControllerProvider.select((s) => s.rev));
     final st = transfer.state;
     final waiting = st == ll.TransferState.offered || st == ll.TransferState.preparing;
     final status = switch (st) {
-      ll.TransferState.preparing => 'Preparing...',
-      ll.TransferState.offered => transfer.incoming ? 'Waiting for you' : 'Waiting for ${lan.nameOf(transfer.peerId)} to accept',
-      ll.TransferState.transferring => '${formatBytes(transfer.bytesDone)} of ${formatBytes(transfer.size)}',
-      ll.TransferState.verifying => 'Verifying...',
+      ll.TransferState.preparing => l.lanTransferPreparing,
+      ll.TransferState.offered => transfer.incoming ? l.lanTransferWaitingYou : l.lanTransferWaitingPeer(lan.nameOf(transfer.peerId)),
+      ll.TransferState.transferring => l.lanTransferProgress(formatBytes(transfer.bytesDone), formatBytes(transfer.size)),
+      ll.TransferState.verifying => l.lanTransferVerifying,
       _ => st.name,
     };
     return Card(
       key: Key('lan-transfer-${transfer.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 6, 10),
         child: Row(
           children: [
             Icon(transfer.incoming ? Icons.download_rounded : Icons.upload_rounded, color: t.colorScheme.primary),
@@ -559,13 +568,13 @@ class _TransferTile extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(transfer.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text('${transfer.incoming ? 'From' : 'To'} ${lan.nameOf(transfer.peerId)}  ·  $status', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                  Text(transfer.incoming ? l.lanTransferFrom(lan.nameOf(transfer.peerId), status) : l.lanTransferTo(lan.nameOf(transfer.peerId), status), style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 6),
                   LinearProgressIndicator(value: waiting ? null : transfer.progress.clamp(0.0, 1.0), minHeight: 4, borderRadius: BorderRadius.circular(2)),
                 ],
               ),
             ),
-            IconButton(tooltip: 'Cancel', onPressed: () => lan.cancelTransfer(transfer), icon: const Icon(Icons.close_rounded)),
+            IconButton(tooltip: l.actionCancel, onPressed: () => lan.cancelTransfer(transfer), icon: const Icon(Icons.close_rounded)),
           ],
         ),
       ),
@@ -579,6 +588,7 @@ class _FileTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final ops = ref.read(lanFileOpsProvider);
     return Card(
       key: Key('lan-file-entry-${entry.id}'),
@@ -587,23 +597,23 @@ class _FileTile extends ConsumerWidget {
         leading: Icon(entry.ok ? (entry.incoming ? Icons.download_done_rounded : Icons.upload_file_rounded) : Icons.error_outline_rounded, color: entry.ok ? t.colorScheme.primary : t.colorScheme.error),
         title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(entry.ok
-            ? '${formatBytes(entry.size)}  ·  ${entry.incoming ? 'from' : 'to'} ${entry.peerName}'
-            : 'Failed: ${entry.error}'),
+            ? (entry.incoming ? l.lanFileFromPeer(formatBytes(entry.size), entry.peerName) : l.lanFileToPeer(formatBytes(entry.size), entry.peerName))
+            : l.lanFileFailed(entry.error)),
         trailing: entry.ok && entry.incoming && entry.path.isNotEmpty
             ? PopupMenuButton<String>(
-                tooltip: 'File actions',
+                tooltip: l.lanFileActions,
                 onSelected: (v) async {
                   if (v == 'copy') {
                     await Clipboard.setData(ClipboardData(text: entry.path));
-                    ref.read(noticeProvider.notifier).show('Path copied');
+                    ref.read(noticeProvider.notifier).show(l.lanPathCopied);
                   } else {
                     await openLanFile(context, ref, entry.path, reveal: v == 'reveal');
                   }
                 },
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'open', child: Text('Open')),
-                  if (ops.isDesktop) const PopupMenuItem(value: 'reveal', child: Text('Show in folder')),
-                  const PopupMenuItem(value: 'copy', child: Text('Copy path')),
+                  PopupMenuItem(value: 'open', child: Text(l.lanFileOpen)),
+                  if (ops.isDesktop) PopupMenuItem(value: 'reveal', child: Text(l.lanFileShowInFolder)),
+                  PopupMenuItem(value: 'copy', child: Text(l.lanFileCopyPath)),
                 ],
               )
             : null,

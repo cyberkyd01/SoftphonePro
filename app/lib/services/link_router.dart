@@ -1,3 +1,4 @@
+import '../l10n/l10n.dart';
 import '../lan/lan_models.dart';
 import '../platform/desktop/launch_args.dart';
 
@@ -40,8 +41,17 @@ class DialCliAction extends LinkAction {
 /// A link that must not be acted on.
 class RejectedLinkAction extends LinkAction {
   const RejectedLinkAction(this.reason);
-  final String reason;
+  final LinkRejection reason;
 }
+
+/// Why a link was rejected; see [linkRejectionText].
+enum LinkRejection { missingArgument, httpsRequired, invalidLan }
+
+String linkRejectionText(AppLocalizations l, LinkRejection r) => switch (r) {
+  LinkRejection.missingArgument => l.callLinkMissingArgument,
+  LinkRejection.httpsRequired => l.callLinkHttpsRequired,
+  LinkRejection.invalidLan => l.callLinkInvalidLan,
+};
 
 /// https only; plain http is accepted for localhost testing.
 bool isAllowedProvisionUrl(Uri u) {
@@ -57,7 +67,7 @@ bool isAllowedProvisionUrl(Uri u) {
 LinkAction classifyLink(Uri uri) {
   if (uri.scheme == kCliScheme) {
     final v = uri.queryParameters['v'] ?? '';
-    if (v.isEmpty) return const RejectedLinkAction('Missing argument');
+    if (v.isEmpty) return const RejectedLinkAction(LinkRejection.missingArgument);
     return uri.host == 'provision' ? ProvisionCliAction(v) : DialCliAction(v);
   }
   if (uri.scheme == 'softphonepro') {
@@ -66,12 +76,12 @@ LinkAction classifyLink(Uri uri) {
         final raw = uri.queryParameters['url'] ?? '';
         final u = Uri.tryParse(raw);
         if (u == null || !isAllowedProvisionUrl(u)) {
-          return const RejectedLinkAction('Configuration links must use https');
+          return const RejectedLinkAction(LinkRejection.httpsRequired);
         }
         return ProvisionLinkAction(u);
       case 'lan':
         final t = LanTarget.parse(uri.toString());
-        if (t == null) return const RejectedLinkAction('That LAN link is not valid');
+        if (t == null) return const RejectedLinkAction(LinkRejection.invalidLan);
         return LanLinkAction(t, uri.toString());
     }
   }

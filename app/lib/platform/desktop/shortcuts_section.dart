@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/settings_controller.dart';
 import '../../ui/widgets/settings_tiles.dart';
 import 'hotkeys.dart';
@@ -21,6 +22,7 @@ class ShortcutsSection extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final bindings = resolveHotkeys(s.hotkeys);
     final mod = Platform.isMacOS ? 'Cmd' : 'Ctrl';
+    final l = context.l10n;
 
     Future<void> save(Map<HotkeyAction, HotkeyBinding?> next) =>
         ref.read(settingsProvider.notifier).update({'hotkeys': hotkeysToSettings(next)});
@@ -40,42 +42,42 @@ class ShortcutsSection extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         SettingsGroup(
-          title: 'Global hotkeys',
-          footer: 'Work from any application. Another program that already uses a combination may prevent it from registering.',
+          title: l.shortcutsGlobalTitle,
+          footer: l.shortcutsGlobalFooter,
           children: [
             for (final a in HotkeyAction.values)
               ListTile(
                 leading: const Icon(Icons.keyboard_rounded),
-                title: Text(a.label),
-                subtitle: Text(bindings[a]?.display(mac: Platform.isMacOS) ?? 'Not set'),
+                title: Text(a.label(l)),
+                subtitle: Text(bindings[a]?.display(mac: Platform.isMacOS) ?? l.commonNotSet, textDirection: bindings[a] == null ? null : TextDirection.ltr),
                 onTap: () => edit(a),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: 'Clear',
+                      tooltip: l.actionClear,
                       icon: const Icon(Icons.clear_rounded),
                       onPressed: bindings[a] == null ? null : () => save({...bindings, a: null}),
                     ),
-                    IconButton(tooltip: 'Change', icon: const Icon(Icons.edit_rounded), onPressed: () => edit(a)),
+                    IconButton(tooltip: l.shortcutsChange, icon: const Icon(Icons.edit_rounded), onPressed: () => edit(a)),
                   ],
                 ),
               ),
             ListTile(
               leading: const Icon(Icons.restart_alt_rounded),
-              title: const Text('Restore defaults'),
+              title: Text(l.shortcutsRestoreDefaults),
               onTap: () => ref.read(settingsProvider.notifier).update({'hotkeys': <String, String>{}}),
             ),
           ],
         ),
         SettingsGroup(
-          title: 'Headset and media keys',
-          footer: 'The play/pause button of a headset or keyboard is claimed only while a call is ringing or active, so music players keep it the rest of the time.',
+          title: l.shortcutsMediaTitle,
+          footer: l.shortcutsMediaFooter,
           children: [
             SwitchTile(
               key: const Key('media-keys'),
               icon: Icons.headset_mic_rounded,
-              title: 'Answer and hang up with the headset/media play-pause button',
+              title: l.shortcutsMediaSwitch,
               value: s.mediaKeys,
               onChanged: (v) => ref.read(settingsProvider.notifier).update({'mediaKeys': v}),
             ),
@@ -83,27 +85,27 @@ class ShortcutsSection extends ConsumerWidget {
               SelectTile<String>(
                 key: const Key('media-key-active'),
                 icon: Icons.touch_app_rounded,
-                title: 'During a call the button',
+                title: l.shortcutsMediaDuringCall,
                 value: s.mediaKeyActive == 'mute' ? 'mute' : 'hangup',
-                options: const {'hangup': 'Hangs up', 'mute': 'Mutes / unmutes'},
+                options: {'hangup': l.shortcutsMediaHangsUp, 'mute': l.shortcutsMediaMutes},
                 onChanged: (v) => ref.read(settingsProvider.notifier).update({'mediaKeyActive': v}),
               ),
           ],
         ),
         SettingsGroup(
-          title: 'In the app',
+          title: l.shortcutsInApp,
           children: [
             for (final e in {
-              '$mod+K': 'Search',
-              '$mod+D': 'Focus the dialer',
-              '$mod+M': 'Mute / unmute',
-              '$mod+Shift+H': 'Hold / resume',
-              '$mod+Shift+T': 'Transfer',
-              '$mod+E': 'End call',
-              '$mod+Shift+A': 'Answer',
-              '$mod+,': 'Settings',
+              '$mod+K': l.actionSearch,
+              '$mod+D': l.shortcutsFocusDialer,
+              '$mod+M': l.hotkeyMute,
+              '$mod+Shift+H': l.shortcutsHoldResume,
+              '$mod+Shift+T': l.shortcutsTransfer,
+              '$mod+E': l.shortcutsEndCall,
+              '$mod+Shift+A': l.trayNotificationAnswer,
+              '$mod+,': l.actionSettings,
             }.entries)
-              ListTile(dense: true, title: Text(e.value), trailing: Text(e.key, style: Theme.of(context).textTheme.bodySmall)),
+              ListTile(dense: true, title: Text(e.value), trailing: Text(e.key, textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.bodySmall)),
           ],
         ),
       ],
@@ -127,7 +129,7 @@ class _CaptureDialog extends StatefulWidget {
 }
 
 class _CaptureDialogState extends State<_CaptureDialog> {
-  String _hint = 'Press the new key combination';
+  String? _hint;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent) return KeyEventResult.handled;
@@ -138,7 +140,7 @@ class _CaptureDialogState extends State<_CaptureDialog> {
     final b = HotkeyBinding.fromKeyEvent(e, pressed: HardwareKeyboard.instance.logicalKeysPressed);
     if (b == null) return KeyEventResult.handled; // a modifier alone, or an unsupported key
     if (HotkeyBinding.parse(b.serialize()) == null) {
-      setState(() => _hint = 'Add Ctrl, Alt, Shift or ${Platform.isMacOS ? 'Cmd' : 'Win'} to a letter or digit');
+      setState(() => _hint = context.l10n.shortcutsNeedModifier(Platform.isMacOS ? 'Cmd' : 'Win'));
       return KeyEventResult.handled;
     }
     Navigator.of(context).pop(b);
@@ -147,17 +149,18 @@ class _CaptureDialogState extends State<_CaptureDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return AlertDialog(
-      title: Text(widget.action.label),
+      title: Text(widget.action.label(l)),
       content: Focus(
         autofocus: true,
         onKeyEvent: _onKey,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(_hint),
+          child: Text(_hint ?? l.shortcutsPressNew),
         ),
       ),
-      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel'))],
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l.actionCancel))],
     );
   }
 }

@@ -23,6 +23,7 @@ import 'package:softphonepro/ui/pages/diagnostics/quality_widgets.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../harness.dart';
+import 'package:softphonepro/l10n/app_localizations.dart';
 
 Future<void> loadInter() async {
   final loader = FontLoader('Inter');
@@ -68,7 +69,7 @@ Future<void> pumpDiag(
       child: Consumer(
         builder: (context, ref, _) {
           ref.watch(appServicesProvider);
-          return MaterialApp(
+          return MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, 
             debugShowCheckedModeBanner: false,
             theme: buildTheme(brightness),
             home: Scaffold(
@@ -322,7 +323,7 @@ void main() {
 
     testWidgets('quality panel renders gauge and charts', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, 
           theme: buildTheme(Brightness.light),
           home: Scaffold(
             body: SingleChildScrollView(

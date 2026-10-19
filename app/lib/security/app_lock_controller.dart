@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/providers.dart';
 import '../services/settings_controller.dart';
 import 'app_lock_service.dart';
@@ -41,7 +42,7 @@ class AppLockController extends Notifier<bool> {
     if (!s.appLockBiometrics) return false;
     final bio = ref.read(biometricAuthProvider);
     if (!await bio.isAvailable()) return false;
-    final ok = await bio.authenticate('Unlock SoftphonePro');
+    final ok = await bio.authenticate(ref.read(l10nProvider).appLockBiometricReason);
     if (ok) state = false;
     return ok;
   }

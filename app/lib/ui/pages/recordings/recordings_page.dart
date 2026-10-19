@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/format.dart';
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../models/call_record.dart';
 import '../../../models/chat.dart';
 import '../../../recordings/recording_exporter.dart';
@@ -61,8 +62,8 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
     if (ids.isEmpty) return;
     final ok = await confirm(
       context,
-      title: 'Delete ${ids.length} recording${ids.length == 1 ? '' : 's'}?',
-      message: 'The audio files are removed from this device. This cannot be undone.',
+      title: context.l10n.recDeleteManyTitle(ids.length),
+      message: context.l10n.recDeleteManyMessage,
     );
     if (!ok) return;
     await ref.read(recordingsProvider.notifier).delete(ids);
@@ -85,12 +86,13 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
     final acc = ref.watch(accountsProvider);
     final settings = ref.watch(settingsProvider);
     final t = Theme.of(context);
+    final l = context.l10n;
     final fctl = ref.read(recordingFilterProvider.notifier);
 
     final items = <Object>[];
     String? lastDay;
     for (final m in list) {
-      final d = dayLabel(m.time);
+      final d = dayLabel(m.time, l);
       if (d != lastDay) {
         items.add(d);
         lastDay = d;
@@ -101,20 +103,20 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
     return Column(
       children: [
         PageHeader(
-          title: _selecting ? '${_selected.length} selected' : 'Recordings',
-          leading: _selecting ? IconButton(tooltip: 'Cancel selection', onPressed: _exitSelect, icon: const Icon(Icons.close_rounded)) : null,
+          title: _selecting ? l.recSelectedCount(_selected.length) : l.recPageTitle,
+          leading: _selecting ? IconButton(tooltip: l.recCancelSelection, onPressed: _exitSelect, icon: const Icon(Icons.close_rounded)) : null,
           actions: _selecting
               ? [
                   IconButton(
                     key: const Key('rec-select-all'),
-                    tooltip: 'Select all',
+                    tooltip: l.recSelectAll,
                     onPressed: () => setState(() => _selected.addAll(list.map((m) => m.id))),
                     icon: const Icon(Icons.select_all_rounded),
                   ),
                   if (!recordingsUseDesktopExport)
                     IconButton(
                       key: const Key('rec-share-selected'),
-                      tooltip: 'Share selected',
+                      tooltip: l.recShareSelected,
                       onPressed: _selected.isEmpty
                           ? null
                           : () => ref.read(recordingExporterProvider).share([for (final m in all) if (_selected.contains(m.id)) m]),
@@ -122,7 +124,7 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
                     ),
                   IconButton(
                     key: const Key('rec-delete-selected'),
-                    tooltip: 'Delete selected',
+                    tooltip: l.recDeleteSelected,
                     onPressed: _selected.isEmpty ? null : () => _deleteSelected(all),
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
@@ -130,7 +132,7 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
               : [
                   IconButton(
                     key: const Key('rec-search-toggle'),
-                    tooltip: 'Search recordings',
+                    tooltip: l.recSearchTooltip,
                     onPressed: () => setState(() {
                       _search = !_search;
                       if (!_search) fctl.set(filter.copyWith(query: ''));
@@ -139,44 +141,45 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
                   ),
                   IconButton(
                     key: const Key('rec-select-mode'),
-                    tooltip: 'Select recordings',
+                    tooltip: l.recSelectTooltip,
                     onPressed: all.isEmpty ? null : () => setState(() => _selecting = true),
                     icon: const Icon(Icons.checklist_rounded),
                   ),
                   PopupMenuButton<String>(
-                    tooltip: 'More',
+                    tooltip: l.actionMore,
                     onSelected: (v) {
                       if (v == 'folder') _openFolder();
                       if (v == 'settings') context.go('/settings/recording');
                     },
                     itemBuilder: (_) => [
-                      if (recordingsUseDesktopExport) const PopupMenuItem(value: 'folder', child: Text('Open recordings folder')),
-                      const PopupMenuItem(value: 'settings', child: Text('Recording settings')),
+                      if (recordingsUseDesktopExport) PopupMenuItem(value: 'folder', child: Text(l.recSettingsOpenFolder)),
+                      PopupMenuItem(value: 'settings', child: Text(l.recMenuSettings)),
                     ],
                   ),
                 ],
         ),
         if (_search)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
               key: const Key('rec-search'),
               autofocus: true,
               onChanged: (v) => fctl.set(filter.copyWith(query: v)),
-              decoration: const InputDecoration(hintText: 'Search name or number', prefixIcon: Icon(Icons.search_rounded)),
+              decoration: InputDecoration(hintText: l.recSearchHint, prefixIcon: const Icon(Icons.search_rounded)),
             ),
           ),
         _FilterBar(accounts: acc.profiles.map((p) => (p.id, p.name)).toList()),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
           child: Row(
             children: [
               Icon(Icons.storage_rounded, size: 16, color: t.colorScheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '${usage.count} recording${usage.count == 1 ? '' : 's'}  ·  ${formatBytes(usage.bytes)}'
-                  '${settings.recordAutoDeleteDays > 0 ? '  ·  auto-delete after ${settings.recordAutoDeleteDays} days' : ''}',
+                  settings.recordAutoDeleteDays > 0
+                      ? l.recUsageSummaryAutoDelete(usage.count, formatBytes(usage.bytes), settings.recordAutoDeleteDays)
+                      : l.recUsageSummary(usage.count, formatBytes(usage.bytes)),
                   key: const Key('rec-usage'),
                   style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                 ),
@@ -188,24 +191,24 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
           child: list.isEmpty
               ? EmptyState(
                   icon: Icons.graphic_eq_rounded,
-                  title: all.isEmpty ? 'No recordings yet' : 'No matching recordings',
+                  title: all.isEmpty ? l.recEmptyNone : l.recEmptyNoMatch,
                   subtitle: all.isEmpty
-                      ? 'Record a call with the Record button, or turn on automatic recording in Settings.'
-                      : 'Try another search or filter.',
-                  actionLabel: all.isEmpty ? 'Recording settings' : 'Clear filters',
+                      ? l.recEmptyNoneHint
+                      : l.recEmptyNoMatchHint,
+                  actionLabel: all.isEmpty ? l.recMenuSettings : l.recClearFilters,
                   onAction: () => all.isEmpty ? context.go('/settings/recording') : fctl.set(const RecordingFilter()),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsetsDirectional.only(bottom: 24),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final it = items[i];
-                    if (it is String) return SectionHeader(it, padding: const EdgeInsets.fromLTRB(16, 16, 16, 4));
+                    if (it is String) return SectionHeader(it, padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 4));
                     final m = it as RecordingMeta;
                     return RecordingTile(
                       key: ValueKey('rec-${m.id}'),
                       meta: m,
-                      title: recordingTitle(m, contacts),
+                      title: recordingTitle(m, contacts, l),
                       accountName: acc.byId(m.accountId)?.name ?? '',
                       expanded: _open == m.id && !_selecting,
                       selecting: _selecting,
@@ -238,19 +241,24 @@ class _FilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final f = ref.watch(recordingFilterProvider);
     final ctl = ref.read(recordingFilterProvider.notifier);
+    final l = context.l10n;
     final range = f.range;
-    final fmt = DateFormat.MMMd();
+    final fmt = DateFormat.MMMd(Localizations.localeOf(context).toString());
     return SizedBox(
       height: 52,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
-          for (final (label, dir) in [('All', null), ('Incoming', CallDirection.incoming), ('Outgoing', CallDirection.outgoing)])
+          for (final (id, label, dir) in [
+            ('All', l.recFilterAll, null),
+            ('Incoming', l.recFilterIncoming, CallDirection.incoming),
+            ('Outgoing', l.recFilterOutgoing, CallDirection.outgoing),
+          ])
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsetsDirectional.only(end: 8),
               child: ChoiceChip(
-                key: Key('rec-dir-$label'),
+                key: Key('rec-dir-$id'),
                 label: Text(label),
                 selected: f.direction == dir,
                 onSelected: (_) => ctl.set(f.copyWith(direction: dir)),
@@ -258,25 +266,25 @@ class _FilterBar extends ConsumerWidget {
             ),
           if (accounts.length > 1)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsetsDirectional.only(end: 8),
               child: PopupMenuButton<String>(
                 key: const Key('rec-account-filter'),
-                tooltip: 'Filter by account',
+                tooltip: l.recFilterByAccount,
                 onSelected: (id) => ctl.set(f.copyWith(accountId: id.isEmpty ? null : id)),
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: '', child: Text('All accounts')),
+                  PopupMenuItem(value: '', child: Text(l.recFilterAllAccounts)),
                   for (final a in accounts) PopupMenuItem(value: a.$1, child: Text(a.$2)),
                 ],
                 child: Chip(
                   avatar: const Icon(Icons.dns_rounded, size: 16),
-                  label: Text(f.accountId == null ? 'All accounts' : accounts.firstWhere((a) => a.$1 == f.accountId, orElse: () => ('', 'Account')).$2),
+                  label: Text(f.accountId == null ? l.recFilterAllAccounts : accounts.firstWhere((a) => a.$1 == f.accountId, orElse: () => ('', l.recFilterAccountFallback)).$2),
                 ),
               ),
             ),
           ActionChip(
             key: const Key('rec-date-filter'),
             avatar: const Icon(Icons.date_range_rounded, size: 16),
-            label: Text(range == null ? 'Any date' : '${fmt.format(range.start)} - ${fmt.format(range.end)}'),
+            label: Text(range == null ? l.recFilterAnyDate : l.recFilterDateRange(fmt.format(range.start), fmt.format(range.end))),
             onPressed: () async {
               final now = DateTime.now();
               final r = await showDateRangePicker(
@@ -290,11 +298,11 @@ class _FilterBar extends ConsumerWidget {
           ),
           if (range != null)
             Padding(
-              padding: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsetsDirectional.only(start: 8),
               child: ActionChip(
                 key: const Key('rec-date-clear'),
                 avatar: const Icon(Icons.close_rounded, size: 16),
-                label: const Text('Clear dates'),
+                label: Text(l.recFilterClearDates),
                 onPressed: () => ctl.set(f.copyWith(range: null)),
               ),
             ),
@@ -329,6 +337,7 @@ class RecordingTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final colors = context.colors;
     final m = meta;
     final exists = File(m.path).existsSync();
@@ -361,12 +370,12 @@ class RecordingTile extends ConsumerWidget {
               if (!exists) Icon(Icons.error_outline_rounded, size: 18, color: colors.endRed),
               Container(
                 key: Key('rec-badge-${m.id}'),
-                margin: const EdgeInsets.only(right: 8),
+                margin: const EdgeInsetsDirectional.only(end: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: t.colorScheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(999)),
                 child: Text(recordFormatBadge(m.format), style: t.textTheme.labelSmall),
               ),
-              Text(timeLabel(m.time), style: t.textTheme.bodySmall),
+              Text(timeLabel(m.time, l), style: t.textTheme.bodySmall),
             ],
           ),
           onTap: onTap,
@@ -374,18 +383,18 @@ class RecordingTile extends ConsumerWidget {
         ),
         if (expanded)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
             child: Card(
               margin: EdgeInsets.zero,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (exists)
                       RecordingPlayer(path: m.path, format: m.format, knownDuration: Duration(milliseconds: m.durationMs))
                     else
-                      Text('The audio file is missing from this device.', key: const Key('rec-missing'), style: TextStyle(color: colors.endRed)),
+                      Text(l.recMissingFile, key: const Key('rec-missing'), style: TextStyle(color: colors.endRed)),
                     _RelatedLinks(meta: m),
                     RecordingActions(meta: m, exists: exists),
                   ],
@@ -410,7 +419,7 @@ class _RelatedLinks extends ConsumerWidget {
     final rel = [for (final id in meta.relatedIds) all.where((m) => m.id == id).firstOrNull].whereType<RecordingMeta>().toList();
     if (rel.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsetsDirectional.only(top: 4),
       child: Wrap(
         spacing: 8,
         children: [
@@ -418,7 +427,7 @@ class _RelatedLinks extends ConsumerWidget {
             ActionChip(
               key: Key('rec-related-${r.id}'),
               avatar: const Icon(Icons.link_rounded, size: 16),
-              label: Text('Related: ${recordingTitle(r, contacts)}'),
+              label: Text(context.l10n.recRelated(recordingTitle(r, contacts, context.l10n))),
               onPressed: () => context.go('/recordings?id=${r.id}'),
             ),
         ],
@@ -435,6 +444,7 @@ class RecordingActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
     final m = meta;
     final desktop = recordingsUseDesktopExport;
     final exporter = ref.read(recordingExporterProvider);
@@ -447,14 +457,14 @@ class RecordingActions extends ConsumerWidget {
           onPressed: () async {
             final title = await promptText(
               context,
-              title: 'Rename recording',
+              title: l.recRenameTitle,
               initial: m.title.isNotEmpty ? m.title : (m.remoteName.isNotEmpty ? m.remoteName : m.remote),
-              hint: 'Name',
+              hint: l.recRenameHint,
             );
             if (title != null) await ref.read(recordingsProvider.notifier).rename(m.id, title);
           },
           icon: const Icon(Icons.edit_rounded, size: 18),
-          label: const Text('Rename'),
+          label: Text(l.actionRename),
         ),
         if (desktop) ...[
           TextButton.icon(
@@ -463,20 +473,20 @@ class RecordingActions extends ConsumerWidget {
                 ? () async {
                     try {
                       final dest = await exporter.saveAs(m);
-                      if (dest != null) notices.show('Saved to $dest');
+                      if (dest != null) notices.show(l.recSavedTo(dest));
                     } catch (e) {
-                      notices.error('Could not save the recording', details: '$e');
+                      notices.error(l.recSaveFailed, details: '$e');
                     }
                   }
                 : null,
             icon: const Icon(Icons.save_alt_rounded, size: 18),
-            label: const Text('Save as...'),
+            label: Text(l.recSaveAs),
           ),
           TextButton.icon(
             key: const Key('rec-reveal'),
             onPressed: exists ? () => exporter.reveal(m.path) : null,
             icon: const Icon(Icons.folder_open_rounded, size: 18),
-            label: Text(Platform.isMacOS ? 'Show in Finder' : 'Show in folder'),
+            label: Text(Platform.isMacOS ? l.recShowInFinder : l.recShowInFolder),
           ),
         ] else
           TextButton.icon(
@@ -486,19 +496,19 @@ class RecordingActions extends ConsumerWidget {
                     try {
                       await exporter.share([m]);
                     } catch (e) {
-                      notices.error('Could not share the recording', details: '$e');
+                      notices.error(l.recShareFailed, details: '$e');
                     }
                   }
                 : null,
             icon: const Icon(Icons.ios_share_rounded, size: 18),
-            label: const Text('Share'),
+            label: Text(l.actionShare),
           ),
         if (m.remote.isNotEmpty)
           TextButton.icon(
             key: const Key('rec-view-call'),
             onPressed: () => context.push('/recents/detail?n=${Uri.encodeQueryComponent(m.remote)}'),
             icon: const Icon(Icons.history_rounded, size: 18),
-            label: const Text('View call'),
+            label: Text(l.recViewCall),
           ),
         TextButton.icon(
           key: const Key('rec-delete'),
@@ -506,13 +516,13 @@ class RecordingActions extends ConsumerWidget {
           onPressed: () async {
             final ok = await confirm(
               context,
-              title: 'Delete this recording?',
-              message: 'The audio file is removed from this device. This cannot be undone.',
+              title: l.recDeleteOneTitle,
+              message: l.recDeleteOneMessage,
             );
             if (ok) await ref.read(recordingsProvider.notifier).delete([m.id]);
           },
           icon: const Icon(Icons.delete_outline_rounded, size: 18),
-          label: const Text('Delete'),
+          label: Text(l.actionDelete),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../services/engine_controller.dart';
 import '../../widgets/settings_tiles.dart';
 
@@ -48,7 +49,7 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
   Future<void> _guard<T>(Future<T> Function(SipEngine e) f) async {
     final e = _engine;
     if (e == null) {
-      setState(() => _error = 'The SIP engine is not running.');
+      setState(() => _error = ref.read(l10nProvider).diagAudioEngineNotRunning);
       return;
     }
     try {
@@ -90,6 +91,7 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final l = context.l10n;
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -99,14 +101,14 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
             child: Text(_error!, style: TextStyle(color: t.colorScheme.error)),
           ),
         SettingsGroup(
-          title: 'Microphone',
-          footer: 'The level meter reads the audio device, which the engine opens during a call or the echo test.',
+          title: l.diagAudioMicrophone,
+          footer: l.diagAudioMicFooter,
           children: [
             SwitchTile(
               key: const Key('audio-meter'),
               icon: Icons.mic_rounded,
-              title: 'Level meter',
-              subtitle: 'Speak and watch the bar move',
+              title: l.diagAudioLevelMeter,
+              subtitle: l.diagAudioLevelMeterSub,
               value: _meter,
               onChanged: (v) {
                 setState(() => _meter = v);
@@ -117,23 +119,23 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
               child: Column(
                 children: [
-                  _LevelBar(key: const Key('mic-bar'), label: 'Mic', value: _mic / 255),
+                  _LevelBar(key: const Key('mic-bar'), label: l.diagAudioMic, value: _mic / 255),
                   const SizedBox(height: 8),
-                  _LevelBar(key: const Key('spk-bar'), label: 'Speaker', value: _spk / 255),
+                  _LevelBar(key: const Key('spk-bar'), label: l.diagAudioSpeaker, value: _spk / 255),
                 ],
               ),
             ),
           ],
         ),
         SettingsGroup(
-          title: 'Echo test',
-          footer: 'Plays your voice back through the speaker. Use headphones to avoid feedback.',
+          title: l.diagAudioEchoTest,
+          footer: l.diagAudioEchoFooter,
           children: [
             SwitchTile(
               key: const Key('audio-echo'),
               icon: Icons.hearing_rounded,
-              title: 'Echo test',
-              subtitle: _echo ? 'Active: speak now' : 'Mic to speaker loopback',
+              title: l.diagAudioEchoTest,
+              subtitle: _echo ? l.diagAudioEchoActive : l.diagAudioEchoIdle,
               value: _echo,
               onChanged: (v) async {
                 await _guard<void>((e) => e.loopback(v));
@@ -143,12 +145,12 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
           ],
         ),
         SettingsGroup(
-          title: 'Speaker test',
+          title: l.diagAudioSpeakerTest,
           children: [
             ListTile(
               leading: const Icon(Icons.volume_up_rounded),
-              title: const Text('Play test tone'),
-              subtitle: Text(_tone == null ? 'Plays through the selected speaker' : 'Playing $_tone'),
+              title: Text(l.diagAudioPlayTone),
+              subtitle: Text(_tone == null ? l.diagAudioPlayToneSub : (_tone == 'DTMF' ? l.diagAudioPlayingDtmf : l.diagAudioPlayingRingback)),
               trailing: Wrap(
                 spacing: 8,
                 children: [
@@ -166,12 +168,12 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
                       await _guard((e) => e.playTone(ToneKind.ringback, loop: true));
                       if (mounted && _error == null) setState(() => _tone = 'ringback');
                     },
-                    child: const Text('Ringback'),
+                    child: Text(l.diagAudioRingback),
                   ),
                   if (_tone != null)
                     IconButton(
                       key: const Key('tone-stop'),
-                      tooltip: 'Stop',
+                      tooltip: l.diagWizStop,
                       icon: const Icon(Icons.stop_circle_outlined),
                       onPressed: () async {
                         await _guard((e) => e.stopTone());
@@ -184,13 +186,13 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
           ],
         ),
         SettingsGroup(
-          title: 'Devices',
+          title: l.diagAudioDevices,
           children: [
             NavTile(
               key: const Key('audio-devices'),
               icon: Icons.settings_voice_rounded,
-              title: 'Choose microphone and speaker',
-              subtitle: 'Opens Settings > Audio',
+              title: l.diagAudioChooseDevices,
+              subtitle: l.diagAudioChooseDevicesSub,
               onTap: () => context.go('/settings/audio'),
             ),
           ],
@@ -209,17 +211,22 @@ class _LevelBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context);
+    final l = context.l10n;
     final v = value.clamp(0.0, 1.0);
     final color = v > 0.9 ? c.regFail : (v > 0.7 ? c.regWarn : c.regOk);
     return Semantics(
-      label: '$label level ${(v * 100).round()} percent',
+      label: l.diagAudioLevelSemantics(label, (v * 100).round()),
       child: Row(
         children: [
           SizedBox(width: 64, child: Text(label, style: t.textTheme.labelMedium)),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(value: v, minHeight: 12, color: color, backgroundColor: t.colorScheme.surfaceContainerHighest),
+            // Level bars always fill left to right, like a meter.
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(value: v, minHeight: 12, color: color, backgroundColor: t.colorScheme.surfaceContainerHighest),
+              ),
             ),
           ),
         ],

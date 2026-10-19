@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
+import 'package:flutter/widgets.dart' show Locale;
+
+import '../l10n/l10n.dart';
 import '../models/account_profile.dart';
 import '../models/app_settings.dart';
 import 'calls_controller.dart';
@@ -15,28 +18,28 @@ import 'settings_controller.dart';
 enum AccountStatus { disabled, offline, registering, registered, failed }
 
 /// Human readable explanation of a registration failure.
-String describeRegistrationFailure(AccountInfo i) {
+String describeRegistrationFailure(AccountInfo i, AppLocalizations l) {
   final err = i.lastError;
   if (err != null && err.trim().isNotEmpty) return err;
   switch (i.regCode) {
     case 401:
     case 403:
-      return 'Wrong username or password (${i.regCode})';
+      return l.acctRegWrongCredentials(i.regCode);
     case 404:
-      return 'Account not found on the server (404)';
+      return l.acctRegNotFound;
     case 408:
-      return 'Server did not answer (408)';
+      return l.acctRegNoAnswer;
     case 423:
-      return 'Registration interval too short (423)';
+      return l.acctRegIntervalTooShort;
     case 480:
-      return 'Server temporarily unavailable (480)';
+      return l.acctRegTemporarilyUnavailable;
     case 503:
-      return 'Service unavailable (503)';
+      return l.acctRegServiceUnavailable;
     case 0:
-      return i.statusText.isNotEmpty ? i.statusText : 'Registration failed';
+      return i.statusText.isNotEmpty ? i.statusText : l.acctRegFailed;
   }
   final r = i.regReason.isNotEmpty ? i.regReason : i.statusText;
-  return r.isNotEmpty ? '$r (${i.regCode})' : 'Registration failed (${i.regCode})';
+  return r.isNotEmpty ? '$r (${i.regCode})' : l.acctRegFailedWithCode(i.regCode);
 }
 
 class AccountsState {
@@ -48,7 +51,11 @@ class AccountsState {
     this.applied = const {},
     this.retryHalted = const {},
     this.usingBackup = const {},
+    this.l10n,
   });
+
+  /// Strings for derived texts such as [errorOf]; null = English.
+  final AppLocalizations? l10n;
 
   /// Accounts whose registration failed for good (401/403/404): no automatic
   /// retries until the profile changes or the user taps register.
@@ -118,7 +125,7 @@ class AccountsState {
   String? errorOf(String id) {
     final i = infos[id];
     if (i == null || statusOf(id) != AccountStatus.failed) return null;
-    return describeRegistrationFailure(i);
+    return describeRegistrationFailure(i, l10n ?? lookupAppLocalizations(const Locale('en')));
   }
 
   int get newVoicemail =>
@@ -174,6 +181,7 @@ class AccountsController extends Notifier<AccountsState> {
             mwi: state.mwi,
             retryHalted: state.retryHalted,
             usingBackup: state.usingBackup,
+            l10n: state.l10n,
           );
           await _sync();
         });
@@ -184,7 +192,13 @@ class AccountsController extends Notifier<AccountsState> {
         _enqueue(_publishPresence);
       }
     });
-    return AccountsState(profiles: ref.read(bootDataProvider).profiles);
+    // Deferred: the locale can change while the widget tree is building.
+    ref.listen<AppLocalizations>(l10nProvider, (prev, next) {
+      Future.microtask(() {
+        if (ref.mounted) state = _with(l10n: next);
+      });
+    });
+    return AccountsState(profiles: ref.read(bootDataProvider).profiles, l10n: ref.read(l10nProvider));
   }
 
   void _enqueue(Future<void> Function() job) {
@@ -217,6 +231,7 @@ class AccountsController extends Notifier<AccountsState> {
       applied: state.applied,
       retryHalted: state.retryHalted,
       usingBackup: state.usingBackup,
+      l10n: state.l10n,
     );
     _enqueue(_sync);
     await _persist();
@@ -290,6 +305,7 @@ class AccountsController extends Notifier<AccountsState> {
     Set<String>? applied,
     Set<String>? retryHalted,
     Set<String>? usingBackup,
+    AppLocalizations? l10n,
   }) => AccountsState(
     profiles: profiles ?? state.profiles,
     infos: infos ?? state.infos,
@@ -298,6 +314,7 @@ class AccountsController extends Notifier<AccountsState> {
     applied: applied ?? state.applied,
     retryHalted: retryHalted ?? state.retryHalted,
     usingBackup: usingBackup ?? state.usingBackup,
+    l10n: l10n ?? state.l10n,
   );
 
   void _publishFlags() {
@@ -320,7 +337,7 @@ class AccountsController extends Notifier<AccountsState> {
     try {
       await _engineCtl.engine.setRegistration(AccountRef.uid(id), register);
     } catch (e) {
-      ref.read(noticeProvider.notifier).error('Could not change registration', details: '$e');
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).acctNoticeRegistrationChange, details: '$e');
     }
   }
 
@@ -447,7 +464,7 @@ class AccountsController extends Notifier<AccountsState> {
         }
       } on EngineException catch (e) {
         ref.read(noticeProvider.notifier).error(
-          'Could not apply account "${p.name}"',
+          ref.read(l10nProvider).acctNoticeApplyFailed(p.name),
           details: e.toString(),
         );
       }
@@ -520,7 +537,7 @@ class AccountsController extends Notifier<AccountsState> {
         _publishFlags();
         final p = state.byId(id);
         if (p != null) {
-          ref.read(noticeProvider.notifier).show('Back on the primary server for ${p.name}');
+          ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).acctNoticeBackOnPrimary(p.name));
         }
       }
     } else if (info.regState == RegState.failed) {
@@ -560,7 +577,7 @@ class AccountsController extends Notifier<AccountsState> {
     _retry.remove(id)?.cancel();
     _onBackup.add(id);
     _publishFlags();
-    ref.read(noticeProvider.notifier).show('Using backup server for ${p.name}');
+    ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).acctNoticeUsingBackup(p.name));
     _enqueue(_sync);
     _scheduleProbe(id);
     return true;

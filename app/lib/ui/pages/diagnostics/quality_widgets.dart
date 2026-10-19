@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../../core/theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../../models/call_record.dart';
 import '../../widgets/basic_widgets.dart';
 
@@ -26,7 +27,7 @@ class MosGauge extends StatelessWidget {
     final t = Theme.of(context);
     final color = mosColor(context, mos);
     return Semantics(
-      label: 'MOS ${mos > 0 ? mos.toStringAsFixed(1) : 'measuring'}, ${QualityIndicator.labelFor(mos)}',
+      label: context.l10n.diagQualityMosSemantics(mos > 0 ? mos.toStringAsFixed(1) : context.l10n.diagQualityMeasuring, QualityIndicator.labelFor(mos, context.l10n)),
       child: SizedBox(
         width: size,
         height: size * 0.62,
@@ -46,7 +47,7 @@ class MosGauge extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(mos > 0 ? mos.toStringAsFixed(1) : '--', style: tabular(t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700, color: color))),
-                Text(QualityIndicator.labelFor(mos), style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                Text(QualityIndicator.labelFor(mos, context.l10n), style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
               ],
             ),
           ],
@@ -104,10 +105,11 @@ class QualityChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final last = values.isEmpty ? null : values.last;
     final mx = values.isEmpty ? 0.0 : values.reduce(math.max);
     return Semantics(
-      label: '$title chart${last == null ? '' : ', latest ${last.toStringAsFixed(decimals)} $unit'}',
+      label: last == null ? l.diagQualityChartSemantics(title) : l.diagQualityChartSemanticsLatest(title, '${last.toStringAsFixed(decimals)} $unit'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -116,7 +118,7 @@ class QualityChart extends StatelessWidget {
               Text(title, style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
               const Spacer(),
               Text(
-                last == null ? '--' : '${last.toStringAsFixed(decimals)} $unit   max ${mx.toStringAsFixed(decimals)}',
+                last == null ? '--' : l.diagQualityLatestMax('${last.toStringAsFixed(decimals)} $unit', mx.toStringAsFixed(decimals)),
                 style: tabular(t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
               ),
             ],
@@ -202,6 +204,7 @@ class QualityPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final l = context.l10n;
     final c = context.colors;
     final mos = stats?.mos ?? (samples.isNotEmpty ? samples.last.mos : (summary?.mosAvg ?? 0));
     final s = stats;
@@ -219,7 +222,7 @@ class QualityPanel extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4, bottom: 4),
             child: Center(
               child: Text(
-                'Average ${summary!.mosAvg.toStringAsFixed(1)}  ·  worst ${summary!.mosMin.toStringAsFixed(1)}',
+                l.diagQualityAvgWorst(summary!.mosAvg.toStringAsFixed(1), summary!.mosMin.toStringAsFixed(1)),
                 style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
               ),
             ),
@@ -229,27 +232,27 @@ class QualityPanel extends StatelessWidget {
           Wrap(
             spacing: 6,
             children: [
-              stat('Codec', s.codec.isEmpty ? '--' : s.codec),
-              stat('Loss', '${s.rx.lossPct.toStringAsFixed(1)} %'),
-              stat('Jitter', '${s.rx.jitterMs.toStringAsFixed(1)} ms'),
+              stat(l.diagQualityCodec, s.codec.isEmpty ? '--' : s.codec),
+              stat(l.diagQualityLoss, '${s.rx.lossPct.toStringAsFixed(1)} %'),
+              stat(l.diagQualityJitter, '${s.rx.jitterMs.toStringAsFixed(1)} ms'),
               stat('RTT', '${s.rtt.lastMs.toStringAsFixed(0)} ms'),
-              stat('Rx', '${s.rx.packets} pkts'),
-              stat('Tx', '${s.tx.packets} pkts'),
-              stat('Media', s.srtp ? 'SRTP' : 'RTP'),
+              stat('Rx', l.diagQualityPackets(s.rx.packets)),
+              stat('Tx', l.diagQualityPackets(s.tx.packets)),
+              stat(l.diagQualityMedia, s.srtp ? 'SRTP' : 'RTP'),
               if (s.ice.state != 'none') stat('ICE', s.ice.state),
             ],
           ),
         const SizedBox(height: 12),
         if (samples.length < 2 && s == null)
-          Text('No time series was recorded for this call.', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant))
+          Text(l.diagQualityNoSeries, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant))
         else ...[
           QualityChart(title: 'MOS', values: [for (final q in samples) q.mos], color: mosColor(context, mos), minY: 1, maxY: 5),
           const SizedBox(height: 12),
-          QualityChart(title: 'Jitter', unit: 'ms', values: [for (final q in samples) q.jitter], color: c.holdAmber),
+          QualityChart(title: l.diagQualityJitter, unit: 'ms', values: [for (final q in samples) q.jitter], color: c.holdAmber),
           const SizedBox(height: 12),
-          QualityChart(title: 'Packet loss', unit: '%', values: [for (final q in samples) q.loss], color: c.regFail, decimals: 2),
+          QualityChart(title: l.diagQualityPacketLoss, unit: '%', values: [for (final q in samples) q.loss], color: c.regFail, decimals: 2),
           const SizedBox(height: 12),
-          QualityChart(title: 'Round-trip time', unit: 'ms', values: [for (final q in samples) q.rtt], color: t.colorScheme.primary, decimals: 0),
+          QualityChart(title: l.diagQualityRtt, unit: 'ms', values: [for (final q in samples) q.rtt], color: t.colorScheme.primary, decimals: 0),
         ],
       ],
     );

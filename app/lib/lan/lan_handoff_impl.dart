@@ -7,6 +7,7 @@ import 'package:lan_link/lan_link.dart' as ll;
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../audio/announcement_service.dart';
+import '../l10n/l10n.dart';
 import '../platform/lan_handoff.dart';
 import '../services/accounts_controller.dart';
 import '../services/calls_controller.dart';
@@ -80,6 +81,7 @@ class LanHandoffImpl implements LanCallPolicy {
   final _cancelledPrompts = StreamController<String>.broadcast();
   bool _disposed = false;
 
+  AppLocalizations get _l => _ref.read(l10nProvider);
   LanController get _lan => _ref.read(lanControllerProvider.notifier);
   CallsController get _calls => _ref.read(callsProvider.notifier);
   EngineController get _engCtl => _ref.read(engineProvider.notifier);
@@ -154,27 +156,27 @@ class LanHandoffImpl implements LanCallPolicy {
   Future<void> _handoff(int cid, String peerId, {required bool attended, required bool ringing}) async {
     final lan = _lan;
     final link = lan.link;
-    if (link == null) throw const LanHandoffException('LAN Link is turned off');
+    if (link == null) throw LanHandoffException(_l.lanHoOff);
     final peer = link.peerById(peerId);
-    if (peer == null || !peer.trusted) throw const LanHandoffException('Pair with that device first');
-    if (!peer.online) throw LanHandoffException('${peer.name} is offline');
-    if (_sessions.containsKey(cid)) throw const LanHandoffException('This call is already being handed off');
+    if (peer == null || !peer.trusted) throw LanHandoffException(_l.lanHoPairFirst);
+    if (!peer.online) throw LanHandoffException(_l.lanHoOffline(peer.name));
+    if (_sessions.containsKey(cid)) throw LanHandoffException(_l.lanHoAlready);
     final call = _calls.rawCall(cid);
-    if (call == null || call.isEnded) throw const LanHandoffException('The call has already ended');
+    if (call == null || call.isEnded) throw LanHandoffException(_l.lanHoEnded);
     if (ringing ? !call.isRingingIn : !call.isConfirmed) {
-      throw const LanHandoffException('Wait until the call is connected');
+      throw LanHandoffException(_l.lanHoWaitConnected);
     }
     if (call.info.uid == kLanAccountUid && call.lan != null) {
-      throw const LanHandoffException('LAN calls cannot be handed off');
+      throw LanHandoffException(_l.lanHoLanCall);
     }
     final profile = _ref.read(accountsProvider).byId(call.accountId);
     final target = _referTarget(peer, profile?.config.domain);
     final mode = target != null ? ll.HandoffMode.refer : ll.HandoffMode.relay;
     if (mode == ll.HandoffMode.relay && !peer.hasSip) {
-      throw LanHandoffException('${peer.name} cannot take calls over the network (LAN calling is off there)');
+      throw LanHandoffException(_l.lanHoPeerNoLan(peer.name));
     }
     if (mode == ll.HandoffMode.relay && lan.link!.info.sipPort == 0) {
-      throw const LanHandoffException('LAN calling is not available on this device');
+      throw LanHandoffException(_l.lanHoNoLanHere);
     }
     final id = _hex(12);
     final callerName = call.info.remoteDisplay;
@@ -200,19 +202,19 @@ class LanHandoffImpl implements LanCallPolicy {
       final res = await link.offerHandoff(peerId, offer);
       if (!res.accepted) {
         throw LanHandoffException(switch (res.outcome) {
-          ll.HandoffOutcome.declined => '${peer.name} declined the call. It stays with you.',
-          ll.HandoffOutcome.timeout => '${peer.name} did not respond. The call stays with you.',
-          ll.HandoffOutcome.cancelled => 'The hand-off was cancelled. The call stays with you.',
-          _ => 'Could not reach ${peer.name}${res.reason == null ? '' : ' (${res.reason})'}. The call stays with you.',
+          ll.HandoffOutcome.declined => _l.lanHoDeclined(peer.name),
+          ll.HandoffOutcome.timeout => _l.lanHoTimeout(peer.name),
+          ll.HandoffOutcome.cancelled => _l.lanHoCancelled,
+          _ => res.reason == null ? _l.lanHoUnreachable(peer.name) : _l.lanHoUnreachableReason(peer.name, res.reason!),
         });
       }
       if (_calls.rawCall(cid)?.isEnded ?? true) {
-        throw const LanHandoffException('The call ended before it could be handed off');
+        throw LanHandoffException(_l.lanHoEndedBefore);
       }
       if (!ringing && !attended) {
         await _ref.read(announcementServiceProvider).playTransferNotice(cid);
         if (_calls.rawCall(cid)?.isEnded ?? true) {
-          throw const LanHandoffException('The call ended before it could be handed off');
+          throw LanHandoffException(_l.lanHoEndedBefore);
         }
       }
       if (mode == ll.HandoffMode.refer) {
@@ -221,9 +223,9 @@ class LanHandoffImpl implements LanCallPolicy {
         if (!peer.hasSip) {
           // CallsController no longer reacts to this failure: keep the call.
           await _guard(() => _engine.unhold(cid));
-          throw LanHandoffException('The phone system refused the transfer and ${peer.name} cannot take LAN calls');
+          throw LanHandoffException(_l.lanHoPbxRefused(peer.name));
         }
-        _ref.read(noticeProvider.notifier).show('Transfer through the phone system failed. Relaying over the network instead.');
+        _ref.read(noticeProvider.notifier).show(_l.lanHoPbxFailedRelaying);
       }
       await _doRelay(session, ringing: ringing, attended: attended);
     } catch (e) {
@@ -245,13 +247,13 @@ class LanHandoffImpl implements LanCallPolicy {
     if (ringing) {
       await _calls.redirectTo(s.cid, target);
       _drop(s);
-      _ref.read(noticeProvider.notifier).show('Call sent to ${s.peerName}');
+      _ref.read(noticeProvider.notifier).show(_l.lanHoSentTo(s.peerName));
       return true;
     }
     if (attended) {
       final consult = await _calls.startConsult(s.cid, target);
       _drop(s);
-      if (consult == null) throw const LanHandoffException('Could not call the other device through the phone system');
+      if (consult == null) throw LanHandoffException(_l.lanHoConsultFailed);
       return true;
     }
     final completer = Completer<bool?>();
@@ -322,14 +324,14 @@ class LanHandoffImpl implements LanCallPolicy {
     final link = lan.link;
     final peer = link?.peerById(s.peerId);
     if (link == null || peer == null || peer.sipUri == null) {
-      throw LanHandoffException('${s.peerName} is no longer reachable');
+      throw LanHandoffException(_l.lanHoNoLongerReachable(s.peerName));
     }
     final cid = s.cid;
     var call = _calls.rawCall(cid)!;
     if (ringing) {
       await _engine.answer(cid);
       if (!await _waitConfirmed(cid, const Duration(seconds: 15))) {
-        throw const LanHandoffException('Could not answer the call to hand it over');
+        throw LanHandoffException(_l.lanHoCouldNotAnswer);
       }
       call = _calls.rawCall(cid) ?? call;
     }
@@ -362,7 +364,7 @@ class LanHandoffImpl implements LanCallPolicy {
     final lanCid = await _calls.placeLanCall(peer.sipUri!, headers: headers, meta: meta, silent: !attended);
     if (lanCid == null) {
       await _restoreAfterFailure(s, wasMuted: wasMuted);
-      throw LanHandoffException('Could not call ${s.peerName} over the network. The call stays with you.');
+      throw LanHandoffException(_l.lanHoCouldNotCall(s.peerName));
     }
     s.lanCid = lanCid;
     if (attended) {
@@ -374,7 +376,7 @@ class LanHandoffImpl implements LanCallPolicy {
     if (!ok || _sessions[cid] != s) {
       if (_calls.rawCall(lanCid)?.isEnded == false) await _guard(() => _engine.hangup(lanCid));
       await _restoreAfterFailure(s, wasMuted: wasMuted);
-      throw LanHandoffException('${s.peerName} did not answer. The call stays with you.');
+      throw LanHandoffException(_l.lanHoNoAnswer(s.peerName));
     }
     if (_calls.rawCall(cid)?.isEnded ?? true) {
       await _guard(() => _engine.hangup(lanCid));
@@ -406,10 +408,10 @@ class LanHandoffImpl implements LanCallPolicy {
     await _engine.detachLocal(lanCid, true);
     s.phase = RelayPhase.relayed;
     s.since = DateTime.now();
-    _calls.markHandedOff(s.cid, 'Handed off to ${s.peerName}');
+    _calls.markHandedOff(s.cid, _l.lanHoHandedOffReason(s.peerName));
     _relay.put(s);
     unawaited(_lan.link?.completeHandoff(s.peerId, s.handoffId).catchError((_) {}));
-    _ref.read(noticeProvider.notifier).show('Call relayed to ${s.peerName}');
+    _ref.read(noticeProvider.notifier).show(_l.lanHoRelayed(s.peerName));
   }
 
   @override
@@ -425,7 +427,7 @@ class LanHandoffImpl implements LanCallPolicy {
     if (s == null) return false;
     final lanCall = _calls.rawCall(consultCid);
     if (lanCall == null || !lanCall.isConfirmed) {
-      _ref.read(noticeProvider.notifier).show('Wait for ${s.peerName} to answer first');
+      _ref.read(noticeProvider.notifier).show(_l.lanHoWaitAnswer(s.peerName));
       return false;
     }
     try {
@@ -434,7 +436,7 @@ class LanHandoffImpl implements LanCallPolicy {
       await _bridge(s);
       return true;
     } on EngineException catch (e) {
-      _ref.read(noticeProvider.notifier).error('Hand-off failed', details: '$e');
+      _ref.read(noticeProvider.notifier).error(_l.lanHoFailed, details: '$e');
       return false;
     }
   }
@@ -452,7 +454,7 @@ class LanHandoffImpl implements LanCallPolicy {
     _calls.clearHandedOff(cid);
     unawaited(_lan.link?.cancelHandoff(s.peerId, s.handoffId).catchError((_) {}));
     _drop(s);
-    _ref.read(noticeProvider.notifier).show('Call taken back from ${s.peerName}');
+    _ref.read(noticeProvider.notifier).show(_l.lanHoTakenBack(s.peerName));
   }
 
   /// Ends a relayed call completely (both legs).
@@ -481,7 +483,7 @@ class LanHandoffImpl implements LanCallPolicy {
             if (other != null) unawaited(_guard(() => _engine.hangup(other)));
           } else {
             unawaited(_guard(() => _engine.unhold(s.cid)));
-            _ref.read(noticeProvider.notifier).show('${s.peerName} ended the consultation. The call is back with you.');
+            _ref.read(noticeProvider.notifier).show(_l.lanHoConsultEnded(s.peerName));
           }
           unawaited(_lan.link?.cancelHandoff(s.peerId, s.handoffId).catchError((_) {}));
           _drop(s);
@@ -557,7 +559,7 @@ class LanHandoffImpl implements LanCallPolicy {
     } on LanHandoffException catch (e) {
       _ref.read(noticeProvider.notifier).show(e.message);
     } catch (e) {
-      _ref.read(noticeProvider.notifier).error('Could not hand the call to ${r.peer.name}', details: '$e');
+      _ref.read(noticeProvider.notifier).error(_l.lanHoCouldNotHand(r.peer.name), details: '$e');
     }
   }
 

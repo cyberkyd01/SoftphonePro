@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
+import '../../l10n/l10n.dart';
 import '../../services/accounts_controller.dart';
 import '../../services/calls_controller.dart';
 import '../../services/contacts_controller.dart';
@@ -22,20 +23,21 @@ class MorePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final acc = ref.watch(accountsProvider);
     final vm = acc.newVoicemail;
+    final l = context.l10n;
     return ListView(
       children: [
-        const PageHeader(title: 'More'),
+        PageHeader(title: l.morePageTitle),
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            NavTile(icon: Icons.grid_view_rounded, title: 'Presence', subtitle: 'Busy lamp field', onTap: () => context.go('/presence')),
-            NavTile(key: const Key('more-retrieve-parked'), icon: Icons.local_parking_rounded, title: 'Retrieve parked call', subtitle: 'Dial a park slot', onTap: () => promptRetrieveParked(context, ref)),
-            NavTile(icon: Icons.lan_rounded, title: 'LAN Link', subtitle: 'Nearby devices, chat and file drop', onTap: () => context.go('/lan')),
-            NavTile(key: const Key('more-recordings'), icon: Icons.graphic_eq_rounded, title: 'Recordings', subtitle: 'Listen to, share and manage call recordings', onTap: () => context.go('/recordings')),
+            NavTile(icon: Icons.grid_view_rounded, title: l.morePresence, subtitle: l.morePresenceHint, onTap: () => context.go('/presence')),
+            NavTile(key: const Key('more-retrieve-parked'), icon: Icons.local_parking_rounded, title: l.moreRetrieveParked, subtitle: l.moreRetrieveParkedHint, onTap: () => promptRetrieveParked(context, ref)),
+            NavTile(icon: Icons.lan_rounded, title: l.moreLanLink, subtitle: l.moreLanLinkHint, onTap: () => context.go('/lan')),
+            NavTile(key: const Key('more-recordings'), icon: Icons.graphic_eq_rounded, title: l.moreRecordings, subtitle: l.moreRecordingsHint, onTap: () => context.go('/recordings')),
             NavTile(
               icon: Icons.voicemail_rounded,
-              title: 'Voicemail',
-              subtitle: vm > 0 ? '$vm new message${vm == 1 ? '' : 's'}' : 'Dial your voicemail',
+              title: l.moreVoicemail,
+              subtitle: vm > 0 ? l.moreVoicemailNew(vm) : l.moreVoicemailDial,
               trailing: vm > 0 ? Badge.count(count: vm) : const Icon(Icons.chevron_right_rounded),
               onTap: () => dialVoicemail(context, ref),
             ),
@@ -43,9 +45,9 @@ class MorePage extends ConsumerWidget {
         ),
         SettingsGroup(
           children: [
-            NavTile(icon: Icons.settings_rounded, title: 'Settings', onTap: () => context.go('/settings')),
-            NavTile(icon: Icons.monitor_heart_rounded, title: 'Diagnostics', subtitle: 'SIP trace and network checks', onTap: () => context.push('/settings/diagnostics')),
-            NavTile(icon: Icons.info_outline_rounded, title: 'About', onTap: () => context.push('/settings/about')),
+            NavTile(icon: Icons.settings_rounded, title: l.actionSettings, onTap: () => context.go('/settings')),
+            NavTile(icon: Icons.monitor_heart_rounded, title: l.moreDiagnostics, subtitle: l.moreDiagnosticsHint, onTap: () => context.push('/settings/diagnostics')),
+            NavTile(icon: Icons.info_outline_rounded, title: l.moreAbout, onTap: () => context.push('/settings/about')),
           ],
         ),
       ],
@@ -58,7 +60,7 @@ Future<void> dialVoicemail(BuildContext context, WidgetRef ref) async {
   final acc = ref.read(accountsProvider);
   final withVm = acc.enabled.where((p) => p.effectiveVoicemail.isNotEmpty).toList();
   if (withVm.isEmpty) {
-    ref.read(noticeProvider.notifier).show('No voicemail number is set. Add one in the account settings.');
+    ref.read(noticeProvider.notifier).show(ref.read(l10nProvider).moreNoVoicemailNumber);
     return;
   }
   var target = withVm.firstWhere((p) => (acc.mwi[p.id]?.newMsgs ?? 0) > 0, orElse: () => withVm.first);
@@ -129,7 +131,7 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
               Navigator.pop(context);
               calls.dial(v.trim());
             },
-            decoration: const InputDecoration(hintText: 'Search contacts, history or type a number', prefixIcon: Icon(Icons.search_rounded)),
+            decoration: InputDecoration(hintText: context.l10n.moreSearchHint, prefixIcon: Icon(Icons.search_rounded)),
           ),
         ),
         Flexible(
@@ -139,7 +141,7 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
               if (q.isNotEmpty)
                 ListTile(
                   leading: CircleAvatar(backgroundColor: context.colors.callGreen, child: const Icon(Icons.call_rounded, color: Colors.white)),
-                  title: Text('Call $q'),
+                  title: Text(context.l10n.moreCallNumber(q)),
                   onTap: () {
                     Navigator.pop(context);
                     calls.dial(q);
@@ -164,9 +166,9 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
               if (q.isEmpty)
                 for (final r in history.take(6))
                   ListTile(
-                    leading: Avatar(name: recordTitle(r, contacts)),
-                    title: Text(recordTitle(r, contacts)),
-                    subtitle: Text('${dayLabel(r.start)}, ${timeLabel(r.start)}'),
+                    leading: Avatar(name: recordTitle(r, contacts, context.l10n)),
+                    title: Text(recordTitle(r, contacts, context.l10n)),
+                    subtitle: Text(context.l10n.moreRecentWhen(dayLabel(r.start, context.l10n), timeLabel(r.start, context.l10n))),
                     onTap: () {
                       Navigator.pop(context);
                       calls.dial(r.remoteNumber);
