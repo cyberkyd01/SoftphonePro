@@ -196,7 +196,7 @@ def main():
     with open(os.path.join(prov_dir, "cfg.json"), "w") as f:
         json.dump(cfg, f)
     prov = subprocess.Popen([sys.executable, "-I", "-m", "http.server", str(prov_port), "--bind", "127.0.0.1",
-                             "--directory", prov_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             "--directory", prov_dir], stdout=open(os.path.join(out, "prov.log"), "w"), stderr=subprocess.STDOUT)
     time.sleep(0.5)
     prov_url = "http://127.0.0.1:%d/cfg.json" % prov_port
 
@@ -212,6 +212,9 @@ def main():
         return [int(x) for x in r.stdout.split()]
 
     def quit_app():
+        # `tell application ... to quit` would launch an app that is not running.
+        if not app_pid():
+            return
         sh("osascript", "-e", 'tell application id "com.softphonepro.softphonepro" to quit')
         for _ in range(40):
             if not app_pid():
@@ -221,7 +224,9 @@ def main():
             os.kill(p, 9)
 
     def launch(*extra):
-        sh("open", "-n", app, "--args", *extra)
+        r = sh("open", "-n", app, "--args", *extra)
+        if r.returncode != 0 or r.stderr.strip():
+            print("open:", r.returncode, r.stderr.strip(), flush=True)
 
     def wait_api(timeout=60):
         end = time.time() + timeout
@@ -246,22 +251,42 @@ def main():
 
     def shot(name, wait=0.8):
         time.sleep(wait)
+        best = None
+        for attempt in range(12):
+            best = pick_window(strict=(attempt >= 3))
+            if best:
+                break
+            api.post("/v1/ui/show", {})
+            sh("open", app)  # re-activate the running app
+            time.sleep(0.7)
+        if not best:
+            raise AssertionError("no onscreen window to capture: " + sh(args.winlist).stdout.replace("\n", " | ")[:1800])
+        path = os.path.join(out, name + ".png")
+        if os.path.exists(path):
+            os.remove(path)
+        sh("screencapture", "-l%d" % best[0], "-o", "-x", path)
+        if not os.path.exists(path):
+            raise AssertionError("screencapture produced no file")
+        return path
+
+    import re
+
+    def pick_window(strict=False):
         lines = sh(args.winlist).stdout.splitlines()
         best = None
         for l in lines:
             parts = l.split()
-            if "onscreen=true" in l and "layer=0" in l:
+            lm = re.search(r"layer=(\d+)", l)
+            if lm and int(lm.group(1)) <= 3 and (strict or "onscreen=true" in l):
                 wid = int(parts[0])
-                import re
                 m = re.search(r"Width[\"']*: (\d+)", l)
                 w = int(m.group(1)) if m else 0
+                hm = re.search(r"Height[\"']*: (\d+)", l)
+                if not hm or int(hm.group(1)) < 300:
+                    continue  # menu bar strip etc.
                 if best is None or w > best[1]:
                     best = (wid, w)
-        if not best:
-            return "no window found for screenshot"
-        path = os.path.join(out, name + ".png")
-        sh("screencapture", "-l%d" % best[0], "-o", "-x", path)
-        return path
+        return best
 
     def show(route):
         s, j = api.post("/v1/ui/show", {"route": route})
@@ -276,6 +301,25 @@ def main():
             if not api.get("/v1/calls")[1].get("calls"):
                 return
             time.sleep(0.3)
+
+    def retry_once(fn):
+        """The far end sits behind the Docker UDP port forwarder, whose NAT mappings expire when idle."""
+        def run():
+            try:
+                return fn()
+            except AssertionError as e:
+                first = str(e)
+                hangup_all()
+                time.sleep(3)
+                return (fn() or "") + " (second attempt; first: %s)" % first[:60]
+        return run
+
+    def wait_gone():
+        for _ in range(20):
+            if "PJSIP/1016" not in pbx("core show channels"):
+                return True
+            time.sleep(0.5)
+        return False
 
     def only(name):
         return not args.only or args.only in name
@@ -350,11 +394,15 @@ def main():
             return "hold, unhold, mute, unmute; conflicting unhold gives 409"
 
         R.run("hold / unhold / mute", t_hold)
-        R.run("hangup 600", lambda: (api.post("/v1/calls/%d/hangup" % state["cid600"])[0] == 200 or check(False), time.sleep(1), check("PJSIP/1016" not in pbx("core show channels"), "channel still up"))[2] or "channel gone")
+        R.run("hangup 600", lambda: (api.post("/v1/calls/%d/hangup" % state["cid600"])[0] == 200 or check(False), time.sleep(1), check(wait_gone(), "channel still up"))[2] or "channel gone")
 
         # ------------------------------------------------------------------ DTMF 602
         def t_dtmf():
-            before = pbx_cat("/var/log/asterisk/dtmf_1016.txt")
+            # the dialplan overwrites this file per call: compare modification times
+            def mtime():
+                return sh("docker", "exec", CONTAINER, "stat", "-c", "%Y.%y", "/var/log/asterisk/dtmf_1016.txt").stdout.strip()
+            before_mtime = mtime()
+            before = ""
             m = ev.mark()
             s, j = api.post("/v1/calls", {"to": "602"})
             check(s == 201, str(j))
@@ -366,7 +414,7 @@ def main():
             got = ""
             for _ in range(30):
                 got = pbx_cat("/var/log/asterisk/dtmf_1016.txt")
-                if "1234" in got[len(before):] or ("1234" in got and got != before):
+                if "1234" in got and mtime() != before_mtime:
                     break
                 time.sleep(0.5)
             api.post("/v1/calls/%d/hangup" % cid)
@@ -379,7 +427,7 @@ def main():
         # ------------------------------------------------------------------ host far end
         far = rt.Cli("far")
         far.start_core()
-        far.add_account(1015)
+        state["far_acc"], _ = far.add_account(1015, keepAliveSec=10)
         state["far"] = far
 
         def t_incoming():
@@ -390,7 +438,12 @@ def main():
             fcid = r["cid"]
             state["fcid"] = fcid
             d = ev.wait(lambda c, d: c == "call" and d["type"] == "incoming", 15, m)
-            check(d, "no incoming event; events=%s" % ev.items[m:])
+            if not d:
+                diag = "events=%s sse=%s calls=%s far=%s contacts=%s" % (
+                    ev.items[m:], ev.status, api.get("/v1/calls"),
+                    [(e.get("event"), e.get("state"), e.get("lastCode")) for e in far.events() if e.get("cid") == fcid],
+                    [l.strip() for l in pbx("pjsip show contacts").splitlines() if "Contact:" in l and "Aor" not in l])
+                raise AssertionError("no incoming event; " + diag)
             check(d["call"]["number"] == "1015", "caller number %r" % d["call"]["number"])
             cid = d["call"]["cid"]
             state["icid"] = cid
@@ -409,7 +462,22 @@ def main():
 
         R.run("incoming 1015 -> 1016: event, answer, far-end hangup", t_incoming)
 
+        def ensure_far():
+            # refresh the far end's registration (its NAT mapping behind the Docker UDP forwarder may have expired)
+            mk = far.mark()
+            try:
+                far.req("account.register", {"acc": state["far_acc"]})
+                far.wait_event("account.reg", 10, mk, regState="registered")
+            except Exception:
+                pass
+            for _ in range(20):
+                if "1015" in pbx("pjsip show contacts"):
+                    return
+                time.sleep(0.5)
+            raise AssertionError("1015 is not registered on the PBX:\n" + pbx("pjsip show contacts"))
+
         def t_transfer():
+            ensure_far()
             m = ev.mark()
             mf = far.mark()
             s, j = api.post("/v1/calls", {"to": "1015"})
@@ -432,7 +500,7 @@ def main():
                 pass
             return "blind transfer accepted (200); PBX after transfer: %s" % " | ".join(l.strip() for l in ch.splitlines() if "PJSIP" in l or "Echo" in l)[:160]
 
-        R.run("blind transfer to 600", t_transfer)
+        R.run("blind transfer to 600", retry_once(t_transfer))
         time.sleep(1)
 
         def t_dnd():
@@ -457,6 +525,7 @@ def main():
         R.run("DND on: incoming rejected", t_dnd)
 
         def t_msg():
+            ensure_far()
             mf = far.mark()
             s, j = api.post("/v1/messages", {"to": "1015", "body": "hello from the API"})
             check(s == 201, str(j))
@@ -469,7 +538,7 @@ def main():
             check(d and d["message"]["body"] == "reply from far", "no message event")
             return "message delivered to 1015; reply arrived as event"
 
-        R.run("message to 1015 (+ reply event)", t_msg)
+        R.run("message to 1015 (+ reply event)", retry_once(t_msg))
 
         def t_hist():
             s, j = api.get("/v1/history?limit=20")
