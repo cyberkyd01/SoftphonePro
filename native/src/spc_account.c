@@ -1,5 +1,6 @@
 /* spc_account.c: account.* requests, registration state, URI normalisation, per-account codec filter. */
 #include "spc_internal.h"
+#include "spc_ws_transport.h"
 #include <ctype.h>
 
 static spc_acc* g_acc[PJSUA_MAX_ACC];
@@ -48,12 +49,18 @@ int spc_acc_resolve(const cJSON* p, int* out)
             *out = G.direct_acc;
             return SPC_OK;
         }
+        if (id >= SPC_ID_IAX_BASE) {
+            if (!spc_iax2_acc_valid(id)) return spc_err(SPC_E_NOT_FOUND, 0, "account %d not found", id);
+            *out = id;
+            return SPC_OK;
+        }
         if (id < 0 || id >= PJSUA_MAX_ACC || !pjsua_acc_is_valid(id) || !spc_acc_from_id(id))
             return spc_err(SPC_E_NOT_FOUND, 0, "account %d not found", id);
         *out = id;
         return SPC_OK;
     }
     if (uid && uid[0]) {
+        if (spc_iax2_acc_find_uid(uid, out) == 0) return SPC_OK;
         spc_registry_lock();
         for (i = 0; i < PJSUA_MAX_ACC; i++) {
             if (g_acc[i] && g_acc[i]->used && strcmp(g_acc[i]->uid, uid) == 0) {
@@ -78,6 +85,7 @@ cJSON* spc_acc_info_json(int acc)
     cJSON* o;
     char state[16], reason[96], lerr[200], pres[12], tr[8], uid[96];
     int code, proto, lan, direct;
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_acc_info_json(acc);
     if (!m || pjsua_acc_get_info(acc, &ai) != PJ_SUCCESS) return NULL;
     spc_registry_lock();
     spc_strlcpy(state, m->reg_state, sizeof(state));
@@ -143,6 +151,7 @@ int spc_acc_list_json(cJSON* arr)
         o = spc_acc_info_json(i);
         if (o) { cJSON_AddItemToArray(arr, o); n++; }
     }
+    spc_iax2_acc_list_json(arr);
     return n;
 }
 
@@ -188,7 +197,7 @@ static void cb_reg_state2(pjsua_acc_id acc, pjsua_reg_info* info)
             snprintf(err, sizeof(err), "Wrong username/password (%d)", code);
         else if (code == 408)
             snprintf(err, sizeof(err), "Timeout (408)");
-        else if (spc_tls_recent_failure() && strcmp(m->transport, "tls") == 0)
+        else if (spc_tls_recent_failure() && (strcmp(m->transport, "tls") == 0 || strcmp(m->transport, "wss") == 0))
             snprintf(err, sizeof(err), "TLS certificate not trusted");
         else if (cp->status == PJ_ERESOLVE || strstr(em, "DNS") || strstr(em, "resolve") || strstr(em, "Resolve"))
             snprintf(err, sizeof(err), "DNS lookup failed");
@@ -279,7 +288,7 @@ static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size
     pjsip_transport_type_e type = PJSIP_TRANSPORT_UDP;
     pjsua_transport_id id;
     pjsua_transport_info ti;
-    if (port <= 0) {
+    if (port <= 0 || (tr && (spc_strieq(tr, "ws") || spc_strieq(tr, "wss")))) {   /* ws/wss: outgoing connections only */
         if (m->own_tp >= 0) { pjsua_transport_close(m->own_tp, PJ_FALSE); m->own_tp = -1; }
         *tp_id = PJSUA_INVALID_ID;
         return 0;
@@ -306,6 +315,60 @@ static int ensure_own_tp(spc_acc* m, const cJSON* c, int* tp_id, char* err, size
     return 0;
 }
 
+/* SIP over WebSocket (RFC 7118): registrar URI with explicit port, "<token>.invalid" Contact, no NAT rewriting
+ * (the server routes back over the WebSocket connection), no UDP keep-alive (the transport pings). */
+static int apply_ws(pjsua_acc_config* cfg, pj_pool_t* pool, const cJSON* c, const char* user, const char* domain,
+                    const char* registrar, int wss, char* err, size_t errn)
+{
+    const char* path = spc_jstr(c, "wsPath");
+    char reg[400], hp[200], host[160], contact[300], rest[200];
+    const char* p;
+    const char* semi;
+    char* colon;
+    int port, n;
+    if (!path || !path[0]) path = "/ws";
+    if (path[0] != '/' || strlen(path) > 120) { snprintf(err, errn, "invalid wsPath"); return -1; }
+    for (p = path; *p; p++) if ((unsigned char)*p <= ' ' || *p == 0x7f) { snprintf(err, errn, "invalid wsPath"); return -1; }
+    if (registrar && registrar[0]) spc_strlcpy(reg, registrar, sizeof(reg));
+    else snprintf(reg, sizeof(reg), "sip:%s", domain);
+    p = reg;
+    if (spc_strnieq(p, "sips:", 5)) p += 5; else if (spc_strnieq(p, "sip:", 4)) p += 4;
+    semi = strchr(p, ';');
+    n = semi ? (int)(semi - p) : (int)strlen(p);
+    if (n <= 0 || n >= (int)sizeof(host)) { snprintf(err, errn, "invalid registrar"); return -1; }
+    memcpy(host, p, (size_t)n); host[n] = 0;
+    spc_strlcpy(rest, semi ? semi : "", sizeof(rest));
+    spc_ws_ensure_port(host, wss, hp, sizeof(hp));
+    snprintf(reg, sizeof(reg), "sip:%s%s", hp, rest);
+    if (!strstr(reg, "transport=") && !strstr(reg, "TRANSPORT=")) {
+        if (strlen(reg) + 16 < sizeof(reg)) strcat(reg, wss ? ";transport=wss" : ";transport=ws");
+    }
+    pj_strdup2_with_null(pool, &cfg->reg_uri, reg);
+    /* route registry: path for connections to host:port */
+    if (hp[0] == '[') { char* rb = strchr(hp, ']'); n = rb ? (int)(rb - hp) - 1 : 0; memcpy(host, hp + 1, (size_t)n); host[n] = 0; colon = rb ? strchr(rb, ':') : NULL; }
+    else { colon = strrchr(hp, ':'); n = colon ? (int)(colon - hp) : (int)strlen(hp); memcpy(host, hp, (size_t)n); host[n] = 0; }
+    port = colon ? atoi(colon + 1) : (wss ? 443 : 80);
+    spc_ws_route_set(host, port, wss, path);
+    {   char inv[40];
+        spc_ws_random_invalid_host(inv, sizeof(inv));
+        snprintf(contact, sizeof(contact), "<sip:%s@%s;transport=%s>", user, inv, wss ? "wss" : "ws");
+        pj_strdup2_with_null(pool, &cfg->force_contact, contact);
+    }
+    /* all requests of the account go to the server over the WebSocket: loose-route through the server URI
+     * (explicit port, so no SRV lookup for a transport that has no SRV convention here) */
+    if (cfg->proxy_cnt == 0) {
+        char px[240];
+        snprintf(px, sizeof(px), "<sip:%s;transport=%s;lr>", hp, wss ? "wss" : "ws");
+        pj_strdup2_with_null(pool, &cfg->proxy[cfg->proxy_cnt++], px);
+    }
+    if (!spc_jhas(c, "regUseProxy")) cfg->reg_use_proxy = 0;
+    cfg->allow_contact_rewrite = PJ_FALSE;
+    cfg->allow_via_rewrite = PJ_FALSE;
+    cfg->use_rfc5626 = 0;
+    cfg->ka_interval = 0;
+    return 0;
+}
+
 static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_t* pool, char* err, size_t errn)
 {
     const char* s;
@@ -326,11 +389,8 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
     if (!domain || !domain[0]) { snprintf(err, errn, "'domain' required"); return -1; }
     if (strlen(user) > 100 || strlen(domain) > 120) { snprintf(err, errn, "username/domain too long"); return -1; }
     if (!transport) transport = "udp";
-    if (spc_strieq(transport, "ws") || spc_strieq(transport, "wss")) {
-        snprintf(err, errn, "transport %s is not supported yet", transport);
-        return -2;
-    }
-    if (!(spc_strieq(transport, "udp") || spc_strieq(transport, "tcp") || spc_strieq(transport, "tls") || spc_strieq(transport, "auto"))) {
+    if (!(spc_strieq(transport, "udp") || spc_strieq(transport, "tcp") || spc_strieq(transport, "tls") ||
+          spc_strieq(transport, "ws") || spc_strieq(transport, "wss") || spc_strieq(transport, "auto"))) {
         snprintf(err, errn, "invalid transport '%s'", transport);
         return -1;
     }
@@ -423,6 +483,12 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
     cfg->ice_cfg_use = PJSUA_ICE_CONFIG_USE_CUSTOM;
     cfg->ice_cfg.enable_ice = spc_jbool(c, "ice", 0);
     cfg->enable_rtcp_mux = spc_jbool(c, "rtcpMux", 0);
+    if (spc_jbool(c, "rtcpFb", 0)) {            /* offer RTP/AVPF (SAVPF/UDP-TLS-RTP-SAVPF) with a=rtcp-fb:* nack, as WebRTC peers expect */
+        cfg->rtcp_fb_cfg.dont_use_avpf = PJ_FALSE;
+        cfg->rtcp_fb_cfg.cap_count = 1;
+        cfg->rtcp_fb_cfg.caps[0].codec_id = pj_str((char*)"*");
+        cfg->rtcp_fb_cfg.caps[0].type = PJMEDIA_RTCP_FB_NACK;
+    }
     obj = spc_jobj(c, "turn");
     cfg->turn_cfg_use = PJSUA_TURN_CONFIG_USE_CUSTOM;
     cfg->turn_cfg.enable_turn = PJ_FALSE;
@@ -508,6 +574,8 @@ static int build_cfg(spc_acc* m, const cJSON* c, pjsua_acc_config* cfg, pj_pool_
         }
     }
     (void)i;
+    if (spc_strieq(transport, "ws") || spc_strieq(transport, "wss"))
+        return apply_ws(cfg, pool, c, user, domain, registrar, spc_strieq(transport, "wss"), err, errn);
     return 0;
 }
 
@@ -564,9 +632,10 @@ static int h_account_add(cJSON* p, cJSON** res)
     if (!uid || !uid[0] || strlen(uid) >= sizeof(m->uid)) return spc_err(SPC_E_INVALID_PARAM, 0, "'uid' required");
     if (uid[0] == '_' && uid[1] == '_') return spc_err(SPC_E_INVALID_PARAM, 0, "reserved uid");
     if (proto && !spc_strieq(proto, "sip")) {
-        if (spc_strieq(proto, "iax2")) return spc_err(SPC_E_UNSUPPORTED, 0, "proto iax2 is not supported yet");
+        if (spc_strieq(proto, "iax2")) return spc_iax2_account_add(p, res);
         return spc_err(SPC_E_INVALID_PARAM, 0, "invalid proto '%s'", proto);
     }
+    if (spc_iax2_acc_find_uid(uid, &i) == 0) return spc_err(SPC_E_ALREADY, 0, "uid '%s' already exists", uid);
     spc_registry_lock();
     for (i = 0; i < PJSUA_MAX_ACC; i++)
         if (g_acc[i] && g_acc[i]->used && strcmp(g_acc[i]->uid, uid) == 0) {
@@ -625,6 +694,7 @@ static int h_account_modify(cJSON* p, cJSON** res)
     (void)res;
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_modify(acc, p);
     m = spc_acc_from_id(acc);
     if (!m || m->is_lan || m->is_direct || !m->cfg) return spc_err(SPC_E_INVALID_PARAM, 0, "cannot modify this account");
     merged = cJSON_Duplicate(m->cfg, 1);
@@ -671,6 +741,7 @@ static int h_account_remove(cJSON* p, cJSON** res)
     (void)res;
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_remove(acc);
     m = spc_acc_from_id(acc);
     if (!m || m->is_lan || m->is_direct) return spc_err(SPC_E_INVALID_PARAM, 0, "cannot remove this account");
     st = pjsua_acc_del(acc);
@@ -691,6 +762,7 @@ static int h_account_register(cJSON* p, cJSON** res)
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
     if (!spc_jhas(p, "register")) return spc_err(SPC_E_INVALID_PARAM, 0, "'register' (bool) required");
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_account_register(acc, spc_jbool(p, "register", 1));
     {
         spc_acc* m = spc_acc_from_id(acc);
         if (!m || m->is_lan || m->is_direct) return spc_err(SPC_E_INVALID_PARAM, 0, "account has no registration");
@@ -715,6 +787,13 @@ static int h_account_set_presence(cJSON* p, cJSON** res)
     memset(&rpid, 0, sizeof(rpid));
     rpid.type = PJRPID_ELEMENT_TYPE_PERSON;
     rpid.activity = PJRPID_ACTIVITY_UNKNOWN;
+    if (acc >= SPC_ID_IAX_BASE) {
+        static const char* ok[] = { "online", "away", "busy", "dnd", "onthephone", "offline", NULL };
+        int k, good = 0;
+        for (k = 0; ok[k]; k++) if (spc_strieq(st, ok[k])) good = 1;
+        if (!good) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid status '%s'", st);
+        return spc_iax2_account_set_presence(acc, st, note);
+    }
     if (spc_strieq(st, "online")) {}
     else if (spc_strieq(st, "away")) rpid.activity = PJRPID_ACTIVITY_AWAY;
     else if (spc_strieq(st, "busy")) rpid.activity = PJRPID_ACTIVITY_BUSY;

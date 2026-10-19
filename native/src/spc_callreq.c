@@ -58,6 +58,7 @@ static int do_make(cJSON* p, const char* extra_name, const char* extra_val, cJSO
     if (!uri || !uri[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'uri' required");
     rc = spc_acc_resolve(p, &acc);
     if (rc) return rc;
+    if (acc >= SPC_ID_IAX_BASE) return spc_iax2_call_make(acc, p, res);
     if (spc_uri_normalize(acc, uri, dest, sizeof(dest)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid uri");
     d = spc_pjs(dest);
     if (pjsua_verify_url(dest) != PJ_SUCCESS && !spc_strnieq(dest, "tel:", 4))
@@ -169,6 +170,7 @@ static int h_answer(cJSON* p, cJSON** res)
     (void)res;
     if (code < 101 || code > 699 || (code >= 300 && code < 400)) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid answer code %d", code);
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_ANSWER, cid, p, res);
     pool = pjsua_pool_create("spcans", 1024, 1024);
     spc_fill_msg_data(pool, &md, spc_jobj(p, "headers"));
     st = pjsua_call_answer(slot, (unsigned)code, NULL, &md);
@@ -187,6 +189,7 @@ static int h_ring(cJSON* p, cJSON** res)
     pj_status_t st = PJ_SUCCESS;
     (void)res;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_RING, cid, p, res);
     c = spc_call_lock_find(cid);
     if (c) { c->responded = 1; need = !c->ring_sent; c->ring_sent = 1; spc_registry_unlock(); }
     if (need) st = pjsua_call_answer(slot, 180, NULL, NULL);
@@ -207,6 +210,11 @@ static int h_reject(cJSON* p, cJSON** res)
     (void)res;
     if (code < 300 || code > 699) return spc_err(SPC_E_INVALID_PARAM, 0, "reject code must be 300..699");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) {
+        rc = spc_iax2_call_op(SPC_IAXOP_REJECT, cid, p, res);
+        if (rc == SPC_OK) spc_call_wait_gone(cid, 1500);
+        return rc;
+    }
     pool = pjsua_pool_create("spcrej", 1024, 1024);
     spc_fill_msg_data(pool, &md, spc_jobj(p, "headers"));
     set_flag(cid, 0, 1);
@@ -238,6 +246,7 @@ static int h_redirect(cJSON* p, cJSON** res)
     if (code < 300 || code > 399) return spc_err(SPC_E_INVALID_PARAM, 0, "redirect code must be 3xx");
     if (!t || cJSON_GetArraySize(t) < 1) return spc_err(SPC_E_INVALID_PARAM, 0, "'targets' must be a non-empty array");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_UNSUPPORTED, cid, p, res);
     val[0] = 0;
     cJSON_ArrayForEach(e, t) {
         char norm[300];
@@ -277,6 +286,7 @@ static int h_process_redirect(cJSON* p, cJSON** res)
     else if (spc_strieq(a, "stop")) op = PJSIP_REDIRECT_STOP;
     else return spc_err(SPC_E_INVALID_PARAM, 0, "invalid action '%s'", a);
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_UNSUPPORTED, cid, p, res);
     st = pjsua_call_process_redirect(slot, op);
     if (st != PJ_SUCCESS) return map_pj(st, "process_redirect");
     return SPC_OK;
@@ -291,6 +301,11 @@ static int h_hangup(cJSON* p, cJSON** res)
     (void)res;
     if (code != 0 && (code < 200 || code > 699)) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid code");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) {
+        rc = spc_iax2_call_op(SPC_IAXOP_HANGUP, cid, p, res);
+        if (rc == SPC_OK) spc_call_wait_gone(cid, 2000);
+        return rc;
+    }
     st = pjsua_call_hangup(slot, (unsigned)code, NULL, NULL);
     if (st != PJ_SUCCESS && st != PJSIP_ESESSIONSTATE) return map_pj(st, "pjsua_call_hangup");
     spc_call_wait_gone(cid, 2000);
@@ -312,6 +327,11 @@ static int h_hold(cJSON* p, cJSON** res)
     pj_status_t st;
     (void)res;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) {
+        rc = spc_iax2_call_op(SPC_IAXOP_HOLD, cid, p, res);
+        spc_call_apply_topology();
+        return rc;
+    }
     set_flag(cid, 3, 1);
     spc_call_apply_topology();
     st = pjsua_call_set_hold2(slot, 0, NULL);
@@ -342,6 +362,11 @@ static int h_unhold(cJSON* p, cJSON** res)
     pj_status_t st;
     (void)res;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) {
+        rc = spc_iax2_call_op(SPC_IAXOP_UNHOLD, cid, p, res);
+        spc_call_apply_topology();
+        return rc;
+    }
     st = unhold_one(cid, slot);
     if (st != PJ_SUCCESS && st != PJ_EEXISTS) return map_pj(st, "unhold");
     return SPC_OK;
@@ -364,12 +389,11 @@ static int h_set_levels(cJSON* p, cJSON** res)
     NEED_CID(cid);
     int slot, acc, rc, cslot;
     double rx = spc_jnum(p, "rx", 1.0), tx = spc_jnum(p, "tx", 1.0);
-    pjsua_call_info ci;
     (void)res;
     if (rx < 0 || rx > 8 || tx < 0 || tx > 8) return spc_err(SPC_E_INVALID_PARAM, 0, "levels must be 0..8");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
-    if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS || ci.conf_slot < 0) return spc_err(SPC_E_BUSY, 0, "no active media");
-    cslot = ci.conf_slot;
+    cslot = spc_call_conf_slot(cid, slot);
+    if (cslot < 0) return spc_err(SPC_E_BUSY, 0, "no active media");
     pjsua_conf_adjust_rx_level(cslot, (float)rx);
     pjsua_conf_adjust_tx_level(cslot, (float)tx);
     return SPC_OK;
@@ -379,12 +403,11 @@ static int h_set_levels(cJSON* p, cJSON** res)
 static int inband_dtmf(uint64_t cid, int slot, const char* digits, int dur)
 {
     spc_call* c;
-    pjsua_call_info ci;
     pjmedia_tone_digit d[32];
     int n = 0, i;
     pj_status_t st;
     int rate = spc_media_bridge_rate();
-    if (pjsua_call_get_info(slot, &ci) != PJ_SUCCESS || ci.conf_slot < 0) return PJ_EINVALIDOP;
+    if (spc_call_conf_slot(cid, slot) < 0) return PJ_EINVALIDOP;
     c = spc_call_lock_find(cid);
     if (!c) return PJ_ENOTFOUND;
     if (!c->tg_port) {
@@ -443,8 +466,9 @@ static int h_dtmf(cJSON* p, cJSON** res)
         spc_strlcpy(meth, c ? c->dtmf_method : "rfc2833", sizeof(meth));
         if (c) spc_registry_unlock();
     }
-    if (!(spc_strieq(meth, "rfc2833") || spc_strieq(meth, "info") || spc_strieq(meth, "inband") || spc_strieq(meth, "auto")))
+    if (!(spc_strieq(meth, "rfc2833") || spc_strieq(meth, "info") || spc_strieq(meth, "inband") || spc_strieq(meth, "auto") || spc_strieq(meth, "iax2")))
         return spc_err(SPC_E_INVALID_PARAM, 0, "invalid DTMF method '%s'", meth);
+    if (!spc_strieq(meth, "inband") && spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_DTMF, cid, p, res);
     if (spc_strieq(meth, "inband")) {
         st = inband_dtmf(cid, slot, digits, dur);
         if (st != PJ_SUCCESS) return map_pj(st, "inband dtmf");
@@ -475,6 +499,7 @@ static int h_transfer(cJSON* p, cJSON** res)
     (void)res;
     if (!target || !target[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'target' required");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_TRANSFER, cid, p, res);
     if (spc_uri_normalize(acc, target, dest, sizeof(dest)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "invalid target");
     d = spc_pjs(dest);
     st = pjsua_call_xfer(slot, &d, NULL);
@@ -493,6 +518,7 @@ static int h_transfer_attended(cJSON* p, cJSON** res)
     if (dest == cid) return spc_err(SPC_E_INVALID_PARAM, 0, "destCid must differ from cid");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
     if ((rc = need_call(dest, &dslot, &dacc))) return rc;
+    if (spc_call_is_iax(cid) || spc_call_is_iax(dest)) return spc_err(SPC_E_UNSUPPORTED, 0, "attended transfer is not supported for IAX2 calls");
     st = pjsua_call_xfer_replaces(slot, dslot, spc_jbool(p, "requireReplaces", 1) ? 0 : PJSUA_XFER_NO_REQUIRE_REPLACES, NULL);
     if (st != PJ_SUCCESS) return map_pj(st, "xfer_replaces");
     return SPC_OK;
@@ -515,13 +541,13 @@ static void del_peer(uint64_t* list, int* n, uint64_t v)
 
 static void disconnect_pair(uint64_t a, uint64_t b)
 {
-    int sa, sb, x;
-    pjsua_call_info ia, ib;
+    int sa, sb, x, ca, cb;
     if (spc_call_cid_to_slot(a, &sa, &x) != 0 || spc_call_cid_to_slot(b, &sb, &x) != 0) return;
-    if (pjsua_call_get_info(sa, &ia) != PJ_SUCCESS || pjsua_call_get_info(sb, &ib) != PJ_SUCCESS) return;
-    if (ia.conf_slot < 0 || ib.conf_slot < 0) return;
-    pjsua_conf_disconnect(ia.conf_slot, ib.conf_slot);
-    pjsua_conf_disconnect(ib.conf_slot, ia.conf_slot);
+    ca = spc_call_conf_slot(a, sa);
+    cb = spc_call_conf_slot(b, sb);
+    if (ca < 0 || cb < 0) return;
+    pjsua_conf_disconnect(ca, cb);
+    pjsua_conf_disconnect(cb, ca);
 }
 
 static int h_bridge(cJSON* p, cJSON** res)
@@ -762,6 +788,7 @@ static int h_update(cJSON* p, cJSON** res)
     pj_status_t st;
     (void)res;
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_UNSUPPORTED, cid, p, res);
     pjsua_call_setting_default(&opt);
     opt.flag |= PJSUA_CALL_UPDATE_CONTACT;
     if (spc_jbool(p, "useUpdate", 0)) st = pjsua_call_update2(slot, &opt, NULL);
@@ -785,6 +812,7 @@ static int h_send_request(cJSON* p, cJSON** res)
     if (!method || !method[0] || strlen(method) > 20) return spc_err(SPC_E_INVALID_PARAM, 0, "'method' required");
     for (i = 0; method[i]; i++) if (!isupper((unsigned char)method[i]) && !isdigit((unsigned char)method[i]) && method[i] != '-') return spc_err(SPC_E_INVALID_PARAM, 0, "invalid method token");
     if ((rc = need_call(cid, &slot, &acc))) return rc;
+    if (spc_call_is_iax(cid)) return spc_iax2_call_op(SPC_IAXOP_UNSUPPORTED, cid, p, res);
     pool = pjsua_pool_create("spcsr", 1024, 1024);
     spc_fill_msg_data(pool, &md, spc_jobj(p, "headers"));
     if (body) {
