@@ -303,6 +303,13 @@ spc_build_pjproject() {
     ${oboe_args[@]+"${oboe_args[@]}"} \
     ${speex_args[@]+"${speex_args[@]}"} \
     ${SPC_PJ_CMAKE_ARGS[@]+"${SPC_PJ_CMAKE_ARGS[@]}"}
+  # pjproject's CMake silently downgrades features it cannot find (e.g. "OpenSSL not found. setting
+  # PJLIB_WITH_SSL to <empty>"). TLS/DTLS-SRTP and the Opus/G.729 codecs are mandatory: fail loudly.
+  local cache="$SPC_BLD/pjproject/CMakeCache.txt" v
+  for v in PJLIB_WITH_SSL=openssl PJMEDIA_WITH_OPUS_CODEC=ON PJMEDIA_WITH_BCG729_CODEC=ON; do
+    grep -Eq "^${v%%=*}:[A-Z]+=${v#*=}\$" "$cache" \
+      || die "pjproject was configured without ${v%%=*}=${v#*=} (see 'not found' messages above); refusing to build with silent feature loss"
+  done
   spc_stamp_set pjproject "$key"
 }
 
