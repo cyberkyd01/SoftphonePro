@@ -37,7 +37,7 @@ native layers written in Kotlin, Swift and C++.
 | SIP/media | PJSIP 2.17 `pjsua` C API | Mature (used by MicroSIP, Telephone, CSipSimple). Covers multi-account, UDP/TCP/TLS, IPv6, SRTP/DTLS, ICE/STUN/TURN, BLF (2.16+), MWI, presence, IM, REFER/Replaces, conference bridge, recording, AEC3, Opus and G.729. GPLv2+. |
 | Native↔Dart | One JSON request entry point plus an async event stream (`Dart_PostCObject_DL`) | Tiny, stable FFI surface. Dart never blocks: requests run on a dedicated native worker thread. Events are copied into Dart, so ownership is simple and nothing leaks. |
 | TLS/DTLS | OpenSSL 3.x on every platform | DTLS-SRTP and SHA-256 digest need OpenSSL. One backend means the same behaviour everywhere. |
-| Build | CMake for spcore. pjproject uses its CMake build where it works (macOS, Linux, Android, iOS); Windows tries CMake first and falls back to the MSVC .sln. | Reproducible scripts under `native/scripts/`, also run in CI. |
+| Build | CMake for spcore. pjproject uses its CMake build on macOS, Linux, Android and iOS, and on Windows the official MSBuild `pjproject-vs14.sln`, which avoids depending on the experimental CMake on MSVC. Every target emits the same `spc_deps.cmake` entry point. | Reproducible scripts under `native/scripts/`, also run in CI. |
 | Packaging | Classic Flutter FFI plugin (`spcore_flutter`) with prebuilt binaries | Native-assets hooks are not stable in Flutter 3.32. |
 | Persistence | `sembast` (pure Dart) + `flutter_secure_storage` (with an encrypted-file fallback) | No native DB libraries to ship. Works on all 4 OSes. |
 | State | `flutter_riverpod` | Testable controllers; UI tests drive them with `FakeSipEngine`. |
@@ -106,6 +106,19 @@ docs/                   ARCHITECTURE.md, ENGINE_API.md, FEATURES.md, research/
   (`ws`/`wss`) is built on pjlib-util `websock` plus pj_ssl_sock. It lets
   accounts register to WebRTC-style SIP servers (Asterisk WSS, FreeSWITCH,
   Kamailio). Used together with ICE, DTLS-SRTP and rtcp-mux.
+  It ships behind an "experimental" flag until it has been fuzzed.
+* **Robustness.**
+  * Stable call identity: `cid` (u64) is never reused, whereas pjsua call
+    slots are recycled.
+  * The event port can be re-attached after a hot restart, an Android
+    engine re-creation, or an isolate death. Events that arrive while no
+    port is attached are buffered and replayed. `core.snapshot` resyncs
+    state.
+  * iOS uses manual sound mode: the sound device opens only from CallKit
+    `didActivate`. Meanwhile the null device keeps the conference bridge
+    clock running.
+  * A sound device failure falls back to the null device, so calls
+    survive. The UI is told through a `media.error` event.
 
 ## 4. Dart engine (packages/spcore_dart)
 
@@ -227,3 +240,10 @@ docs/                   ARCHITECTURE.md, ENGINE_API.md, FEATURES.md, research/
   unsigned and must be sideloaded.
 * **Video and ZRTP.** These are a planned phase after audio parity, not in
   the first release.
+* **App Store.** PJSIP (GPLv2+) and bcg729 (GPLv3) cannot be distributed
+  through the Apple App Store under GPL terms. iOS builds are for sideloading
+  or alternative stores.
+* **Windows audio.** pjmedia's WASAPI backend is UWP-only, so desktop
+  Windows uses WMME. WebRTC AEC3 handles echo cancellation.
+* **In-band DTMF.** Sending is supported. Receiving in-band DTMF is not
+  supported, though RFC 2833 and SIP INFO receive both work.

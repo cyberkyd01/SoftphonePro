@@ -1,0 +1,21 @@
+services:
+  pbx:
+    build:
+      context: .
+      target: pbx
+    image: softphonepro-pbx:latest
+    container_name: softphonepro-pbx
+    hostname: softphonepro-pbx
+    environment:
+      # Address clients use to reach the PBX (SDP/Contact/ICE). Emulator: 10.0.2.2
+      PBX_EXTERNAL_ADDR: ${PBX_EXTERNAL_ADDR:-127.0.0.1}
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5061:5061/tcp"
+      - "8088:8088/tcp"
+      - "8089:8089/tcp"
+      - "4569:4569/udp"
+      - "10000-10099:10000-10099/udp"
+      - "5038:5038/tcp"
+    restart: "no"
