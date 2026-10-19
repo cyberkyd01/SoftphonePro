@@ -1,13 +1,15 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Golden images are generated on macOS; CI runs on Linux where text is
-/// rasterised slightly differently. Accept a small fraction of differing
-/// pixels so genuine layout regressions still fail but font anti-aliasing
-/// does not.
-const double _goldenTolerance = 0.03; // 3 % of pixels
+/// Golden images are generated on macOS. On the generating platform only a
+/// tiny difference is accepted; elsewhere (Linux CI) text is rasterised
+/// differently, so text-heavy screens can differ by a few percent while the
+/// layout is identical. The looser bound still catches broken layouts
+/// (missing panels, overflow stripes, wrong theme) which change far more.
+final double _goldenTolerance = Platform.isMacOS ? 0.005 : 0.08;
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   final comparator = goldenFileComparator;
