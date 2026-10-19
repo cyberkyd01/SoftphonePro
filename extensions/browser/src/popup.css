@@ -1,0 +1,15 @@
+body { width: 320px; padding: 14px; }
+form { display: flex; gap: 8px; margin: 12px 0 4px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+section { margin-top: 12px; }
+.row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.row h2 { margin: 0; }
+button.small { padding: 2px 8px; font-size: 12px; }
+ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+li button {
+  display: flex; justify-content: space-between; width: 100%; background: transparent; color: var(--fg);
+  border-radius: 6px; padding: 6px 8px; font-weight: 500; text-align: left;
+}
+li button:hover { background: var(--primary-soft); filter: none; }
+li .when { color: var(--muted); font-size: 12px; font-weight: 400; }
+footer { margin-top: 12px; text-align: right; font-size: 12px; }

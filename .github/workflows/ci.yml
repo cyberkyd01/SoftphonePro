@@ -378,3 +378,30 @@ jobs:
         with:
           name: ios-ipa
           path: dist/*.ipa
+
+  # ---------------------------------------------------------------------------------------------
+  browser-extension:
+    needs: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: extensions/browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Lint (syntax + manifest validation)
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build Chrome + Firefox packages
+        env:
+          EXT_VERSION: ${{ needs.meta.outputs.version }}
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extension
+          path: extensions/browser/dist/*.zip
+          if-no-files-found: error

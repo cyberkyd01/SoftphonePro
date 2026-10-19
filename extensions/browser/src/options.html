@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SoftphonePro Click-to-Dial options</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header><img src="icons/icon-48.png" alt=""><h1>SoftphonePro Click-to-Dial</h1></header>
+
+    <section class="card">
+      <label class="check"><input type="checkbox" id="enabled"> <span><strong>Detect phone numbers on web pages</strong><br><span class="hint">Numbers in page text become clickable (dotted underline, phone icon on hover).</span></span></label>
+
+      <label for="scheme"><strong>Open numbers with</strong></label>
+      <select id="scheme">
+        <option value="tel">tel: link (system default dialer)</option>
+        <option value="softphonepro">softphonepro://call (SoftphonePro directly)</option>
+        <option value="sip">sip: link</option>
+      </select>
+      <p class="hint">SoftphonePro registers all of these on your computer. Choose softphonepro:// if another app owns tel:.</p>
+
+      <label for="cc"><strong>Default country calling code</strong></label>
+      <input id="cc" type="text" inputmode="tel" placeholder="e.g. +44 (leave empty for none)" maxlength="6">
+      <p class="hint">Added in front of national numbers such as 020 7946 0958 (the leading 0 is dropped). Numbers that already start with + or 00 are left alone.</p>
+      <p id="ccerr" class="err" hidden>Enter a calling code like +44 or +1.</p>
+
+      <label class="check"><input type="checkbox" id="openAll"> <span><strong>Open all phone links with SoftphonePro</strong><br><span class="hint">Rewrites existing tel:, sip:, sips: and callto: links on pages to softphonepro://call.</span></span></label>
+    </section>
+
+    <section class="card">
+      <h2>Sites</h2>
+      <label for="siteMode"><strong>Where should this run?</strong></label>
+      <select id="siteMode">
+        <option value="deny">Everywhere except the sites listed below</option>
+        <option value="allow">Only on the sites listed below</option>
+      </select>
+      <label for="sites"><strong>Site list</strong> <span class="hint">(one per line, subdomains included)</span></label>
+      <textarea id="sites" spellcheck="false" placeholder="example.com&#10;intranet.corp.local"></textarea>
+    </section>
+
+    <p id="status" class="hint" role="status">&nbsp;</p>
+    <p class="hint">Settings stay in your browser. Nothing is sent anywhere.</p>
+  </main>
+  <script src="phone.js"></script>
+  <script src="settings.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
+.card > label:not(.check), .card > h2 + label { display: block; margin-top: 16px; margin-bottom: 6px; }
+.card > label:first-child { margin-top: 0; }
+.check { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; cursor: pointer; }
+.check:first-child { margin-top: 0; }
+.check input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--primary); }
+.err { color: #d93025; font-size: 12px; margin: 4px 0 0; }
+@media (prefers-color-scheme: dark) { .err { color: #ff8a80; } }

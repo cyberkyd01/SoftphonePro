@@ -1,0 +1,31 @@
+:root {
+  --bg: #f6f7fb; --card: #ffffff; --fg: #1b1d2a; --muted: #5d6178; --line: #dfe2ee;
+  --primary: #3f51e0; --primary-fg: #ffffff; --primary-soft: #e8ebfd; --focus: #3f51e0;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12131c; --card: #1b1d2b; --fg: #eceefa; --muted: #a2a6c0; --line: #2d3047;
+    --primary: #7886ff; --primary-fg: #0e1030; --primary-soft: #262a52; --focus: #7886ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+a { color: var(--primary); }
+input[type=text], input[type=tel], select, textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); color: var(--fg); font: inherit;
+}
+textarea { min-height: 96px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button {
+  padding: 8px 14px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-fg);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+button.secondary { background: transparent; color: var(--primary); border: 1px solid var(--line); }
+button:hover { filter: brightness(1.08); }
+.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+header { display: flex; align-items: center; gap: 10px; }
+header img { width: 28px; height: 28px; }

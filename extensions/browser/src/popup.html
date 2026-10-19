@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SoftphonePro</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><img src="icons/icon-48.png" alt=""><h1>SoftphonePro</h1></header>
+  <form id="dial" autocomplete="off">
+    <label for="num" class="sr">Number to call</label>
+    <input id="num" type="tel" inputmode="tel" placeholder="Enter a number or paste one" autofocus>
+    <button type="submit">Call</button>
+  </form>
+  <div id="msg" class="hint" role="status"></div>
+  <section>
+    <div class="row"><h2>Recent</h2><button id="clear" class="secondary small" type="button">Clear</button></div>
+    <ul id="recents"></ul>
+    <p id="empty" class="hint">No recent numbers yet.</p>
+  </section>
+  <footer><a href="#" id="options">Options</a></footer>
+  <script src="phone.js"></script>
+  <script src="settings.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
