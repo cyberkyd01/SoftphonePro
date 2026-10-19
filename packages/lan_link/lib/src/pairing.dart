@@ -99,7 +99,8 @@ class PairingSession {
     conn.onClosed = (_) {
       // Both users confirmed: trust is being persisted, so a close from the
       // peer (which finished first) is not a failure.
-      if (!isFinished && !_finishing) _finish(PairingState.failed, 'disconnected');
+      if (!isFinished && !_finishing)
+        _finish(PairingState.failed, 'disconnected');
     };
     conn.start();
     conn.send(PeerInfoMsg(ownInfo())).catchError((_) {});

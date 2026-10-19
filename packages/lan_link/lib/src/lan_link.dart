@@ -322,6 +322,7 @@ class LanLink {
   Stream<IncomingCallsQuery> get callsQueries => _queryCtrl.stream;
   Stream<CallsListEvent> get callsLists => _listCtrl.stream;
   Stream<PullRequest> get pullRequests => _pullCtrl.stream;
+
   /// Legacy (non-negotiated) intercom messages.
   Stream<IntercomEvent> get intercomRequests => _intercomCtrl.stream;
 
@@ -532,7 +533,7 @@ class LanLink {
         remote.address, () => RateLimiter(30, const Duration(minutes: 1)));
     if (_connLimits.length > 256) _connLimits.clear();
     if (!lim.allow() || _pendingHandshakes >= 8 || !_started) {
-      ws.close(1013, 'busy').catchError((_) {});
+      unawaited(safeCloseSocket(ws, 1013, 'busy'));
       return;
     }
     _pendingHandshakes++;
@@ -1199,6 +1200,6 @@ class LanLink {
   @visibleForTesting
   Future<void> debugDropConnection(String peerId) async {
     final c = _conns[peerId];
-    if (c != null) await c.ws.close(1001);
+    if (c != null) await safeCloseSocket(c.ws, 1001);
   }
 }

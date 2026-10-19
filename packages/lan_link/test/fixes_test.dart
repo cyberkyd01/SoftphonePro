@@ -107,8 +107,8 @@ void main() {
     });
 
     test('no answer times out as denied; revoke works', () async {
-      final g = await a.link.requestIntercom(b.id,
-          timeout: const Duration(milliseconds: 500));
+      final g = await a.link
+          .requestIntercom(b.id, timeout: const Duration(milliseconds: 500));
       expect(g.allowed, isFalse);
       b.link.intercomNegotiations.listen((r) => r.respond(true));
       await a.link.requestIntercom(b.id);

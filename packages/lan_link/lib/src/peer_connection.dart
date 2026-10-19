@@ -51,12 +51,15 @@ class PeerConnection {
   final _done = Completer<void>();
   StreamSubscription<dynamic>? _sub;
   bool _closed = false;
+  bool _closing = false;
+  bool _closeStarted = false;
 
-  bool get isClosed => _closed;
+  bool get isClosed => _closed || _closing;
   Future<void> get done => _done.future;
 
   void start() {
     ws.pingInterval = const Duration(seconds: 10);
+    ws.done.then((_) {}, onError: (Object _) {});
     _sub = _queue.rest.listen((data) async {
       _sub?.pause();
       try {
@@ -72,8 +75,9 @@ class PeerConnection {
   }
 
   void _finish(Object? err) {
-    if (_closed && _done.isCompleted) return;
+    if (_done.isCompleted) return;
     _closed = true;
+    _closing = true;
     if (!_done.isCompleted) {
       _done.complete();
       onClosed?.call(err);
@@ -99,28 +103,71 @@ class PeerConnection {
     }
   }
 
-  Future<void> _sendRaw(int type, List<int> body) => _send.run(() async {
-        if (_closed) throw PeerOfflineException(peerId);
-        final frame = await session.seal(concatBytes([
-          [type],
-          body
-        ]));
+  Future<void> _sendRaw(int type, List<int> body) {
+    // Never start a write once close was initiated; fail the future instead.
+    if (_closing || _closed) {
+      return Future.error(PeerOfflineException(peerId));
+    }
+    return _send.run(() async {
+      if (_closed || _closing && _closeStarted) {
+        throw PeerOfflineException(peerId);
+      }
+      final frame = await session.seal(concatBytes([
+        [type],
+        body
+      ]));
+      // Re-check after the async gap: the socket may have been closed.
+      if (_closed || _closeStarted || ws.readyState != WebSocket.open) {
+        throw PeerOfflineException(peerId);
+      }
+      try {
         ws.add(frame);
-      });
+      } catch (_) {
+        throw PeerOfflineException(peerId);
+      }
+    });
+  }
 
   Future<void> send(AppMessage m) => _sendRaw(_tJson, m.encode());
 
   Future<void> sendChunk(FileChunk c) => _sendRaw(_tChunk, c.encode());
 
-  Future<void> close([int code = 1000, String reason = '']) async {
-    if (_closed && ws.closeCode != null) return;
-    _closed = true;
+  Future<void>? _closeFuture;
+
+  /// Graceful close: frames queued before this call are flushed first, frames
+  /// sent afterwards fail. Never throws.
+  Future<void> close([int code = 1000, String reason = '']) =>
+      _closeFuture ??= _doClose(code, reason);
+
+  Future<void> _doClose(int code, String reason) async {
+    _closing = true; // new sends are refused from now on
     try {
-      await ws.close(code, reason).timeout(const Duration(seconds: 2));
+      await _send.run(() async {
+        _closeStarted = true;
+        ws.pingInterval = null;
+        await safeCloseSocket(ws, code, reason);
+      });
     } catch (_) {}
-    await _sub?.cancel();
+    _closed = true;
+    // Do not cancel the socket subscription here: cancelling destroys the
+    // socket and would race with a close frame that is still being written.
     _finish(null);
   }
+}
+
+/// Closes [ws] without ever throwing or leaking an async error, and without
+/// waiting longer than [timeout] for the peer's close frame.
+Future<void> safeCloseSocket(WebSocket ws,
+    [int? code,
+    String? reason,
+    Duration timeout = const Duration(seconds: 2)]) async {
+  ws.done.then((_) {}, onError: (Object _) {});
+  try {
+    if (ws.readyState == WebSocket.closed) return;
+    final f = code == null ? ws.close() : ws.close(code, reason);
+    f.then((_) {}, onError: (Object _) {});
+    await f.timeout(timeout);
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +215,7 @@ Js _textFrame(dynamic d) {
 Future<void> _sendError(WebSocket ws, HandshakeException e) async {
   try {
     ws.add(jsonEncode({'t': 'error', 'code': e.code, 'message': e.message}));
-    await ws.close(1008, e.code).timeout(const Duration(seconds: 2));
+    await safeCloseSocket(ws, 1008, e.code);
   } catch (_) {}
 }
 
@@ -181,6 +228,7 @@ Future<PeerConnection> handshakeAsInitiator(
   InternetAddress? remote,
   Duration timeout = const Duration(seconds: 10),
 }) async {
+  ws.done.then((_) {}, onError: (Object _) {});
   final q = StreamQueue<dynamic>(ws);
   try {
     final hs = await Handshake.create(
@@ -226,9 +274,11 @@ Future<PeerConnection> handshakeAsInitiator(
 }
 
 Future<void> _closeQuiet(WebSocket ws, StreamQueue<dynamic> q) async {
+  // Close first (flushes pending writes), only then drop the subscription.
+  await safeCloseSocket(ws, 1008, null, const Duration(seconds: 1));
   try {
-    unawaited(q.cancel(immediate: true));
-    await ws.close(1008).timeout(const Duration(seconds: 1));
+    unawaited(Future.sync(() => q.cancel(immediate: true))
+        .then((_) {}, onError: (Object _) {}));
   } catch (_) {}
 }
 
@@ -243,6 +293,7 @@ Future<PeerConnection> handshakeAsResponder(
   InternetAddress? remote,
   Duration timeout = const Duration(seconds: 10),
 }) async {
+  ws.done.then((_) {}, onError: (Object _) {});
   final q = StreamQueue<dynamic>(ws);
   try {
     final j = _textFrame(await _next(q, timeout));
@@ -281,7 +332,8 @@ Future<PeerConnection> handshakeAsResponder(
       ..initiatorId = theirs.deviceId;
   } on HandshakeException catch (e) {
     await _sendError(ws, e);
-    unawaited(q.cancel(immediate: true));
+    unawaited(Future.sync(() => q.cancel(immediate: true))
+        .then((_) {}, onError: (Object _) {}));
     rethrow;
   } on FormatException {
     final e = HandshakeException('bad_hello', 'Malformed handshake');
