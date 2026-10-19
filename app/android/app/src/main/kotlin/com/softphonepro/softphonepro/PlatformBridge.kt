@@ -36,6 +36,14 @@ object PlatformBridge : MethodChannel.MethodCallHandler {
     fun register(engine: FlutterEngine) {
         val m = engine.dartExecutor.binaryMessenger
         MethodChannel(m, CHANNEL).setMethodCallHandler(this)
+        // Channel used by the LAN controller (app/lib/lan): idempotent, owner "lan".
+        MethodChannel(m, "com.softphonepro/lan").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "acquireMulticastLock" -> { Locks.setMulticast(true, "lan"); result.success(true) }
+                "releaseMulticastLock" -> { Locks.setMulticast(false, "lan"); result.success(true) }
+                else -> result.notImplemented()
+            }
+        }
         EventChannel(m, EVENTS).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink) = Hub.attach(events)
             override fun onCancel(arguments: Any?) = Hub.detach()
@@ -377,4 +385,10 @@ object PlatformBridge : MethodChannel.MethodCallHandler {
     }
 
     private val activeCalls = HashSet<String>()
+
+    /** A call was answered from the system UI: take the audio mode right away. */
+    fun markActive(key: String) {
+        activeCalls.add(key)
+        AudioRouter.begin()
+    }
 }

@@ -181,7 +181,8 @@ object AudioRouter {
                 @Suppress("DEPRECATION")
                 am.isSpeakerphoneOn = false
             }
-            am.mode = savedMode
+            // Never restore a stale RINGTONE/IN_COMMUNICATION captured while Telecom was ringing.
+            am.mode = if (savedMode == AudioManager.MODE_IN_CALL) savedMode else AudioManager.MODE_NORMAL
             if (Build.VERSION.SDK_INT >= 26) focus?.let { am.abandonAudioFocusRequest(it) }
             else @Suppress("DEPRECATION") am.abandonAudioFocus(null)
             focus = null

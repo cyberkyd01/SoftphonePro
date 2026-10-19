@@ -91,6 +91,7 @@ class MainActivity : FlutterActivity() {
             ACTION_ANSWER -> {
                 val key = i.getStringExtra(EXTRA_CALL_KEY) ?: return
                 showOverLockScreen(true)
+                PlatformBridge.markActive(key)
                 NotificationHelper.showOngoingCall(this, key)
                 Hub.emit("callAction", "kind" to "answer", "callKey" to key)
                 i.action = null

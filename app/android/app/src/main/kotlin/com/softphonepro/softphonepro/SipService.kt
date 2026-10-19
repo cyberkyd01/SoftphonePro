@@ -121,6 +121,7 @@ class SipService : Service() {
     override fun onDestroy() {
         running = false
         Locks.setIdleWake(false)
+        if (Hub.activity == null) Locks.releaseAllMulticast()
         super.onDestroy()
     }
 }

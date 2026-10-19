@@ -52,16 +52,28 @@ object Locks {
         }
     }
 
+    private val multicastOwners = HashSet<String>()
+
+    /** Multicast lock shared by several owners (app setting, LAN controller): held while any owner wants it. */
     @Synchronized
-    fun setMulticast(on: Boolean) {
+    fun setMulticast(on: Boolean, owner: String = "app") {
+        if (on) multicastOwners.add(owner) else multicastOwners.remove(owner)
         try {
-            if (on) {
+            if (multicastOwners.isNotEmpty()) {
                 if (multicast == null) multicast = wm().createMulticastLock("softphonepro:lan").apply { setReferenceCounted(false) }
                 if (multicast?.isHeld != true) multicast?.acquire()
             } else if (multicast?.isHeld == true) multicast?.release()
         } catch (e: Throwable) {
             Hub.log("multicast lock failed", e)
         }
+    }
+
+    @Synchronized
+    fun releaseAllMulticast() = setMulticastAll()
+
+    private fun setMulticastAll() {
+        multicastOwners.clear()
+        try { if (multicast?.isHeld == true) multicast?.release() } catch (_: Throwable) {}
     }
 
     fun multicastHeld() = multicast?.isHeld == true
