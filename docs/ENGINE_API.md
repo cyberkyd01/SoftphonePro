@@ -171,7 +171,9 @@ AccountConfig:
   "registrar": null,                 // override, e.g. "sip:pbx.example.com:5080"; default sip:<domain>
   "proxies": [],                     // outbound proxies, e.g. ["sip:proxy.example.com;lr"]
   "regUseProxy": 3,                  // pjsua reg_use_proxy bitmask (1 outbound, 2 acc proxy)
-  "transport": "udp",                // udp | tcp | tls | ws | wss | auto
+  "transport": "udp",                // udp | tcp | tls | ws | wss | auto   (ws/wss = SIP over WebSocket, RFC 7118, §8)
+  "wsPath": "/ws",                   // ws/wss only: HTTP path of the WebSocket upgrade (starts with "/", <=120 chars)
+  "rtcpFb": false,                   // offer RTP/AVPF (SAVPF, UDP/TLS/RTP/SAVPF) + a=rtcp-fb:* nack (WebRTC servers)
   "register": true, "regExpires": 300, "regRetrySec": 30, "regFirstRetrySec": 5,
   "regRetryRandomSec": 10, "regDelayBeforeRefreshSec": 5, "unregTimeoutMs": 4000,
   "dropCallsOnRegFail": false,
@@ -436,3 +438,79 @@ Phone-number cleanup is done by Dart dial rules.
   update (`on_call_media_state` re-applies the stored topology).
 * Picking the account for incoming calls: `on_acc_find_for_incoming`
   routes by receiving transport for the LAN and direct accounts.
+
+## 7. IAX2 (proto "iax2")
+* **Accounts:**
+  * `account.add` with `proto:"iax2"` returns `{acc, localPort}`. IAX2
+    account ids start at 1000 and share the `account.*` namespace and the
+    uid space with SIP.
+  * Config fields used: `username`, `password`, `domain` (or `iax.host`),
+    `iax.port` (default 4569), `iax.context` (sent as CALLED_CONTEXT),
+    `codecs` (subset of `PCMU/8000/1`, `PCMA/8000/1`, `GSM/8000/1`, in
+    order), `callerId`, `displayName`, `regExpires`, `regRetrySec`,
+    `regFirstRetrySec`, `register`.
+  * Registration failures report `regCode` 403 ("Wrong username/password
+    (403)"), 408 ("Timeout (408)") or 502 ("DNS lookup failed").
+* **Socket:** `core.start` accepts `iax:{port:4569, enabled:true}`. One UDP
+  socket is shared by all IAX2 accounts and calls. It is created lazily, and
+  falls back to a random port if 4569 is busy.
+* **Calls:**
+  * IAX2 calls carry `proto:"iax2"`, a `call` slot of 1000 or more, and a
+    normal global `cid`.
+  * The codec is one of `PCMU/8000/1`, `PCMA/8000/1` or `GSM/8000/1`.
+    `srtp` is always false and `remoteContact` is empty.
+  * `call.incoming.headers` carries `X-IAX-Called-Number`, `X-IAX-Context`
+    and `X-IAX-Username`.
+* **Shared requests:** IAX2 calls join the same conference bridge as SIP
+  calls. These requests therefore work for both protocols: `call.mute`,
+  `hold`, `unhold`, `conference`, `bridge`, `detachLocal`, `recordStart`,
+  `recordStop`, `playFile`, `setLevels`, `stats`, `dtmf` and `hangup`.
+* **DTMF:** the `call.dtmf` event's `method` can also be `"iax2"`. A
+  `call.dtmf` request with any method except `inband` is sent as native
+  IAX2 DTMF frames.
+* **Transfer and unsupported requests:** `call.transfer` sends an IAX
+  TRANSFER and emits `call.transferStatus {code:202, final:false}`. The
+  call ends when the PBX drops our leg. `call.transferAttended`,
+  `call.update`, `call.redirect`, `call.processRedirect` and
+  `call.sendRequest` return `UNSUPPORTED` for IAX2.
+* **Stats:** `rtt` comes from PING/PONG, and `jitterMs` is an RFC 3550-style
+  estimate. IAX2 has no RTCP, so `tx.lost` is 0 and `rx.lost` is the jitter
+  buffer's loss count.
+* **Limitations (v1):**
+  * IPv4 only.
+  * No trunk or meta frames, no RSA auth, no IAX encryption, and no native
+    media transfer (TXREQ is refused).
+  * No MWI.
+  * Remote hold is reported only when the peer sends a HOLD control frame.
+
+## 8. SIP over WebSocket (transport "ws" / "wss")
+* **Server and connection:**
+  * The server is the registrar host[:port] (else the domain). The default
+    port is 80 for ws and 443 for wss, and the HTTP path is `wsPath`.
+  * All accounts on the same server host:port share one connection and one
+    path.
+* **Addressing:**
+  * Contact is `<sip:user@<random>.invalid;transport=ws|wss>`.
+  * Contact/Via rewriting, `sipOutbound` and UDP `keepAliveSec` don't apply.
+  * Requests the server sends are accepted on the same connection. The
+    remote-target Contact of dialog-forming messages is re-pointed at that
+    connection.
+* **TLS:** wss uses `transports.tls` (verifyServer, caFile, certFile/keyFile,
+  minProto) and `core.setTlsPins`, even when the TLS listener is disabled.
+* **Liveness and limits:**
+  * The WebSocket is pinged every 30 s and dropped after 75 s of silence.
+  * Messages over 8000 bytes, protocol violations and handshake failures
+    close the connection, and pjsua re-registers on a new connection.
+* **`transport.state`:**
+  * `transport` is `"ws"` or `"wss"`.
+  * `connected` is reported after the WebSocket upgrade completes (for wss,
+    after TLS and then the upgrade).
+  * `disconnected` is reported on handshake failure, a peer Close, a drop, a
+    timeout or a protocol violation.
+  * `local` is the `.invalid` host with port 0.
+* **`sip.trace`:** `transport` is `WS` or `WSS`.
+* **WebRTC servers** (Asterisk `webrtc=yes`, FreeSWITCH, Kamailio): set
+  `srtp:"mandatory"`, `srtpKeying:["dtls"]`, `ice:true`, `rtcpMux:true` and
+  `rtcpFb:true`.
+* **Limitation:** `core.start` still needs at least one of udp/tcp/tls
+  enabled.

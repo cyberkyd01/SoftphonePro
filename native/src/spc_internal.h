@@ -204,6 +204,7 @@ typedef struct spc_call {
     int recording; int rec_id; int rec_mix; char rec_file[600]; int64_t rec_start_ms;
     int player_id;
     int tg_slot; pjmedia_port* tg_port; pj_pool_t* tg_pool;
+    void* iax;                     /* proto==1: unused by the registry (state lives in spc_iax2.c, keyed by cid) */
     int rx_set; float rx_level, tx_level;
     int64_t created_ms;
     int64_t next_stats_ms;
@@ -235,6 +236,33 @@ int       spc_call_media_audio_idx(const pjsua_call_info* ci);
 void      spc_call_get_tags(int slot, char* l, size_t ln, char* r, size_t rn);
 void      spc_call_schedule_timer(void (*cb)(void*), uint64_t cid, unsigned ms);
 uint64_t  spc_call_cid_of_slot(int slot);
+
+/* ---- IAX2 (spc_iax2.c); acc ids and call slots >= SPC_ID_IAX_BASE ---- */
+enum { SPC_IAXOP_ANSWER = 1, SPC_IAXOP_RING, SPC_IAXOP_REJECT, SPC_IAXOP_HANGUP, SPC_IAXOP_HOLD, SPC_IAXOP_UNHOLD,
+       SPC_IAXOP_DTMF, SPC_IAXOP_TRANSFER, SPC_IAXOP_UNSUPPORTED };
+int    spc_iax2_acc_valid(int acc);
+int    spc_iax2_acc_find_uid(const char* uid, int* acc);
+int    spc_iax2_account_add(cJSON* p, cJSON** res);
+int    spc_iax2_account_modify(int acc, const cJSON* p);
+int    spc_iax2_account_remove(int acc);
+int    spc_iax2_account_register(int acc, int on);
+int    spc_iax2_account_set_presence(int acc, const char* status, const char* note);
+cJSON* spc_iax2_acc_info_json(int acc);
+void   spc_iax2_acc_list_json(cJSON* arr);
+void   spc_iax2_configure(const cJSON* iax);                  /* core.start "iax" object (may be NULL) */
+int    spc_iax2_call_make(int acc, const cJSON* p, cJSON** res);
+int    spc_iax2_call_op(int op, uint64_t cid, const cJSON* p, cJSON** res);
+cJSON* spc_iax2_call_info_json(uint64_t cid);
+cJSON* spc_iax2_call_stats_json(uint64_t cid, int* err);
+int    spc_iax2_call_conf(uint64_t cid, int* conf_slot, int* active);   /* 0 ok, -1 unknown */
+int    spc_call_is_iax(uint64_t cid);
+int    spc_call_conf_slot(uint64_t cid, int slot);             /* conference slot of a call (SIP or IAX2), -1 if none */
+void   spc_iax2_unregister_all(int max_ms);
+void   spc_iax2_hangup_all(void);
+void   spc_iax2_shutdown(void);
+/* registry helpers for IAX2 calls (spc_call.c) */
+spc_call* spc_call_iax_new(int slot, int acc, const char* uid, int role);
+void      spc_call_iax_finish(spc_call* c, cJSON* terminal_state);   /* emits call.state, unlinks, frees; registry lock NOT held */
 
 /* ---- media (spc_media.c) ---- */
 int   spc_media_init(void);                 /* after pjsua_init, before start */

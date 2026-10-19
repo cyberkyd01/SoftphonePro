@@ -35,7 +35,7 @@ endif()
 set(SPC_SOURCES
   src/spc_core.c src/spc_json.c src/spc_port.c src/spc_account.c src/spc_call.c src/spc_callreq.c
   src/spc_media.c src/spc_stats.c src/spc_presence.c src/spc_trace.c src/spc_diag.c src/spc_dns.c
-  src/spc_lan.c src/spc_tls.c
+  src/spc_lan.c src/spc_tls.c src/spc_ws_transport.c src/spc_iax2.c src/spc_iax2_proto.c
   third_party/cjson/cJSON.c third_party/dart_api/dart_api_dl.c)
 
 add_library(spcore SHARED ${SPC_SOURCES})

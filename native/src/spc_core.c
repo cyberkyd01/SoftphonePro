@@ -1,6 +1,7 @@
 /* spc_core.c: public C ABI, worker thread, event delivery, core.* requests. */
 #include "spc_internal.h"
 #include "dart_api_dl.h"
+#include "spc_ws_transport.h"
 #include <errno.h>
 #include <time.h>
 
@@ -672,6 +673,7 @@ static int h_core_start(cJSON* p, cJSON** res)
     if (G.max_calls < 1 || G.max_calls > PJSUA_MAX_CALLS) G.max_calls = G.max_calls < 1 ? 1 : PJSUA_MAX_CALLS;
     G.incoming_auto_ring_ms = spc_jint(p, "incomingAutoRingMs", 1500);
     G.incoming_unattended_ms = spc_jint(p, "incomingUnattendedMs", 30000);
+    spc_iax2_configure(spc_jobj(p, "iax"));
     G.stats_interval_ms = spc_jint(p, "statsIntervalMs", 0);
     if (G.stats_interval_ms > 0 && G.stats_interval_ms < 200) G.stats_interval_ms = 200;
 
@@ -849,7 +851,16 @@ static int h_core_start(cJSON* p, cJSON** res)
         tl.port = (unsigned)tls_port;
         create_tp(PJSIP_TRANSPORT_TLS, &tl, 0, &G.tls_tp);
         if (G.ipv6) create_tp(PJSIP_TRANSPORT_TLS6, &tl, 1, &G.tls6_tp);
+    } else if (tls) {   /* TLS listener disabled: wss accounts still use these TLS settings */
+        pjsip_tls_setting ts;
+        static char w_ca[512], w_cert[512], w_key[512];
+        G.tls_verify = spc_jbool(tls, "verifyServer", 0);
+        spc_strlcpy(w_ca, spc_jstr(tls, "caFile") ? spc_jstr(tls, "caFile") : "", sizeof(w_ca));
+        spc_strlcpy(w_cert, spc_jstr(tls, "certFile") ? spc_jstr(tls, "certFile") : "", sizeof(w_cert));
+        spc_strlcpy(w_key, spc_jstr(tls, "keyFile") ? spc_jstr(tls, "keyFile") : "", sizeof(w_key));
+        spc_tls_cfg(&ts, G.tls_verify, w_ca, w_cert, w_key, spc_jstr(tls, "minProto"));
     }
+    spc_ws_start();     /* SIP over WebSocket transports (ws/wss) */
     if (G.udp_tp < 0 && G.tcp_tp < 0 && G.tls_tp < 0) {
         cJSON_Delete(tparr); pjsua_destroy();
         return spc_err(SPC_E_INVALID_PARAM, 0, "no transport enabled");
@@ -926,8 +937,9 @@ static void do_stop(int graceful)
 {
     if (!G.started) return;
     g_stats_gen++;
-    if (graceful) spc_account_graceful_unregister(4000);
+    if (graceful) { spc_iax2_unregister_all(4000); spc_account_graceful_unregister(4000); }
     spc_call_hangup_all_and_wait(1500);
+    spc_iax2_shutdown();
     spc_media_shutdown();
     spc_trace_set(0);
     spc_lan_stop();

@@ -1,5 +1,6 @@
 /* spc_tls.c: TLS transport settings, certificate verification policy with pins, transport.state events, sha256. */
 #include "spc_internal.h"
+#include "spc_ws_transport.h"
 #include <time.h>
 #include <ctype.h>
 
@@ -207,7 +208,7 @@ void spc_tls_on_transport_state(pjsip_transport* tp, pjsip_transport_state state
     cJSON* f;
     const char* sn;
     char type[12], local[96], remote[96], host[128];
-    int is_tls = (tp->key.type & ~PJSIP_TRANSPORT_IPV6) == PJSIP_TRANSPORT_TLS;
+    int is_tls = (tp->key.type & ~PJSIP_TRANSPORT_IPV6) == PJSIP_TRANSPORT_TLS || spc_ws_type_is_wss(tp->key.type);
     pj_ssl_sock_info* ssi = NULL;
     char sha[65] = "";
     int reject = 0;
