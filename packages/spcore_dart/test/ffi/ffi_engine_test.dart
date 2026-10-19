@@ -31,11 +31,18 @@ Future<void> main() async {
     if (r.exitCode != 0) skip = 'cannot compile stub: ${r.stderr}';
   }
 
-  FfiSipEngine make({Duration? wd}) => FfiSipEngine(
-    libraryPath: lib,
-    watchdogInterval: wd,
-    defaultTimeout: const Duration(seconds: 2),
-  );
+  // Every engine is disposed after its test, even when the test fails, so a
+  // failure never leaves the shared stub core attached for the next test.
+  // Timeouts are generous upper bounds for slow CI runners.
+  FfiSipEngine make({Duration? wd}) {
+    final e = FfiSipEngine(
+      libraryPath: lib,
+      watchdogInterval: wd,
+      defaultTimeout: const Duration(seconds: 10),
+    );
+    addTearDown(e.dispose);
+    return e;
+  }
 
   test('init, request/response routing and error mapping', () async {
     final e = make();
@@ -113,7 +120,7 @@ Future<void> main() async {
       expect(e2.attachedToRunningCore, isTrue);
       final snap = await e2.events
           .firstWhere((x) => x is ResyncSnapshotEvent)
-          .timeout(const Duration(seconds: 2));
+          .timeout(const Duration(seconds: 10));
       expect(snap, isA<ResyncSnapshotEvent>());
       await e2.dispose();
       await e1.dispose();
@@ -127,6 +134,7 @@ Future<void> main() async {
       watchdogInterval: const Duration(milliseconds: 100),
       watchdogTimeout: const Duration(milliseconds: 100),
     );
+    addTearDown(e.dispose);
     await e.init();
     // The stub answers core.ping unless STUB_NO_PING is set; use start() to arm the watchdog,
     // then make pings fail by pointing them at a method that never answers.
@@ -138,11 +146,11 @@ Future<void> main() async {
     await e.request('test.mute', {});
     await e.events
         .firstWhere((x) => x is EngineUnresponsiveEvent)
-        .timeout(const Duration(seconds: 2));
+        .timeout(const Duration(seconds: 10));
     await e.request('test.unmute', {});
     await e.events
         .firstWhere((x) => x is EngineResponsiveEvent)
-        .timeout(const Duration(seconds: 2));
+        .timeout(const Duration(seconds: 10));
     await e.dispose();
   }, skip: skip);
 

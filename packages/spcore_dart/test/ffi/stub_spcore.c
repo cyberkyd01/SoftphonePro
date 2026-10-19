@@ -86,10 +86,13 @@ API int64_t spc_request(const char* method, const char* params) {
   Req* r = (Req*)calloc(1, sizeof(Req));
   r->id = ++g_req;
   strncpy(r->method, method, 63);
+  int64_t id = r->id;
   pthread_t t;
-  pthread_create(&t, NULL, worker, r);
-  pthread_detach(t);
-  return r->id;
+  /* A loaded CI runner can refuse new threads; answer inline then (the
+   * response is queued on the port and handled after this returns). */
+  if (pthread_create(&t, NULL, worker, r) != 0) worker(r);
+  else pthread_detach(t);
+  return id;
 }
 API char* spc_request_sync(const char* m, const char* p, int32_t t) { return strdup("{}"); }
 API void spc_free(char* p) { free(p); }
