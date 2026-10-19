@@ -33,13 +33,15 @@ build_one() {
   local sdk arch ossl minflag
   case "$target" in
     ios-arm64)       sdk=iphoneos;        arch=arm64;  ossl=ios64-xcrun;        minflag="-miphoneos-version-min=$MIN_IOS" ;;
-    ios-sim-arm64)   sdk=iphonesimulator; arch=arm64;  ossl=iossimulator-xcrun; minflag="-mios-simulator-version-min=$MIN_IOS" ;;
-    ios-sim-x86_64)  sdk=iphonesimulator; arch=x86_64; ossl=iossimulator-xcrun; minflag="-mios-simulator-version-min=$MIN_IOS" ;;
+    ios-sim-arm64)   sdk=iphonesimulator; arch=arm64;  ossl=iossimulator-arm64-xcrun; minflag="-mios-simulator-version-min=$MIN_IOS" ;;
+    ios-sim-x86_64)  sdk=iphonesimulator; arch=x86_64; ossl=iossimulator-x86_64-xcrun; minflag="-mios-simulator-version-min=$MIN_IOS" ;;
   esac
   local sdkpath; sdkpath="$(xcrun --sdk "$sdk" --show-sdk-path)"
   spc_init "$target" "$@"
   SPC_OPENSSL_TARGET="$ossl"
-  SPC_OPENSSL_ARGS=(-arch "$arch" "$minflag" -fPIC)
+  # The *-xcrun Configure targets already add "-arch <arch>"; a separate
+  # "-arch" "<arch>" pair would be parsed by Configure as a second target.
+  SPC_OPENSSL_ARGS=("$minflag" -fPIC)
   SPC_CMAKE_PLATFORM_ARGS=(
     -DCMAKE_SYSTEM_NAME=iOS
     -DCMAKE_OSX_SYSROOT="$sdk"
