@@ -1,0 +1,296 @@
+/* spcore internals shared by all modules. */
+#ifndef SPC_INTERNAL_H
+#define SPC_INTERNAL_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+
+#include <pjsua-lib/pjsua.h>
+#include "cJSON.h"
+#include "spcore.h"
+#include "spc_port.h"
+
+#define SPC_VERSION "1.0.0"
+#define SPC_EVENT_RING_MAX 2000
+#define SPC_MAX_CODECS 24
+#define SPC_MAX_PEERS 32
+#define SPC_ID_IAX_BASE 1000
+
+/* ---- errors ---- */
+enum {
+    SPC_OK = 0,
+    SPC_E_INVALID_PARAM,
+    SPC_E_NOT_FOUND,
+    SPC_E_NOT_STARTED,
+    SPC_E_ALREADY,
+    SPC_E_PJ_ERROR,
+    SPC_E_TIMEOUT,
+    SPC_E_UNSUPPORTED,
+    SPC_E_BUSY,
+    SPC_E_INTERNAL
+};
+const char* spc_err_name(int code);
+/* Records an error for the current request (worker thread) and returns code. */
+int spc_err(int code, pj_status_t status, const char* fmt, ...);
+int spc_pjerr(pj_status_t status, const char* what);
+
+typedef int (*spc_handler)(cJSON* p, cJSON** res);
+typedef struct { const char* name; spc_handler fn; int flags; } spc_method;
+#define SPC_M_PRESTART 1
+
+/* ---- json helpers (spc_json.c) ---- */
+const char* spc_jstr(const cJSON* o, const char* k);
+int         spc_jint(const cJSON* o, const char* k, int def);
+double      spc_jnum(const cJSON* o, const char* k, double def);
+int         spc_jbool(const cJSON* o, const char* k, int def);
+int         spc_jhas(const cJSON* o, const char* k);
+cJSON*      spc_jobj(const cJSON* o, const char* k);
+cJSON*      spc_jarr(const cJSON* o, const char* k);
+uint64_t    spc_ju64(const cJSON* o, const char* k);   /* 0 if missing */
+void        spc_jadd_str(cJSON* o, const char* k, const char* s);   /* NULL -> null */
+void        spc_jadd_pjstr(cJSON* o, const char* k, const pj_str_t* s);
+void        spc_jadd_u64(cJSON* o, const char* k, uint64_t v);
+cJSON*      spc_jpjstr(const pj_str_t* s);
+char*       spc_json_print(const cJSON* o);          /* malloc'd, free with free() */
+pj_str_t    spc_pjs(const char* s);                   /* no copy */
+void        spc_pjcopy(char* dst, size_t n, const pj_str_t* s);
+char*       spc_strdup(const char* s);
+void        spc_strlcpy(char* dst, const char* src, size_t n);
+int         spc_strieq(const char* a, const char* b);
+int         spc_strnieq(const char* a, const char* b, size_t n);
+/* parse: "Disp" <sip:user@host>;tag -> display, uri, user */
+void        spc_parse_nameaddr(const char* s, char* disp, size_t dn, char* uri, size_t un, char* user, size_t usn);
+cJSON*      spc_sockaddr_json_str(const pj_sockaddr* a);
+/* msg_data from {"headers":{k:v}} into msg_data using pool */
+void        spc_fill_msg_data(pj_pool_t* pool, pjsua_msg_data* md, const cJSON* headers);
+cJSON*      spc_headers_from_rdata(pjsip_rx_data* rdata);
+
+/* ---- events / core (spc_core.c) ---- */
+typedef struct spc_global {
+    int inited;         /* spc_init called */
+    int started;        /* core.start done */
+    int shutting;
+    /* sinks */
+    spc_mutex_t emit_mtx;
+    int64_t dart_port;
+    void (*cb)(const char*, void*);
+    void* cb_user;
+    int dart_ok;
+    char* ring[SPC_EVENT_RING_MAX];
+    int ring_head, ring_count;
+    int64_t seq;
+    /* registry mutex: protects calls/accounts/buddies tables */
+    spc_mutex_t reg_mtx;
+    /* queue */
+    spc_mutex_t q_mtx;
+    spc_cond_t q_cv;
+    void* q_head; void* q_tail;
+    int64_t next_req_id;
+    int worker_quit;
+    spc_thread_t worker;
+    int worker_running;
+    pj_pool_t* pool;               /* pjsua pool for engine lifetime */
+    /* config */
+    char user_agent[128];
+    int  incoming_auto_ring_ms;
+    int  incoming_unattended_ms;
+    int  stats_interval_ms;
+    int  max_calls;
+    int  snd_manual;               /* sndMode manual */
+    int  no_audio_device;
+    int  log_forward;
+    int  sip_trace;
+    int  tls_verify;
+    int  qos;
+    int  rtp_port, rtp_port_range;
+    int  ec_tail_ms;
+    int  clock_rate;
+    int  udp_tp, tcp_tp, tls_tp, udp6_tp, tcp6_tp, tls6_tp, lan_tp;
+    int  direct_acc, lan_acc;
+    int  ipv6;
+    char nat_type_desc[64];
+    char nat_type[24];
+    char stun_server[128];
+    char public_addr[64];         /* optional override for advertised SIP/RTP address (tests, split-horizon) */
+    int64_t cid_counter;           /* never reset */
+} spc_global;
+extern spc_global G;
+
+void   spc_emit(const char* event, cJSON* fields);     /* takes ownership of fields */
+int    spc_sink_attached(void);
+void   spc_registry_lock(void);
+void   spc_registry_unlock(void);
+void   spc_ensure_pj_thread(const char* name);
+
+/* module method tables */
+extern const spc_method spc_methods_core[];
+extern const spc_method spc_methods_account[];
+extern const spc_method spc_methods_call[];
+extern const spc_method spc_methods_media[];
+extern const spc_method spc_methods_presence[];
+extern const spc_method spc_methods_diag[];
+
+/* ---- accounts (spc_account.c) ---- */
+typedef struct spc_acc {
+    struct spc_acc* next;          /* all-allocated list (freed at core.stop) */
+    int acc;
+    int proto;                     /* 0 sip, 1 iax2 */
+    int used;
+    char uid[96];
+    int is_lan, is_direct;
+    char reg_state[16];
+    int reg_code;
+    char reg_reason[96];
+    char last_error[200];
+    char presence[12];
+    char presence_note[128];
+    char transport[8];
+    char domain[128];
+    char dtmf_method[12];
+    char user_agent[128];
+    char caller_id[64];
+    char display_name[64];
+    int redirect;                  /* 0 auto 1 ask 2 reject */
+    int refer_reject, watcher_reject;
+    int srtp;
+    int mwi;
+    int privacy;
+    int ncodecs;
+    char codecs[SPC_MAX_CODECS][40];
+    int own_tp;
+    int expires_cfg;
+    int tls_verify_failed;         /* last registration failed due to TLS cert */
+    cJSON* cfg;
+} spc_acc;
+
+spc_acc* spc_acc_from_id(int acc);              /* takes no lock; returns meta pointer or NULL (valid until core.stop) */
+int      spc_acc_resolve(const cJSON* p, int* acc);   /* acc or uid -> pjsua id; handles -1 = direct */
+cJSON*   spc_acc_info_json(int acc);
+void     spc_account_install_callbacks(pjsua_callback* cb);
+int      spc_account_init_special(int direct_tp, int lan_tp);
+void     spc_account_cleanup(void);
+void     spc_account_graceful_unregister(int max_ms);
+int      spc_uri_normalize(int acc, const char* in, char* out, size_t outsz);
+int      spc_acc_list_json(cJSON* arr);
+void     spc_account_on_ip_change(void);
+
+/* ---- calls (spc_call.c) ---- */
+typedef struct spc_call {
+    struct spc_call* next;
+    uint64_t cid;
+    int slot;
+    int acc;
+    char uid[96];
+    int proto;
+    int role;                      /* 0 caller, 1 callee */
+    int ended;
+    int responded;                 /* app answered/rang/rejected */
+    int ring_sent;
+    int incoming_emitted;
+    uint64_t parent_cid;           /* spawned by REFER */
+    char call_id[128];
+    char local_tag[64], remote_tag[64];
+    char last_media[12];
+    char last_codec[48];
+    int last_srtp;
+    int muted, held, detached;
+    int redirect_pending;
+    int nconf; uint64_t conf[SPC_MAX_PEERS];
+    int nbr;   uint64_t bridged[SPC_MAX_PEERS];
+    int recording; int rec_id; int rec_mix; char rec_file[600]; int64_t rec_start_ms;
+    int player_id;
+    int tg_slot; pjmedia_port* tg_port; pj_pool_t* tg_pool;
+    int rx_set; float rx_level, tx_level;
+    int64_t created_ms;
+    int64_t next_stats_ms;
+    char dtmf_method[12];
+} spc_call;
+
+spc_call* spc_call_find_locked(uint64_t cid);        /* registry lock must be held */
+int       spc_call_cid_to_slot(uint64_t cid, int* slot, int* acc);   /* takes lock */
+int       spc_call_alive(uint64_t cid);
+void      spc_call_install_callbacks(pjsua_callback* cb);
+cJSON*    spc_call_info_json(uint64_t cid);                          /* NULL if gone */
+void      spc_call_apply_media_all(void);
+int       spc_calls_active(void);
+void      spc_call_cleanup_all(void);
+void      spc_call_hangup_all_and_wait(int ms);
+cJSON*    spc_call_stats_json(uint64_t cid, int* err);
+void      spc_call_stats_tick(int64_t now_ms);
+void      spc_call_emit(uint64_t cid, const char* ev, cJSON* f);     /* dropped if cid is gone */
+void      spc_call_wait_gone(uint64_t cid, int ms);
+void      spc_calls_list_json(cJSON* arr);
+int       spc_account_filter_codecs_for(int acc, pjmedia_sdp_session* sdp);
+
+/* call internals shared with spc_callreq.c */
+spc_call* spc_call_lock_find(uint64_t cid);      /* returns with registry lock held if found, else unlocked NULL */
+void      spc_call_apply_topology(void);
+void      spc_call_cleanup_media(spc_call* c);   /* registry lock NOT held */
+int       spc_lan_register_account(int tp, int* acc);
+int       spc_call_media_audio_idx(const pjsua_call_info* ci);
+void      spc_call_get_tags(int slot, char* l, size_t ln, char* r, size_t rn);
+void      spc_call_schedule_timer(void (*cb)(void*), uint64_t cid, unsigned ms);
+uint64_t  spc_call_cid_of_slot(int slot);
+
+/* ---- media (spc_media.c) ---- */
+int   spc_media_init(void);                 /* after pjsua_init, before start */
+void  spc_media_started(void);              /* after pjsua_start */
+void  spc_media_shutdown(void);
+void  spc_media_on_call_media(int slot, int active);   /* ensure clock etc */
+cJSON* spc_media_devices_json(void);
+void  spc_media_on_snd_op(int op);
+int   spc_media_ensure_clock(void);
+pj_status_t spc_media_set_null_snd(void);
+extern pj_pool_t* spc_media_pool;
+int   spc_media_bridge_rate(void);
+const char* spc_media_snd_current(char* cap, size_t n, char* play, size_t m);
+int   spc_media_snd_open(void);
+int   spc_media_on_connect_error(pj_status_t st);
+unsigned spc_ec_options(const char* algo, int ns, int agc, int* tail_zero);
+
+/* ---- stats (spc_stats.c) ---- */
+double spc_emodel_mos(const char* codec, double lossPct, double jitterMs, double rttMs, double jbDelayMs, double ptimeMs);
+
+/* ---- presence (spc_presence.c) ---- */
+void  spc_presence_install_callbacks(pjsua_callback* cb);
+void  spc_presence_cleanup(void);
+void  spc_presence_on_mwi(int acc, pjsip_rx_data* rdata);
+cJSON* spc_buddy_list_json(void);
+
+/* ---- trace (spc_trace.c) ---- */
+int   spc_trace_init(void);
+void  spc_trace_set(int enabled);
+void  spc_trace_shutdown(void);
+
+/* ---- tls (spc_tls.c) ---- */
+void  spc_tls_on_transport_state(pjsip_transport* tp, pjsip_transport_state state, const pjsip_transport_state_info* info);
+void  spc_tls_set_pins(const cJSON* pins);
+void  spc_tls_cfg(pjsip_tls_setting* st, int verify, const char* ca, const char* cert, const char* key, const char* minProto);
+void  spc_tls_flag_failure(void);
+int   spc_tls_recent_failure(void);
+void  spc_tls_cleanup(void);
+
+/* ---- dns (spc_dns.c) ---- */
+int   spc_dns_detect(char servers[][64], int max);
+
+/* ---- lan (spc_lan.c) ---- */
+int   spc_lan_start(int port, cJSON* res);
+void  spc_lan_stop(void);
+void  spc_lan_on_find(const pjsip_rx_data* rdata, pjsua_acc_id* acc_id);
+int   spc_presence_init_module(void);
+
+/* ---- diag ---- */
+void  spc_diag_install_callbacks(pjsua_callback* cb);
+
+/* sha256 */
+void  spc_sha256_hex(const unsigned char* data, size_t len, char out[65]);
+size_t spc_pem_to_der(const char* pem, size_t pemlen, unsigned char* out, size_t outmax);
+
+/* log forwarding */
+void  spc_log_cb(int level, const char* data, int len);
+
+#endif

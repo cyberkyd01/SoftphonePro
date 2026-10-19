@@ -1,0 +1,10 @@
+_spc_api_version
+_spc_version_string
+_spc_init_dart_api
+_spc_init
+_spc_set_event_port
+_spc_set_event_callback
+_spc_request
+_spc_request_sync
+_spc_free
+_spc_shutdown

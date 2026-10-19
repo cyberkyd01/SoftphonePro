@@ -62,6 +62,9 @@ SPC_API void        spc_shutdown(void);                    // destroys pjsua, jo
   `cid`. `call` (the pjsua slot, 0..31; IAX2 1000+) is informational only.
   **Every `call.*` request identifies the call by `cid`.** If a request
   names a cid that is unknown or already ended, it fails with `NOT_FOUND`.
+* **Hangup responses:** `call.hangup`, `call.reject` and `call.redirect` wait
+  up to 2 s for the terminal `call.state`, so the terminal event is always
+  delivered before the response.
 * **Accounts:** `acc` is the pjsua account id (IAX2: 1000+). Every
   `account.*` request accepts either `acc` or `uid`. Dart's stable `uid`
   is echoed in every account and call event.
@@ -79,6 +82,7 @@ Error codes: `INVALID_PARAM`, `NOT_FOUND`, `NOT_STARTED`, `ALREADY`, `PJ_ERROR`
 ```json
 {"type":"event","event":"call.state","ts":1729312345123,"seq":991, ...fields}
 ```
+* Event payloads must not use the keys `type`, `event`, `ts` or `seq`.
 * `ts` is Unix time in milliseconds.
 * `seq` is a monotonic event counter. Dart uses it to detect gaps after a
   ring overflow and then calls `core.snapshot`.
@@ -117,6 +121,8 @@ after `=`.
   "incomingAutoRingMs": 1500,            // send 180 if Dart hasn't answered/rung/rejected in time; 0 = never
   "incomingUnattendedMs": 30000,         // if no event port/callback is attached when an INVITE arrives: 480 after this
   "statsIntervalMs": 0,                  // >0: emit call.stats events for confirmed calls at this interval
+  "publicAddr": null,                    // optional: overrides the advertised address for SIP transports and RTP
+                                         // (testing, split-horizon DNS, multi-homed hosts)
   "transports": {
     "udp": {"port": 5060, "enabled": true},     // port 0 = random; falls back to random if busy
     "tcp": {"port": 5060, "enabled": true},
@@ -212,6 +218,8 @@ AccountInfo, which is also the payload of the `account.reg` event:
  "expires":295,"online":true,"isUnreg":false,"contact":"<sip:1001@1.2.3.4:5060;ob>",
  "transport":"udp","presence":"online","isLan":false,"isDirect":false}
 ```
+* `account.add` with `register:true` does not emit a separate `account.reg`.
+  The first one is pjsua's own `registering` event.
 * `regState` is one of `none` · `registering` · `registered` ·
   `unregistering` · `unregistered` · `failed`.
 * `lastError` is a human-readable reason, for example "Wrong
@@ -244,7 +252,7 @@ Every call request identifies the call by `cid` (u64).
 | `call.conference` | `{cids:[u64]}` | `{}`; full-mesh connect with the local mic/speaker; unholds held calls |
 | `call.unconference` | `{cids:[u64]}` | `{}` |
 | `call.recordStart` | `{cid, file:s, mix?:"both\|remote\|local"="both"}` | `{file}` WAV PCM16 at the bridge clock rate |
-| `call.recordStop` | `{cid}` | `{file, durationMs}` |
+| `call.recordStop` | `{cid}` | `{file, durationMs}`; returns only after the WAV file is finalised |
 | `call.update` | `{cid, useUpdate?:b=false}` | `{}` (re-INVITE/UPDATE: refreshes media/contact) |
 | `call.sendRequest` | `{cid, method:s, headers?:{}, body?:s, contentType?:s}` | `{}` (in-dialog INFO/MESSAGE/NOTIFY...) |
 | `call.info` | `{cid}` | `CallInfo` |
@@ -260,7 +268,7 @@ CallInfo:
  "stateCode":180,"stateReason":"Ringing","lastCode":180,
  "remoteUri":"sip:1002@pbx","remoteContact":"<sip:…>","remoteDisplay":"Bob","remoteUser":"1002",
  "localUri":"sip:1001@pbx","callId":"SIP Call-ID","localTag":"…","remoteTag":"…",
- "media":"none|active|localHold|remoteHold|bothHold|error","codec":"opus/48000/2",
+ "media":"none|active|localHold|remoteHold|bothHold|error","codec":"opus/48000/2",   // bothHold reserved (not emitted yet)
  "srtp":false,"secureSignaling":false,"muted":false,"recording":false,"detached":false,
  "held":false,"conferenceWith":[43],"bridgedWith":[],
  "connectMs":0,"totalMs":0,"headers":{"Call-Info":"…"}}
@@ -311,7 +319,7 @@ Special ids:
 ### buddy.* (presence and BLF)
 | method | params | result |
 |---|---|---|
-| `buddy.add` | `{acc|uid, uri:s, presence?:b=true, blf?:b=false}` | `{buddy:i}` |
+| `buddy.add` | `{acc|uid, uri:s, presence?:b=true, blf?:b=false}` | `{buddy:i}`. pjsua picks the sending account from the buddy URI's domain, so `acc`/`uid` is used only for URI normalisation. |
 | `buddy.subscribe` | `{buddy:i, presence?:b, blf?:b}` | `{}` |
 | `buddy.remove` | `{buddy:i}` | `{}` |
 | `buddy.list` | `{}` | `{buddies:[BuddyInfo]}` |
@@ -353,8 +361,8 @@ BuddyInfo:
 | `core.ipChangeProgress` | `{op:"restartListener\|shutdownTransport\|reregister\|reinvite\|done", status, acc?, cid?}` |
 | `log` | `{level, msg}` |
 | `sip.trace` | `{dir:"rx\|tx", transport:"UDP\|TCP\|TLS\|WS\|WSS", local:"ip:port", remote:"ip:port", len, msg}` |
-| `transport.state` | `{type, local, remote, state:"connected\|disconnected\|shutdown", status, tls?:{verifyStatus:[s], cipher, remoteCert:{subject,issuer,notAfter,sha256}}}` |
-| `transport.tlsVerify` | `{host, sha256, verifyStatus:[s], subject, issuer}`; a handshake was rejected. The UI may pin the cert (`core.setTlsPins`) and re-register. |
+| `transport.state` | `{transport:"udp\|tcp\|tls\|ws\|wss", local, remote, state:"connected\|disconnected\|shutdown", status, tls?:{verifyStatus:[s], cipher, remoteCert:{subject,issuer,notAfter,sha256}}}` |
+| `transport.tlsVerify` | `{host, sha256, verifyStatus:[s], subject, issuer}`; a handshake was rejected. The UI may pin the cert (`core.setTlsPins`) and re-register. Pins match on the certificate SHA-256; the pin's `host` field is advisory. |
 | `account.reg` | AccountInfo |
 | `account.mwi` | `{acc, uid, waiting:b, newMsgs:i, oldMsgs:i, urgentNew:i, urgentOld:i, account?:s, solicited:b}` |
 | `account.incomingSubscribe` | `{acc, uid, from, accepted:b}` |
@@ -362,7 +370,7 @@ BuddyInfo:
 | `call.state` | `{cid, call, acc, uid, proto, role, state, stateCode, stateReason, lastCode, remoteUri, remoteDisplay, remoteUser, connectMs, totalMs}` |
 | `call.media` | `{cid, media, codec, srtp, crypto, secureSignaling, ice}` |
 | `call.dtmf` | `{cid, digit, method:"rfc2833\|info", durationMs}` (in-band receive is not supported in v1) |
-| `call.transferRequest` | `{cid, target, referredBy, newCid?}`; incoming REFER, already accepted when referPolicy is accept |
+| `call.transferRequest` | `{cid, target, referredBy, accepted:b}`; incoming REFER. The call created by the REFER announces itself with its own events, and its `call.state` events carry `transferFrom:<cid>`. |
 | `call.transferStatus` | `{cid, code, reason, final:b}` |
 | `call.replaced` | `{oldCid, newCid}` |
 | `call.redirected` | `{cid, target, code}`; only when the account's redirect = ask |
@@ -374,7 +382,7 @@ BuddyInfo:
 | `im.typing` | `{acc, uid, from, typing:b}` |
 | `media.devicesChanged` | `{}` |
 | `media.error` | `{op, status, message, fallback:"null"\|null}` |
-| `diag.natType` | `{type:"unknown\|open\|blocked\|symmetricUdp\|fullCone\|symmetric\|restricted\|portRestricted", description, stun}` |
+| `diag.natType` | `{natType:"unknown\|open\|blocked\|symmetricUdp\|fullCone\|symmetric\|restricted\|portRestricted", description, stun}` |
 | `diag.options` | `{acc, uid, code, reason, rttMs}` |
 
 Every call satisfies these invariants (tests assert them):

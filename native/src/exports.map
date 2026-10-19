@@ -1,0 +1,15 @@
+{
+  global:
+    spc_api_version;
+    spc_version_string;
+    spc_init_dart_api;
+    spc_init;
+    spc_set_event_port;
+    spc_set_event_callback;
+    spc_request;
+    spc_request_sync;
+    spc_free;
+    spc_shutdown;
+  local:
+    *;
+};
