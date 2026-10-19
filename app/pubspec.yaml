@@ -56,9 +56,6 @@ dependencies:
   spcore_flutter:
     path: ../packages/spcore_flutter
 
-  spcore_flutter:
-    path: ../packages/spcore_flutter
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
