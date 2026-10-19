@@ -54,9 +54,10 @@ build_one() {
   )
   SPC_WEBRTC_AEC=0
   SPC_SPEEX_AEC_SHIM=1
-  # Opus: NEON is presumed on iOS arm64 (OPUS_PRESUME_NEON); the "may have" runtime-detection path is
-  # not available there (CMake prints "Runtime cpu capability detection needed for MAY_HAVE_NEON").
-  SPC_OPUS_ARGS=(-DOPUS_MAY_HAVE_NEON=OFF)
+  # Opus: leave OPUS_MAY_HAVE_NEON at its default (ON). On iOS opus presumes NEON (OPUS_PRESUME_NEON, arm64
+  # only) and its CMake message "Runtime cpu capability detection needed for MAY_HAVE_NEON" is a plain
+  # message(), not an error: MAY_HAVE_NEON must stay defined or celt_neon_intr.c fails to compile
+  # (celt_inner_prod_neon undeclared). Result: NEON code is compiled in and used unconditionally.
   # CMAKE_SYSTEM_NAME=iOS restricts find_package/find_path/find_library to the SDK sysroot, so our
   # prefix (OpenSSL!) is invisible unless it is added to CMAKE_FIND_ROOT_PATH and the find modes are
   # relaxed. OpenSSL is also passed explicitly (hard-fails in common.sh if pjproject still does not use it).

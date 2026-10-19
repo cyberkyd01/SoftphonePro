@@ -149,7 +149,7 @@ function Build-OpenSSL {
 
 # ------------------------------------------------------------------ CMake sub-projects (Opus, bcg729)
 function Build-CMake($name, $extra) {
-  $d = $Deps[$name]; $key = "$($d.Version)|static-crt"
+  $d = $Deps[$name]; $key = "$($d.Version)|static-crt-v2"
   $lib = if ($name -eq 'opus') { 'opus.lib' } else { 'bcg729.lib' }
   if ((StampOk $name $key) -and (Test-Path "$Out\lib\$lib")) { Log "${name}: up to date"; return }
   Log "$name $($d.Version)"
@@ -312,7 +312,7 @@ function Write-DepsCmake {
 }
 
 Build-OpenSSL
-Build-CMake 'opus'   @('-DOPUS_BUILD_SHARED_LIBRARY=OFF','-DOPUS_BUILD_PROGRAMS=OFF','-DOPUS_BUILD_TESTING=OFF')
+Build-CMake 'opus'   @('-DOPUS_BUILD_SHARED_LIBRARY=OFF','-DOPUS_BUILD_PROGRAMS=OFF','-DOPUS_BUILD_TESTING=OFF','-DOPUS_STATIC_RUNTIME=ON')
 Build-CMake 'bcg729' @('-DENABLE_SHARED=NO','-DENABLE_STATIC=YES','-DENABLE_UNIT_TESTS=NO','-DENABLE_STRICT=NO')
 Build-PjProject
 Write-DepsCmake
