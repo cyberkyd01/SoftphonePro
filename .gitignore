@@ -39,3 +39,4 @@ key.properties
 __pycache__/
 *.pyc
 app/test/failures/
+third_party/**/pubspec.lock
