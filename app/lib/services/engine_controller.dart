@@ -14,7 +14,8 @@ import 'engine_files.dart';
 import 'providers.dart';
 import 'settings_controller.dart';
 
-const String kAppVersion = '1.0.0';
+/// Must match `version:` in pubspec.yaml (without the build number); a test checks it.
+const String kAppVersion = '1.1.0';
 const String kUserAgent = 'SoftphonePro/$kAppVersion';
 
 /// Rolling log of engine events and app-side engine errors (diagnostics).
