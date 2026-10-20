@@ -68,8 +68,9 @@ class _InCallPageState extends ConsumerState<InCallPage> {
           builder: (context, box) {
             final small = box.maxHeight < 640;
             // The meter strip sits above the avatar: shrink it on shorter
-            // screens so the action grid fits above the End button.
-            final avatar = box.maxHeight < 700 ? 64.0 : box.maxHeight < 880 ? 88.0 : 120.0;
+            // screens, and drop it (as in landscape) where the action grid
+            // would otherwise not fit above the End button.
+            final avatar = box.maxHeight < 760 ? 0.0 : box.maxHeight < 880 ? 88.0 : 120.0;
             final landscape =
                 box.maxWidth > box.maxHeight && box.maxHeight < 560;
             Widget endButton(double bottom) => Padding(
@@ -171,7 +172,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
               if (_keypad && c.isConfirmed) ...[
                 const SizedBox(height: 8),
                 InCallKeypad(cid: c.cid, compact: true),
-              ] else if (others.isEmpty && !landscape) ...[
+              ] else if (others.isEmpty && !landscape && avatar > 0) ...[
                 SizedBox(height: avatar < 120 ? 12 : 24),
                 Avatar(name: title, size: avatar),
               ],

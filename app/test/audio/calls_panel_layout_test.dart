@@ -181,6 +181,25 @@ void main() {
     });
   }
 
+  for (final size in const [Size(360, 740), Size(400, 820), Size(412, 915)]) {
+    testWidgets('phone in-call ${size.width.toInt()}x${size.height.toInt()}: the whole action grid fits above End without scrolling', (t) async {
+      final env = await _env();
+      await _pump(t, env, size);
+      await containerOf(t).read(callsProvider.notifier).dial('2002');
+      await settle(t, env.engine);
+      containerOf(t).read(routerProvider).go('/call');
+      await t.pump(const Duration(milliseconds: 300));
+      await settle(t, env.engine);
+      final page = find.byType(InCallPage).last;
+      final end = t.getRect(find.descendant(of: page, matching: find.byKey(const Key('end-call'))));
+      for (final label in const ['Mute', 'Hold', 'More']) {
+        final f = find.descendant(of: page, matching: find.text(label));
+        expect(t.getRect(f).bottom, lessThanOrEqualTo(end.top), reason: '"$label" above the End button');
+        expect(f.hitTestable(), findsOneWidget, reason: '"$label" visible without scrolling');
+      }
+    });
+  }
+
   testWidgets('keypad strip expanded at 400x820 sizes to its content, nothing cut mid-row', (t) async {
     final env = await _env();
     await _pump(t, env, const Size(400, 820));
