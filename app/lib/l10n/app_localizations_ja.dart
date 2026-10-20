@@ -6691,4 +6691,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => '音楽ファイル';
+
+  @override
+  String get linkImportFlagMusicbed => '通話中に音楽を流します';
+
+  @override
+  String get musicbedMonitorIosHint => 'iPhoneでは通話中に聞こえます';
+
+  @override
+  String get musicbedStopFailed => '音楽を停止できませんでした。通話相手にまだ流れている可能性があります。';
 }

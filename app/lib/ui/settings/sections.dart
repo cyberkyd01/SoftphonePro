@@ -32,6 +32,7 @@ import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
 import '../pages/recordings/recording_settings.dart';
 import '../../services/ringtones.dart';
+import '../../audio/audio_levels.dart' show MeterBoostHolder;
 import '../../audio/device_labels.dart';
 import '../../audio/voice_isolation.dart' show strengthLabel;
 import 'audio_call_settings.dart';
@@ -152,7 +153,8 @@ class AudioSection extends ConsumerStatefulWidget {
   ConsumerState<AudioSection> createState() => _AudioSectionState();
 }
 
-class _AudioSectionState extends ConsumerState<AudioSection> {
+/// Mounted Audio settings keep the meters at the fast rate (they are the page).
+class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHolder<AudioSection> {
   bool _loop = false;
   late final EngineController _engCtl;
 

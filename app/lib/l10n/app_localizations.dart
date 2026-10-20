@@ -11591,6 +11591,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Music file'**
   String get musicbedSettingsFile;
+
+  /// Import confirmation: the profile switches music into every call.
+  ///
+  /// In en, this message translates to:
+  /// **'Plays music into your calls'**
+  String get linkImportFlagMusicbed;
+
+  /// Hint under the hear-it-myself toggle on iOS, where there is no audio device without a call.
+  ///
+  /// In en, this message translates to:
+  /// **'On iPhone you hear it during calls'**
+  String get musicbedMonitorIosHint;
+
+  /// Error notice: switching the musicbed off failed and it may still be playing to the other party.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t stop the music. It may still be playing to your callers.'**
+  String get musicbedStopFailed;
 }
 
 class _AppLocalizationsDelegate

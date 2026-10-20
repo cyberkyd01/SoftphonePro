@@ -6866,4 +6866,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Music file';
+
+  @override
+  String get linkImportFlagMusicbed => 'Plays music into your calls';
+
+  @override
+  String get musicbedMonitorIosHint => 'On iPhone you hear it during calls';
+
+  @override
+  String get musicbedStopFailed =>
+      'Couldn’t stop the music. It may still be playing to your callers.';
 }

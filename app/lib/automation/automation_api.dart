@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../audio/musicbed.dart';
 import '../models/account_profile.dart';
 import '../models/chat.dart';
 import '../services/accounts_controller.dart';
@@ -18,6 +19,7 @@ import 'automation_json.dart';
 import 'automation_server.dart';
 
 final _routeRe = RegExp(r'^/(keypad|recents|contacts|messages|presence|lan|more|settings(/[a-z]+)?)$');
+String _snake(String k) => k.replaceAllMapped(RegExp('[A-Z]'), (m) => '_${m[0]!.toLowerCase()}');
 final _dtmfRe = RegExp(r'^[0-9A-Da-d*#]{1,64}$');
 
 /// Routes `/v1/...` requests to the app's controllers. The same controllers
@@ -57,6 +59,10 @@ class AutomationApi {
         case 'dnd':
           if (m == 'GET') return ApiResponse(200, {'enabled': ref.read(settingsProvider).dnd});
           if (m == 'POST') return _dnd(r);
+          throw notAllowed('GET or POST');
+        case 'audio':
+          if (m == 'GET') return ApiResponse(200, await audioToJson(ref));
+          if (m == 'POST') return _audio(r);
           throw notAllowed('GET or POST');
         case 'history':
           if (m != 'GET') throw notAllowed('GET');
@@ -286,6 +292,43 @@ class AutomationApi {
     if (e is! bool) throw ApiException(400, 'invalid_enabled', '"enabled" must be true or false');
     await ref.read(settingsProvider.notifier).update({'dnd': e});
     return ApiResponse(200, {'enabled': e});
+  }
+
+  /// Mixer and musicbed controls. Everything goes through the settings the UI
+  /// edits (and the musicbed controller), so the app stays in sync. The
+  /// musicbed file is chosen in the app only: no file or path is accepted.
+  Future<ApiResponse> _audio(ApiRequest r) async {
+    final b = r.json;
+    const gains = {'micLevel', 'speakerLevel', 'musicbedVolume', 'musicbedMonitorVolume'};
+    const flags = {'musicbedEnabled', 'musicbedMonitor', 'musicbedPaused'};
+    final changes = <String, dynamic>{};
+    for (final e in b.entries) {
+      final k = e.key;
+      final v = e.value;
+      if (gains.contains(k)) {
+        if (v is! num || v.isNaN || v < 0 || v > 2) {
+          throw ApiException(400, 'invalid_${_snake(k)}', '"$k" must be a number from 0 to 2');
+        }
+        changes[k] = v.toDouble();
+      } else if (flags.contains(k)) {
+        if (v is! bool) throw ApiException(400, 'invalid_${_snake(k)}', '"$k" must be true or false');
+        changes[k] = v;
+      } else {
+        throw ApiException(400, 'invalid_field', 'Unknown field "$k"; the musicbed file can only be chosen in the app');
+      }
+    }
+    final paused = changes.remove('musicbedPaused') as bool?;
+    final settings = ref.read(settingsProvider);
+    if (changes['musicbedEnabled'] == true && settings.musicbedFile.isEmpty) {
+      throw ApiException(409, 'no_musicbed_file', 'No musicbed file is chosen; choose one in the app first');
+    }
+    if (paused != null) _requireEngine();
+    final bed = ref.read(musicbedProvider.notifier);
+    if (changes.isNotEmpty) await ref.read(settingsProvider.notifier).update(changes);
+    await bed.settled();
+    if (paused != null) await bed.setPaused(paused);
+    await bed.settled();
+    return ApiResponse(200, await audioToJson(ref));
   }
 
   Future<ApiResponse> _message(ApiRequest r) async {

@@ -536,10 +536,10 @@ will pick the music up again.
 * Recordings you make with **Record** include the musicbed on your side.
 * Between calls it pauses, and it continues from where it stopped when the
   next call connects. With **Hear it myself** on, it plays on your side even
-  with no call, which lets you preview it.
+  with no call, which lets you preview it (on iPhone you hear it during calls only).
 * If the file is deleted, SoftphonePro turns the musicbed off and tells you.
 
-The musicbed cannot be switched on or off through the local automation API.
+The local automation API can switch the musicbed on and off, pause it and set its volumes (`GET` / `POST /v1/audio`, see `docs/AUTOMATION_API.md`), but the music file can only be chosen in the app.
 Developers can read the engine calls in [ENGINE_API.md](ENGINE_API.md), section 10.
 
 ## Audio mixer

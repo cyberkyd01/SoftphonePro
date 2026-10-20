@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "Scegli prima un file per la musica di sottofondo.",
   "musicbedStopped": "Musica di sottofondo interrotta: {message}",
   "musicbedSettingsFooter": "Riproduce in loop un file musicale sotto la tua voce per tutti nelle tue chiamate, anche se sei in muto. Le chiamate in attesa sentono la musica di attesa.",
-  "musicbedSettingsFile": "File musicale"
+  "musicbedSettingsFile": "File musicale",
+  "linkImportFlagMusicbed": "Riproduce musica nelle tue chiamate",
+  "musicbedMonitorIosHint": "Su iPhone la senti durante le chiamate",
+  "musicbedStopFailed": "Impossibile fermare la musica. Potrebbe essere ancora udibile dai tuoi interlocutori."
 }

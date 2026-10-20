@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "Wähle zuerst eine Datei für die Hintergrundmusik.",
   "musicbedStopped": "Hintergrundmusik gestoppt: {message}",
   "musicbedSettingsFooter": "Spielt eine Musikdatei in Endlosschleife unter deiner Stimme für alle in deinen Anrufen, auch wenn du stummgeschaltet bist. Gehaltene Anrufe hören stattdessen die Wartemusik.",
-  "musicbedSettingsFile": "Musikdatei"
+  "musicbedSettingsFile": "Musikdatei",
+  "linkImportFlagMusicbed": "Spielt Musik in deine Anrufe ein",
+  "musicbedMonitorIosHint": "Auf dem iPhone hörst du sie während Anrufen",
+  "musicbedStopFailed": "Die Musik konnte nicht gestoppt werden. Sie läuft möglicherweise noch für deine Gesprächspartner."
 }

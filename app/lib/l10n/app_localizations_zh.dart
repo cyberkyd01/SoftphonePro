@@ -6636,4 +6636,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => '音乐文件';
+
+  @override
+  String get linkImportFlagMusicbed => '在你的通话中播放音乐';
+
+  @override
+  String get musicbedMonitorIosHint => '在 iPhone 上，通话期间才能听到';
+
+  @override
+  String get musicbedStopFailed => '无法停止音乐。通话对方可能仍能听到。';
 }

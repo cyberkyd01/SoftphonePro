@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// True on iOS, where (CallKit's manual audio session) there is no audio
+/// device outside a call. A provider so tests can override it.
+final isIosProvider = Provider<bool>((_) => !kIsWeb && Platform.isIOS);
+
 /// Platform extras for noise cancellation, over the existing channels:
 /// `softphonepro/desktop` (macOS) and `softphonepro/platform` (iOS, Android).
 abstract class AudioPlatform {

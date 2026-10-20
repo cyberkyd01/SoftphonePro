@@ -88,6 +88,8 @@ const _flagged = <String, Object?>{
   'autoAnswer': true,
   'stripPrefix': '0',
   'recordAutoDeleteDays': 1,
+  'musicbedEnabled': true,
+  'musicbedVolume': 1.5,
 };
 
 String _json(Map<String, Object?> settings, {List<Map<String, Object?>> accounts = const []}) => jsonEncode({'version': 1, 'accounts': accounts, 'settings': settings});
@@ -216,9 +218,23 @@ void main() {
       expect(p.ignored, hasLength(4));
     });
 
+    test('musicbed on / volume from an untrusted profile is flagged and still applied; off and monitor are not', () {
+      for (final k in ['musicbedEnabled', 'musicbedVolume']) {
+        expect(classifyImportSetting(k), ImportClass.flagged, reason: k);
+      }
+      final on = prepareUntrustedImport(const ProvisioningResult(settings: {'musicbedEnabled': true}));
+      expect(on.flags.map((f) => f.kind.name), ['musicbed']);
+      expect(on.resolve(const ImportDecision()).settings['musicbedEnabled'], true);
+      final vol = prepareUntrustedImport(const ProvisioningResult(settings: {'musicbedVolume': 0.9}));
+      expect(vol.flags.map((f) => f.kind.name), ['musicbed']);
+      final off = prepareUntrustedImport(const ProvisioningResult(settings: {'musicbedEnabled': false, 'musicbedMonitor': true, 'musicbedMonitorVolume': 0.2}));
+      expect(off.flags, isEmpty);
+      expect(off.resolve(const ImportDecision()).settings, {'musicbedEnabled': false, 'musicbedMonitor': true, 'musicbedMonitorVolume': 0.2});
+    });
+
     test('flagged settings carry flags; auto-answer and auto-record are off unless ticked', () {
       final p = prepareUntrustedImport(ProvisioningResult(settings: {..._flagged, ..._good}));
-      expect(p.flags.map((f) => f.kind.name).toSet(), containsAll(['autoAnswer', 'autoRecord', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion']));
+      expect(p.flags.map((f) => f.kind.name).toSet(), containsAll(['autoAnswer', 'autoRecord', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion', 'musicbed']));
       final off = p.resolve(const ImportDecision()).settings;
       expect(off.containsKey('autoAnswer'), isFalse);
       expect(off.containsKey('autoRecord'), isFalse);
@@ -357,7 +373,7 @@ void main() {
         unawaited(ch.value(h, doc));
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('link-import-confirm')), findsOneWidget);
-        for (final k in ['autoAnswer', 'autoRecord', 'forwarding', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion']) {
+        for (final k in ['autoAnswer', 'autoRecord', 'forwarding', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion', 'musicbed']) {
           expect(find.byKey(Key('link-import-flag-$k')), findsOneWidget, reason: k);
         }
         expect(find.textContaining('0900123'), findsOneWidget);
@@ -452,7 +468,7 @@ void main() {
       final env = await TestEnv.create(settings: const AppSettings());
       await pumpLink(tester, env, _LinkPlatform(), _json({..._good, ..._dropped, ..._flagged}, accounts: [_riskyAccount]));
       expect(find.byKey(const Key('link-import-confirm')), findsOneWidget);
-      for (final k in ['autoAnswer', 'autoRecord', 'forwarding', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion']) {
+      for (final k in ['autoAnswer', 'autoRecord', 'forwarding', 'blocklist', 'emergencyNumbers', 'speedDial', 'dialRewrite', 'recordingDeletion', 'musicbed']) {
         expect(find.byKey(Key('link-import-flag-$k')), findsOneWidget, reason: k);
       }
       expect(find.byKey(const Key('link-import-ignored')), findsOneWidget);

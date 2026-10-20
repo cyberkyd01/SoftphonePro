@@ -6946,4 +6946,15 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Muziekbestand';
+
+  @override
+  String get linkImportFlagMusicbed => 'Speelt muziek af in je gesprekken';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'Op de iPhone hoor je het tijdens gesprekken';
+
+  @override
+  String get musicbedStopFailed =>
+      'De muziek kon niet worden gestopt. Je gesprekspartners horen haar mogelijk nog.';
 }

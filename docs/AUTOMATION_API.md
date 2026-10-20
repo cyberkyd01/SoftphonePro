@@ -123,6 +123,38 @@ api -d '{"enabled":true}' $SPT/v1/dnd
 
 Same switch as Settings > Calls > Do not disturb.
 
+### GET /v1/audio, POST /v1/audio
+
+Levels, gains, devices and the musicbed (the looping music under your voice).
+
+```sh
+api $SPT/v1/audio
+api -d '{"micLevel":1.2,"musicbedEnabled":true,"musicbedVolume":0.4}' $SPT/v1/audio
+```
+
+```json
+{ "micLevel": 1.0, "speakerLevel": 1.0,
+  "levels": { "mic": 12, "speaker": 0, "musicbed": 87 },
+  "devices": { "capture": "default", "playback": "default" },
+  "musicbed": { "enabled": true, "file": "Calm", "active": true, "volume": 0.3,
+                "monitor": false, "monitorVolume": 0.5, "paused": false } }
+```
+
+* `micLevel`, `speakerLevel` and the musicbed `volume` / `monitorVolume` are gains from 0 to 2.
+* `levels` are the engine's instantaneous levels, 0 to 255 (read on each request).
+* `devices` are the selected device names (`default` for the system default).
+* `musicbed.file` is the display name of the chosen file, never a path. `active` is what the
+  engine reports; `enabled` is the setting.
+
+`POST` takes any of `micLevel`, `speakerLevel`, `musicbedEnabled`, `musicbedVolume`,
+`musicbedMonitor`, `musicbedMonitorVolume`, `musicbedPaused` and answers with the same body as
+`GET`. It uses the same settings and musicbed controller as the app, so the app's sliders and
+switches follow. Errors: `400 invalid_<field>` (for example `invalid_mic_level`) for a value
+outside 0 to 2 or of the wrong type, `400 invalid_field` for any other field, and
+`409 no_musicbed_file` when `musicbedEnabled` is `true` but no file is chosen in the app.
+`musicbedPaused` needs a running engine (`409 engine_not_running`) and does nothing while no
+music plays. **No file or path is accepted**: the musicbed file is chosen in the app only.
+
 ### GET /v1/history?limit=50
 
 Newest first, `limit` 1 to 500. Each record: `id`, `direction` (`incoming`/`outgoing`),
@@ -166,6 +198,7 @@ increasing `id`, an `event:` category and JSON `data` with a `type` and `time`:
 | `message` | `received`, `sent`, `status` | `message` object |
 | `history` | `added` | `record` (also written for calls the app rejected, for example under DND) |
 | `dnd` | `changed` | `enabled` |
+| `audio` | `musicbed` | `musicbed` object as in `GET /v1/audio`; sent when the musicbed is switched on or off, starts, stops, is paused or resumed, or its file or monitor setting changes (not for volume or level changes) |
 
 Browsers: `EventSource` cannot send an Authorization header; use `fetch()` and read
 `response.body` as a stream from an allowed origin.

@@ -17,6 +17,7 @@ String importFlagText(AppLocalizations l, ImportFlag f) => switch (f.kind) {
   ImportFlagKind.speedDial => l.linkImportFlagSpeedDial,
   ImportFlagKind.recordingDeletion => l.linkImportFlagRecordingDelete,
   ImportFlagKind.featureCodes => l.linkImportFlagFeatureCodes,
+  ImportFlagKind.musicbed => l.linkImportFlagMusicbed,
 };
 
 /// Lines describing where an imported account connects (server, proxies,

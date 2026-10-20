@@ -6955,6 +6955,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Ficheiro de música';
+
+  @override
+  String get linkImportFlagMusicbed => 'Reproduz música nas suas chamadas';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'No iPhone, você a ouve durante as chamadas';
+
+  @override
+  String get musicbedStopFailed =>
+      'Não foi possível parar a música. Ela pode ainda estar a tocar para os seus interlocutores.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13907,4 +13918,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get musicbedSettingsFile => 'Arquivo de música';
+
+  @override
+  String get linkImportFlagMusicbed => 'Toca música nas suas chamadas';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'No iPhone, você ouve durante as chamadas';
+
+  @override
+  String get musicbedStopFailed =>
+      'Não foi possível parar a música. Ela pode ainda estar tocando para quem está na chamada.';
 }

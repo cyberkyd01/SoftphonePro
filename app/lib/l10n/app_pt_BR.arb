@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "Escolha primeiro um arquivo para a música de fundo.",
   "musicbedStopped": "Música de fundo interrompida: {message}",
   "musicbedSettingsFooter": "Reproduz em loop um arquivo de música por baixo da sua voz para todos nas suas chamadas, mesmo no mudo. Chamadas em espera ouvem a música de espera.",
-  "musicbedSettingsFile": "Arquivo de música"
+  "musicbedSettingsFile": "Arquivo de música",
+  "linkImportFlagMusicbed": "Toca música nas suas chamadas",
+  "musicbedMonitorIosHint": "No iPhone, você ouve durante as chamadas",
+  "musicbedStopFailed": "Não foi possível parar a música. Ela pode ainda estar tocando para quem está na chamada."
 }

@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "先にBGMファイルを選択してください。",
   "musicbedStopped": "BGMが停止しました: {message}",
   "musicbedSettingsFooter": "あなたの声の下で音楽ファイルをループ再生し、通話中の全員に聞こえます。ミュート中でも再生されます。保留中の通話には保留音が流れます。",
-  "musicbedSettingsFile": "音楽ファイル"
+  "musicbedSettingsFile": "音楽ファイル",
+  "linkImportFlagMusicbed": "通話中に音楽を流します",
+  "musicbedMonitorIosHint": "iPhoneでは通話中に聞こえます",
+  "musicbedStopFailed": "音楽を停止できませんでした。通話相手にまだ流れている可能性があります。"
 }

@@ -18,12 +18,21 @@ const kMusicbedSetEvery = Duration(milliseconds: 50);
 /// Keeps the engine's musicbed (a looping library track mixed into every call)
 /// in line with the `musicbed*` settings: starts it when enabled (also after
 /// an engine restart), stops it when disabled, pushes volume / monitor changes
-/// live and switches the setting off, with a notice, when the engine reports
-/// an error or the file is gone. The state is the engine's last known one.
+/// live (only the fields that changed) and switches the setting off, with a
+/// notice, when the file is gone or the engine rejects it (`INVALID_PARAM`).
+/// Other start failures (engine not started, internal error...) show a notice
+/// but leave the setting on; the next reconcile trigger (settings change,
+/// engine restart) tries again. The state is the engine's last known one.
 class MusicbedController extends Notifier<MusicbedState> {
   Future<void> _chain = Future.value();
   Timer? _throttle;
   bool _dirty = false;
+
+  /// The volume / monitor values the engine is known to hold; null while
+  /// unknown (then everything is sent). Only fields that differ from this are
+  /// sent, so a volume drag never makes the engine rebuild its call topology
+  /// for an unchanged `monitor`.
+  ({double volume, bool monitor, double monitorVolume})? _applied;
 
   @override
   MusicbedState build() {
@@ -47,8 +56,8 @@ class MusicbedController extends Notifier<MusicbedState> {
   EngineController get _ctl => ref.read(engineProvider.notifier);
 
   /// Runs [f] after everything queued before it, never overlapping.
-  void _enqueue(Future<void> Function() f) {
-    _chain = _chain.then((_) async {
+  Future<void> _enqueue(Future<void> Function() f) {
+    return _chain = _chain.then((_) async {
       if (!ref.mounted) return;
       try {
         await f();
@@ -92,12 +101,42 @@ class MusicbedController extends Notifier<MusicbedState> {
     error ? n.error(message) : n.show(message);
   }
 
-  Future<void> _refresh() async {
-    if (!_ctl.hasEngine) return;
+  /// Reads the engine's state; false when it could not be read.
+  Future<bool> _refresh() async {
+    if (!_ctl.hasEngine) return false;
     try {
       final st = await _ctl.engine.musicbedState();
-      if (ref.mounted) state = st;
+      if (!ref.mounted) return false;
+      state = st;
+      _applied = st.active ? (volume: st.volume, monitor: st.monitor, monitorVolume: st.monitorVolume) : null;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Stops the bed. When that fails, the engine may still be playing to the
+  /// customer: re-read its state and, if it is (or may be) active, try once
+  /// more; if that fails too, say so.
+  Future<void> _stop() async {
+    final e = _ctl.engine;
+    try {
+      await e.musicbedStop();
+      await _refresh();
+      return;
     } catch (_) {}
+    final known = await _refresh();
+    if (known && !state.active) return;
+    try {
+      await e.musicbedStop();
+    } catch (_) {
+      await _refresh();
+      if (state.active || !known) {
+        ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).musicbedStopFailed);
+      }
+      return;
+    }
+    await _refresh();
   }
 
   /// Makes the engine match the settings.
@@ -107,10 +146,7 @@ class MusicbedController extends Notifier<MusicbedState> {
     final s = ref.read(settingsProvider);
     final l = ref.read(l10nProvider);
     if (!s.musicbedEnabled) {
-      try {
-        await e.musicbedStop();
-      } catch (_) {}
-      return _refresh();
+      return _stop();
     }
     if (s.musicbedFile.isEmpty) return _giveUp(l.musicbedNeedsFile, error: false);
     final path = await ref.read(audioLibraryProvider).resolve(s.musicbedFile);
@@ -124,7 +160,14 @@ class MusicbedController extends Notifier<MusicbedState> {
         monitorVolume: s.musicbedMonitorVolume,
       );
     } on EngineException catch (err) {
-      _giveUp(l.musicbedStopped(err.error.message));
+      if (err.error.code == ErrorCode.invalidParam) {
+        // The file itself is bad or unsupported: retrying cannot help.
+        _giveUp(l.musicbedStopped(err.error.message));
+      } else {
+        // The engine could not do it right now: tell the user, keep the
+        // setting, and try again on the next engine start / settings change.
+        ref.read(noticeProvider.notifier).error(l.musicbedStopped(err.error.message));
+      }
     }
     await _refresh();
   }
@@ -149,18 +192,42 @@ class MusicbedController extends Notifier<MusicbedState> {
   Future<void> _sendSet() async {
     if (!_ctl.hasEngine || !state.active) return;
     final s = ref.read(settingsProvider);
+    final a = _applied;
+    final volume = s.musicbedVolume, monitor = s.musicbedMonitor, monitorVolume = s.musicbedMonitorVolume;
+    final sendVolume = a == null || a.volume != volume;
+    final sendMonitor = a == null || a.monitor != monitor;
+    final sendMonitorVolume = a == null || a.monitorVolume != monitorVolume;
+    if (!(sendVolume || sendMonitor || sendMonitorVolume)) return;
     try {
       await _ctl.engine.musicbedSet(
-        volume: s.musicbedVolume,
-        monitor: s.musicbedMonitor,
-        monitorVolume: s.musicbedMonitorVolume,
+        volume: sendVolume ? volume : null,
+        monitor: sendMonitor ? monitor : null,
+        monitorVolume: sendMonitorVolume ? monitorVolume : null,
       );
+      _applied = (volume: volume, monitor: monitor, monitorVolume: monitorVolume);
     } on EngineException catch (err) {
       if (err.error.code == ErrorCode.notFound) {
         await _refresh();
       }
     }
   }
+
+  /// Completes when everything queued so far (and anything queued meanwhile)
+  /// has run; the automation API answers with the state after this.
+  Future<void> settled() async {
+    Future<void> c;
+    do {
+      c = _chain;
+      await c;
+    } while (!identical(c, _chain));
+  }
+
+  /// Pauses or resumes the playing bed (automation API); a no-op when none plays.
+  Future<void> setPaused(bool paused) => _enqueue(() async {
+    if (!_ctl.hasEngine || !state.active) return;
+    await _ctl.engine.musicbedSet(paused: paused);
+    await _refresh();
+  });
 
   /// Turns the musicbed on or off from the UI.
   Future<void> setEnabled(bool on) =>

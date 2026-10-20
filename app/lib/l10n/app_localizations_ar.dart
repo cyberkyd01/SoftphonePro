@@ -6925,4 +6925,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'ملف الموسيقى';
+
+  @override
+  String get linkImportFlagMusicbed => 'يشغّل الموسيقى في مكالماتك';
+
+  @override
+  String get musicbedMonitorIosHint => 'على iPhone تسمعها أثناء المكالمات';
+
+  @override
+  String get musicbedStopFailed =>
+      'تعذّر إيقاف الموسيقى. قد تكون لا تزال تُسمَع للطرف الآخر في المكالمة.';
 }

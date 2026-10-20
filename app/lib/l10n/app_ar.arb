@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "اختر ملف الموسيقى الخلفية أولًا.",
   "musicbedStopped": "توقفت الموسيقى الخلفية: {message}",
   "musicbedSettingsFooter": "يكرر ملفًا موسيقيًا خلف صوتك لجميع المشاركين في مكالماتك، حتى أثناء كتم الميكروفون. المكالمات قيد الانتظار تسمع موسيقى الانتظار بدلًا منه.",
-  "musicbedSettingsFile": "ملف الموسيقى"
+  "musicbedSettingsFile": "ملف الموسيقى",
+  "linkImportFlagMusicbed": "يشغّل الموسيقى في مكالماتك",
+  "musicbedMonitorIosHint": "على iPhone تسمعها أثناء المكالمات",
+  "musicbedStopFailed": "تعذّر إيقاف الموسيقى. قد تكون لا تزال تُسمَع للطرف الآخر في المكالمة."
 }

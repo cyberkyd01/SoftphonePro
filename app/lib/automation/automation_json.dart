@@ -1,4 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
+
+import '../audio/audio_library.dart';
+import '../audio/musicbed.dart';
+import '../services/engine_controller.dart';
+import '../services/settings_controller.dart';
 
 import '../models/account_profile.dart';
 import '../models/call_record.dart';
@@ -108,3 +114,49 @@ Map<String, Object?> messageToJson(ChatMessage m) => {
   'status': m.status.name,
   'error': m.error,
 };
+
+/// Display name of the musicbed file; never a path.
+Future<String> _musicbedFileName(Ref ref, String file) async {
+  if (file.isEmpty) return '';
+  try {
+    for (final i in await ref.read(audioLibraryProvider).list()) {
+      if (i.ref == file) return i.name;
+    }
+  } catch (_) {}
+  final i = file.indexOf(':');
+  return i < 0 ? file : file.substring(i + 1).split(RegExp(r'[\\/]')).last;
+}
+
+/// The `musicbed` object of `GET /v1/audio` and the `audio` event.
+Future<Map<String, Object?>> musicbedToJson(Ref ref) async {
+  final s = ref.read(settingsProvider);
+  final st = ref.read(musicbedProvider);
+  return {
+    'enabled': s.musicbedEnabled,
+    'file': await _musicbedFileName(ref, s.musicbedFile),
+    'active': st.active,
+    'volume': s.musicbedVolume,
+    'monitor': s.musicbedMonitor,
+    'monitorVolume': s.musicbedMonitorVolume,
+    'paused': st.paused,
+  };
+}
+
+/// The body of `GET /v1/audio`. Levels come straight from the engine.
+Future<Map<String, Object?>> audioToJson(Ref ref) async {
+  final s = ref.read(settingsProvider);
+  var l = const MediaLevels(mic: 0, speaker: 0, musicbed: 0);
+  final ctl = ref.read(engineProvider.notifier);
+  if (ctl.hasEngine) {
+    try {
+      l = await ctl.engine.levels();
+    } catch (_) {}
+  }
+  return {
+    'micLevel': s.micLevel,
+    'speakerLevel': s.speakerLevel,
+    'levels': {'mic': l.mic, 'speaker': l.speaker, 'musicbed': l.musicbed},
+    'devices': {'capture': s.captureDev, 'playback': s.playbackDev},
+    'musicbed': await musicbedToJson(ref),
+  };
+}

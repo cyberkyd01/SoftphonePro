@@ -189,7 +189,7 @@ Device testing is narrower than the automated tests: the macOS app was driven en
   * Supported on 64-bit systems only (Ubuntu 22.04+, Debian 12+, Raspberry Pi OS Bookworm 64-bit). 32-bit Raspberry Pi OS is not supported, because Flutter has no 32-bit ARM Linux build.
   * There is no QR camera scanning (paste the code), no biometric app unlock (PIN only), no mDNS discovery (LAN Link uses its multicast discovery, which still finds the other platforms) and no system contacts import.
   * The tray icon needs a StatusNotifierItem host (stock GNOME needs the AppIndicator extension); without one, closing the window quits. Global shortcuts work on X11, not Wayland.
-* **Musicbed** cannot be controlled through the automation API, and calls on hold hear the hold music instead of it.
+* **Musicbed**: calls on hold hear the hold music instead of it. The local automation API can switch it on and off and set its volume (`/v1/audio`), but the file is chosen in the app only.
 * **Hold music through Asterisk:** when the PBX answers a hold request itself, the caller hears the PBX's own music, not yours. Your music plays on direct calls and on PBXs that relay the held party's audio.
 * **Ogg Opus recordings** play inside the app on Android and Linux only. On iPhone, Mac and Windows use *Open with…* or export the file.
 * **Partly tested areas:** see the ◐ rows in [docs/FEATURES.md](docs/FEATURES.md), for example STUN/TURN against real servers, IPv6, session timers, 100rel, SIP Outbound, camera QR scanning, device contacts, CallKit and the Android Telecom integration.

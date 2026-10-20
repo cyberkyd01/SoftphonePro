@@ -167,24 +167,7 @@ class _MeterBars extends ConsumerStatefulWidget {
 }
 
 /// A running mic test keeps the meters at the fast rate.
-class _MeterBarsState extends ConsumerState<_MeterBars> {
-  late final MeterBoost _boost;
-
-  @override
-  void initState() {
-    super.initState();
-    _boost = ref.read(meterBoostProvider.notifier);
-    Future.microtask(() {
-      if (mounted) _boost.hold();
-    });
-  }
-
-  @override
-  void dispose() {
-    _boost.release();
-    super.dispose();
-  }
-
+class _MeterBarsState extends ConsumerState<_MeterBars> with MeterBoostHolder<_MeterBars> {
   @override
   Widget build(BuildContext context) {
     final meters = ref.watch(audioLevelsProvider);

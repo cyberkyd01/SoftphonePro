@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../audio/audio_io.dart';
 import '../../audio/audio_levels.dart';
+import '../../audio/audio_platform.dart';
 import '../../audio/audio_library.dart';
 import '../../audio/device_labels.dart';
 import '../../audio/musicbed.dart';
@@ -408,6 +409,11 @@ class _MusicbedBlock extends ConsumerWidget {
               ),
             ],
           ),
+          if (ref.watch(isIosProvider))
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(l.musicbedMonitorIosHint, key: const Key('mixer-monitor-ios-hint'), style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+            ),
           if (s.musicbedMonitor)
             Row(
               children: [

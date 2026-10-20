@@ -9399,5 +9399,17 @@
   "musicbedSettingsFile": "Music file",
   "@musicbedSettingsFile": {
     "description": "Settings > Audio > Musicbed: the music file selector."
+  },
+  "linkImportFlagMusicbed": "Plays music into your calls",
+  "@linkImportFlagMusicbed": {
+    "description": "Import confirmation: the profile switches music into every call."
+  },
+  "musicbedMonitorIosHint": "On iPhone you hear it during calls",
+  "@musicbedMonitorIosHint": {
+    "description": "Hint under the hear-it-myself toggle on iOS, where there is no audio device without a call."
+  },
+  "musicbedStopFailed": "Couldn’t stop the music. It may still be playing to your callers.",
+  "@musicbedStopFailed": {
+    "description": "Error notice: switching the musicbed off failed and it may still be playing to the other party."
   }
 }

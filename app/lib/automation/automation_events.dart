@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spcore_dart/spcore_dart.dart' show MusicbedState;
 
+import '../audio/musicbed.dart';
 import '../models/app_settings.dart';
 import '../models/call_record.dart';
 import '../services/accounts_controller.dart';
@@ -57,6 +59,8 @@ class AutomationEventHub {
 ///  * `message`  new / updated SIP messages
 ///  * `history`  a call record was written (also for calls the app rejected)
 ///  * `dnd`      do-not-disturb toggled
+///  * `audio`    musicbed switched on / off, started, stopped, paused, file or
+///               monitor changed (volume and level changes are not events)
 ///
 /// Must be created with the service's [Ref]; call [dispose] to stop.
 class AutomationEventBridge {
@@ -69,6 +73,17 @@ class AutomationEventBridge {
     _subs.add(ref.listen<List<CallRecord>>(historyProvider, (p, n) => _onHistory(p, n)));
     _subs.add(ref.listen<AppSettings>(settingsProvider, (p, n) {
       if (p != null && p.dnd != n.dnd) hub.emit('dnd', 'changed', {'enabled': n.dnd});
+    }));
+    _subs.add(ref.listen<AppSettings>(settingsProvider, (p, n) {
+      if (p != null &&
+          (p.musicbedEnabled != n.musicbedEnabled ||
+              p.musicbedFile != n.musicbedFile ||
+              p.musicbedMonitor != n.musicbedMonitor)) {
+        _audioChanged();
+      }
+    }));
+    _subs.add(ref.listen<MusicbedState>(musicbedProvider, (p, n) {
+      if (p != null && (p.active != n.active || p.paused != n.paused)) _audioChanged();
     }));
     for (final m in ref.read(messagesProvider).messages) {
       _msgStatus[m.id] = m.status.name;
@@ -83,7 +98,17 @@ class AutomationEventBridge {
   final Set<int> _ended = {};
   final Map<String, String> _msgStatus = {};
 
+  bool _disposed = false;
+
+  void _audioChanged() {
+    unawaited(() async {
+      final bed = await musicbedToJson(ref);
+      if (!_disposed) hub.emit('audio', 'musicbed', {'musicbed': bed});
+    }());
+  }
+
   void dispose() {
+    _disposed = true;
     for (final s in _subs) {
       s.close();
     }

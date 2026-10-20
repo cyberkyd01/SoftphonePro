@@ -6982,4 +6982,15 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Музыкальный файл';
+
+  @override
+  String get linkImportFlagMusicbed => 'Воспроизводит музыку в ваших звонках';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'На iPhone вы слышите её во время звонков';
+
+  @override
+  String get musicbedStopFailed =>
+      'Не удалось остановить музыку. Возможно, собеседники всё ещё её слышат.';
 }

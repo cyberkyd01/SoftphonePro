@@ -64,7 +64,7 @@ The full list is in the [changelog](../CHANGELOG.md).
 * **Linux global shortcuts** work on X11 sessions only, not on Wayland.
 * **Linux audio** goes through ALSA. On PulseAudio and PipeWire systems pick the `default` device.
 * **Linux testing is partial.** The desktop integration is covered by tests with fake backends (see rows X9 and X10 in [FEATURES.md](FEATURES.md)). The tests do not run a real tray host, keyring or `xdg-mime`.
-* **Musicbed.** It does not play to held calls, which hear the hold music. It cannot be controlled through the local automation API. With **Hear it myself** on and no headphones, the microphone can pick the music up again.
+* **Musicbed.** It does not play to held calls, which hear the hold music. The local automation API (`/v1/audio`) can switch it on and off and set the volumes, but the file is chosen in the app only. With **Hear it myself** on and no headphones, the microphone can pick the music up again.
 * **iOS background calls.** iOS delivers incoming calls only while the app is running. Calls in the background need VoIP push (PushKit), a push server and PBX support, which this release does not have. Android avoids the problem with a foreground service.
 * **No video and no ZRTP.** Both are planned for a later version (rows M8 and S6 in FEATURES.md).
 * **Translations are machine-assisted.** All 13 languages are complete, but some wording may sound unnatural. Corrections are welcome as pull requests to `app/lib/l10n/`.

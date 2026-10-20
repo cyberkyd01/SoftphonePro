@@ -332,7 +332,7 @@ const Map<String, ImportClass> kSettingImportPolicy = {
   'announceMonitor': _a,
   'recordingNoticeFile': _x, 'transferNoticeFile': _x,
   // musicbed (the file is a path into the local library: not importable)
-  'musicbedEnabled': _a, 'musicbedFile': _x, 'musicbedVolume': _a,
+  'musicbedEnabled': _f, 'musicbedFile': _x, 'musicbedVolume': _f,
   'musicbedMonitor': _a, 'musicbedMonitorVolume': _a,
   'speedDial': _f,
   // updates / media keys
@@ -508,6 +508,7 @@ enum ImportFlagKind {
   speedDial,
   recordingDeletion,
   featureCodes,
+  musicbed,
 }
 
 class ImportFlag {
@@ -793,6 +794,10 @@ ImportPlan prepareUntrustedImport(ProvisioningResult r) {
       case 'speedDial':
         safe[k] = v;
         flag(const ImportFlag(ImportFlagKind.speedDial));
+      case 'musicbedEnabled' || 'musicbedVolume':
+        safe[k] = v;
+        if (k == 'musicbedVolume' || v == true)
+          flag(const ImportFlag(ImportFlagKind.musicbed));
       default:
         safe[k] = v;
     }

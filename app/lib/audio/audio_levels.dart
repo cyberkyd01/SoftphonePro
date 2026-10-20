@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/calls_controller.dart';
+import 'audio_platform.dart';
 import '../services/engine_controller.dart';
 import '../services/settings_controller.dart';
 import 'mic_recorder.dart';
@@ -101,6 +102,42 @@ class MeterBoost extends Notifier<int> {
 
 final meterBoostProvider = NotifierProvider<MeterBoost, int>(MeterBoost.new);
 
+/// Holds the meter boost for as long as the state is mounted. Hold and
+/// release are paired through one flag, so a state that is disposed before
+/// its deferred hold ran never releases another holder's count.
+mixin MeterBoostHolder<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  late final MeterBoost _boostCtl;
+  bool _boostHeld = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _boostCtl = ref.read(meterBoostProvider.notifier);
+    Future.microtask(() {
+      if (mounted && !_boostHeld) {
+        _boostHeld = true;
+        _boostCtl.hold();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_boostHeld) {
+      _boostHeld = false;
+      // Providers must not change during dispose (the tree is being torn down).
+      Future.microtask(() {
+        try {
+          _boostCtl.release();
+        } catch (_) {
+          // The whole container is gone (app or test teardown): nothing to release.
+        }
+      });
+    }
+    super.dispose();
+  }
+}
+
 /// Polling period while audio flows (~15 Hz).
 const kMeterPollEvery = Duration(milliseconds: 66);
 
@@ -130,7 +167,9 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   var echo = ref.read(voiceIsolationProvider).echoTest;
   var recording = ref.read(micRecorderProvider).recording;
   var boost = ref.read(meterBoostProvider);
-  bool flowing() => inCall || (bedActive && monitor) || echo || recording || boost > 0;
+  // iOS has no audio device outside a call: the monitor plays nowhere then.
+  final ios = ref.read(isIosProvider);
+  bool flowing() => inCall || (bedActive && monitor && !ios) || echo || recording || boost > 0;
 
   Future<void> poll() async {
     if (busy) return;

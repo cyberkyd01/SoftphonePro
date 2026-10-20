@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "Kies eerst een bestand voor de achtergrondmuziek.",
   "musicbedStopped": "Achtergrondmuziek gestopt: {message}",
   "musicbedSettingsFooter": "Speelt een muziekbestand in een lus onder je stem af voor iedereen in je gesprekken, ook als je gedempt bent. Gesprekken in de wacht horen in plaats daarvan de wachtmuziek.",
-  "musicbedSettingsFile": "Muziekbestand"
+  "musicbedSettingsFile": "Muziekbestand",
+  "linkImportFlagMusicbed": "Speelt muziek af in je gesprekken",
+  "musicbedMonitorIosHint": "Op de iPhone hoor je het tijdens gesprekken",
+  "musicbedStopFailed": "De muziek kon niet worden gestopt. Je gesprekspartners horen haar mogelijk nog."
 }

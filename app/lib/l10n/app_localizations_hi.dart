@@ -6872,4 +6872,15 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'म्यूज़िक फ़ाइल';
+
+  @override
+  String get linkImportFlagMusicbed => 'आपकी कॉल में संगीत चलाता है';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'iPhone पर आप इसे कॉल के दौरान सुनते हैं';
+
+  @override
+  String get musicbedStopFailed =>
+      'संगीत बंद नहीं हो सका। हो सकता है कि कॉल पर सामने वालों को यह अब भी सुनाई दे रहा हो।';
 }

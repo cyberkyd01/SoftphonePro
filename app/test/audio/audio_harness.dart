@@ -126,6 +126,7 @@ class AudioEnv {
     bool start = true,
     EngineFactory? factory,
     PlatformServices? platform,
+    List<Override> overrides = const [],
   }) async {
     final e = engine ?? LogEngine();
     final env = await TestEnv.create(
@@ -137,8 +138,9 @@ class AudioEnv {
     final dir = Directory('${env.tempDir.path}/audio')..createSync(recursive: true);
     final picked = <String?>[];
     final preview = FakePreview();
-    final overrides = <Override>[
+    final allOverrides = <Override>[
       ...env.overrides,
+      ...overrides,
       audioDirProvider.overrideWithValue(() async => dir.path),
       audioAssetFileProvider.overrideWithValue((asset) async {
         final f = File('${env.tempDir.path}/assets/${asset.split('/').last}');
@@ -152,7 +154,7 @@ class AudioEnv {
       audioPreviewProvider.overrideWithValue(preview),
       if (platform != null) platformServicesProvider.overrideWithValue(platform),
     ];
-    final c = ProviderContainer(overrides: overrides);
+    final c = ProviderContainer(overrides: allOverrides);
     final a = AudioEnv._(env, e, c, dir, picked, preview);
     if (start) {
       c.read(appServicesProvider);

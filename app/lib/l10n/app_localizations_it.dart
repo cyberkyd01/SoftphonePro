@@ -6960,4 +6960,14 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'File musicale';
+
+  @override
+  String get linkImportFlagMusicbed => 'Riproduce musica nelle tue chiamate';
+
+  @override
+  String get musicbedMonitorIosHint => 'Su iPhone la senti durante le chiamate';
+
+  @override
+  String get musicbedStopFailed =>
+      'Impossibile fermare la musica. Potrebbe essere ancora udibile dai tuoi interlocutori.';
 }

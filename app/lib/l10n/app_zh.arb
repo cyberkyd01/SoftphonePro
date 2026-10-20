@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "请先选择背景音乐文件。",
   "musicbedStopped": "背景音乐已停止：{message}",
   "musicbedSettingsFooter": "在您的声音下方循环播放音乐文件，通话中的所有人都能听到，静音时也一样。保持中的通话将听到等待音乐。",
-  "musicbedSettingsFile": "音乐文件"
+  "musicbedSettingsFile": "音乐文件",
+  "linkImportFlagMusicbed": "在你的通话中播放音乐",
+  "musicbedMonitorIosHint": "在 iPhone 上，通话期间才能听到",
+  "musicbedStopFailed": "无法停止音乐。通话对方可能仍能听到。"
 }

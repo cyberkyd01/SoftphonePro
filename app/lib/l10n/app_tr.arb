@@ -1906,5 +1906,8 @@
   "musicbedNeedsFile": "Önce bir fon müziği dosyası seçin.",
   "musicbedStopped": "Fon müziği durduruldu: {message}",
   "musicbedSettingsFooter": "Aramalarınızdaki herkes için sesinizin altında bir müzik dosyasını döngüyle çalar; sessizdeyken bile. Beklemedeki aramalar bunun yerine bekletme müziğini duyar.",
-  "musicbedSettingsFile": "Müzik dosyası"
+  "musicbedSettingsFile": "Müzik dosyası",
+  "linkImportFlagMusicbed": "Aramalarınızda müzik çalar",
+  "musicbedMonitorIosHint": "iPhone’da bunu aramalar sırasında duyarsınız",
+  "musicbedStopFailed": "Müzik durdurulamadı. Karşınızdakiler hâlâ duyuyor olabilir."
 }

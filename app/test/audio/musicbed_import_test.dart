@@ -8,7 +8,11 @@ import 'package:softphonepro/services/provisioning_import.dart';
 void main() {
   test('policy: the file is forbidden, the rest follows the other audio settings', () {
     expect(classifyImportSetting('musicbedFile'), ImportClass.forbidden);
-    for (final k in ['musicbedEnabled', 'musicbedVolume', 'musicbedMonitor', 'musicbedMonitorVolume']) {
+    // Switching music into every call is flagged in the import dialog.
+    for (final k in ['musicbedEnabled', 'musicbedVolume']) {
+      expect(classifyImportSetting(k), ImportClass.flagged, reason: k);
+    }
+    for (final k in ['musicbedMonitor', 'musicbedMonitorVolume']) {
       expect(classifyImportSetting(k), ImportClass.allowed, reason: k);
     }
     // Same class as the comparable hold-music settings.

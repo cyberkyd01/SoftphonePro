@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softphonepro/audio/audio_levels.dart';
 import 'package:softphonepro/audio/audio_library.dart';
+import 'package:softphonepro/audio/audio_platform.dart';
 import 'package:softphonepro/audio/musicbed.dart';
 import 'package:softphonepro/models/app_settings.dart';
 import 'package:softphonepro/services/calls_controller.dart';
@@ -17,6 +18,12 @@ import 'audio_harness.dart';
 /// Records the musicbed requests.
 class MbEngine extends LogEngine {
   MbEngine({this.failStart});
+
+  /// Code of the failure `musicbedStart` throws.
+  ErrorCode failStartCode = ErrorCode.invalidParam;
+
+  /// The next N `musicbedStop` calls fail and leave the bed playing.
+  int failStops = 0;
   final starts = <({String file, double volume, bool monitor, double monitorVolume})>[];
   final sets = <({double? volume, bool? monitor, double? monitorVolume})>[];
   int stops = 0;
@@ -30,7 +37,7 @@ class MbEngine extends LogEngine {
   Future<MusicbedInfo> musicbedStart(String file, {double volume = 0.3, bool monitor = false, double monitorVolume = 0.5}) {
     starts.add((file: file, volume: volume, monitor: monitor, monitorVolume: monitorVolume));
     if (failStart != null) {
-      return Future.error(EngineException(EngineError(code: ErrorCode.invalidParam, message: failStart!)));
+      return Future.error(EngineException(EngineError(code: failStartCode, message: failStart!)));
     }
     return super.musicbedStart(file, volume: volume, monitor: monitor, monitorVolume: monitorVolume);
   }
@@ -38,6 +45,10 @@ class MbEngine extends LogEngine {
   @override
   Future<bool> musicbedStop() {
     stops++;
+    if (failStops > 0) {
+      failStops--;
+      return Future.error(const EngineException(EngineError(code: ErrorCode.internal, message: 'stop failed')));
+    }
     return super.musicbedStop();
   }
 
@@ -167,6 +178,128 @@ void main() {
       expect(e.sets.length, greaterThan(1));
       expect(e.sets.last.volume, 1.0);
       expect(e.musicbed.volume, 1.0);
+      a.dispose();
+    });
+
+    test('only the changed field is sent; the final value lands', () async {
+      final e = MbEngine();
+      final a = await AudioEnv.create(engine: e, settings: {..._on, 'musicbedMonitor': true});
+      await _until(a, () => a.container.read(musicbedProvider).active);
+      for (var i = 1; i <= 30; i++) {
+        unawaited(a.settings.update({'musicbedVolume': 0.3 + i / 40}));
+        await Future<void>.delayed(const Duration(milliseconds: 3));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      expect(e.sets, isNotEmpty);
+      for (final s in e.sets) {
+        expect(s.volume, isNotNull);
+        expect(s.monitor, isNull, reason: 'monitor did not change: not re-sent');
+        expect(s.monitorVolume, isNull);
+      }
+      expect(e.sets.last.volume, closeTo(0.3 + 30 / 40, 1e-9));
+      expect(e.musicbed.volume, closeTo(0.3 + 30 / 40, 1e-9));
+
+      e.sets.clear();
+      await a.settings.update({'musicbedMonitor': false});
+      await _until(a, () => e.sets.isNotEmpty);
+      expect(e.sets.single, (volume: null, monitor: false, monitorVolume: null));
+      // Same value again: nothing to send.
+      await a.settings.update({'musicbedVolume': e.musicbed.volume});
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(e.sets, hasLength(1));
+      a.dispose();
+    });
+
+    test('a failed live update is retried with the next change', () async {
+      final e = MbEngine();
+      final a = await AudioEnv.create(engine: e, settings: _on);
+      await _until(a, () => a.container.read(musicbedProvider).active);
+      await a.settings.update({'musicbedVolume': 0.7, 'musicbedMonitorVolume': 0.9});
+      await _until(a, () => e.sets.isNotEmpty);
+      expect(e.sets.first, (volume: 0.7, monitor: null, monitorVolume: 0.9));
+      a.dispose();
+    });
+
+    for (final code in [ErrorCode.notStarted, ErrorCode.internal, ErrorCode.pjError]) {
+      test('a ${code.wire} start failure keeps the setting on, warns, and retries on the next trigger only', () async {
+        final e = MbEngine(failStart: 'engine hiccup')..failStartCode = code;
+        final a = await AudioEnv.create(engine: e, settings: _on);
+        await _until(a, () => e.starts.isNotEmpty);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(e.starts, hasLength(1), reason: 'no tight retry loop');
+        expect(a.container.read(settingsProvider).musicbedEnabled, isTrue);
+        expect(_notice(a), contains('engine hiccup'));
+        expect(a.container.read(noticeProvider)!.isError, isTrue);
+        expect(a.container.read(musicbedProvider).active, isFalse);
+
+        // The next trigger (here: the file changes) tries again and works.
+        e.failStart = null;
+        await a.settings.update({'musicbedFile': 'builtin:hold_breeze'});
+        await _until(a, () => e.musicbed.active);
+        expect(e.starts, hasLength(2));
+        expect(a.container.read(settingsProvider).musicbedEnabled, isTrue);
+        await _until(a, () => a.container.read(musicbedProvider).active);
+        a.dispose();
+      });
+    }
+
+    test('after a transient start failure an engine restart tries again', () async {
+      final engines = <MbEngine>[MbEngine(failStart: 'not ready')..failStartCode = ErrorCode.notStarted];
+      var calls = 0;
+      final a = await AudioEnv.create(
+        engine: engines.first,
+        settings: _on,
+        factory: ({required bool simulator}) async {
+          if (calls++ > 0) engines.add(MbEngine());
+          return EngineHandle(engines.last, demo: false);
+        },
+      );
+      await _until(a, () => engines.first.starts.isNotEmpty);
+      expect(a.container.read(settingsProvider).musicbedEnabled, isTrue);
+      await a.container.read(engineProvider.notifier).restart();
+      await _until(a, () => engines.length == 2 && engines.last.musicbed.active);
+      expect(engines.last.starts, hasLength(1));
+      a.dispose();
+    });
+
+    test('a failed stop is retried once when the engine still plays', () async {
+      final e = MbEngine();
+      final a = await AudioEnv.create(engine: e, settings: _on);
+      await _until(a, () => a.container.read(musicbedProvider).active);
+      e.failStops = 1;
+      await a.settings.update({'musicbedEnabled': false});
+      await _until(a, () => !e.musicbed.active);
+      expect(e.stops, 2);
+      await _until(a, () => !a.container.read(musicbedProvider).active);
+      expect(_notice(a), isNull, reason: 'the retry worked: nothing to warn about');
+      a.dispose();
+    });
+
+    test('a stop that keeps failing says the music may still be playing; the state stays active', () async {
+      final e = MbEngine();
+      final a = await AudioEnv.create(engine: e, settings: _on);
+      await _until(a, () => a.container.read(musicbedProvider).active);
+      e.failStops = 5;
+      await a.settings.update({'musicbedEnabled': false});
+      await _until(a, () => _notice(a) != null);
+      expect(e.stops, 2, reason: 'one retry, no loop');
+      expect(_notice(a), contains('may still be playing'));
+      expect(a.container.read(noticeProvider)!.isError, isTrue);
+      expect(e.musicbed.active, isTrue);
+      expect(a.container.read(musicbedProvider).active, isTrue, reason: 'the in-call chip reads this');
+      a.dispose();
+    });
+
+    test('a failed stop with the engine already silent is quiet', () async {
+      final e = MbEngine();
+      final a = await AudioEnv.create(engine: e, settings: _on);
+      await _until(a, () => a.container.read(musicbedProvider).active);
+      e.failStops = 1;
+      // The bed ends on its own just as the stop fails.
+      e.failMusicbed('gone');
+      await _until(a, () => !a.container.read(settingsProvider).musicbedEnabled);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(a.container.read(musicbedProvider).active, isFalse);
       a.dispose();
     });
 
@@ -325,6 +458,26 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(e.levelCalls - n, greaterThan(10), reason: 'mic test');
       boost.release();
+      sub.close();
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(() async => a.dispose());
+    });
+
+    testWidgets('on iOS the monitor does not boost polling without a call; a call does', (tester) async {
+      final e = MbEngine();
+      final a = (await tester.runAsync(() => AudioEnv.create(engine: e, settings: {..._on, 'musicbedMonitor': true}, overrides: [isIosProvider.overrideWithValue(true)])))!;
+      final sub = a.container.listen(audioLevelsProvider, (_, __) {});
+      await tester.runAsync(() => _until(a, () => a.container.read(musicbedProvider).active));
+      await tester.pump(const Duration(milliseconds: 100));
+      var n = e.levelCalls;
+      await tester.pump(const Duration(seconds: 3));
+      expect(e.levelCalls - n, lessThanOrEqualTo(4), reason: 'nothing is audible: 1 Hz');
+
+      await tester.runAsync(() => a.dialConfirmed());
+      await tester.pump(const Duration(milliseconds: 100));
+      n = e.levelCalls;
+      await tester.pump(const Duration(seconds: 1));
+      expect(e.levelCalls - n, greaterThan(10), reason: 'in a call the bed is audible');
       sub.close();
       await tester.pump(const Duration(milliseconds: 10));
       await tester.runAsync(() async => a.dispose());

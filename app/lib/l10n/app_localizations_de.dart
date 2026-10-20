@@ -6958,4 +6958,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Musikdatei';
+
+  @override
+  String get linkImportFlagMusicbed => 'Spielt Musik in deine Anrufe ein';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'Auf dem iPhone hörst du sie während Anrufen';
+
+  @override
+  String get musicbedStopFailed =>
+      'Die Musik konnte nicht gestoppt werden. Sie läuft möglicherweise noch für deine Gesprächspartner.';
 }

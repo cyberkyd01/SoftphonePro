@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:softphonepro/audio/audio_library.dart';
+import 'package:softphonepro/audio/musicbed.dart';
 import 'package:softphonepro/automation/automation_auth.dart';
 import 'package:softphonepro/automation/automation_service.dart';
 import 'package:softphonepro/models/app_settings.dart';
@@ -50,7 +52,18 @@ class _Env {
         ...settings,
       }),
     );
-    e.c = ProviderContainer(overrides: e.env.overrides);
+    e.c = ProviderContainer(overrides: [
+      ...e.env.overrides,
+      audioDirProvider.overrideWithValue(() async => '${e.env.tempDir.path}/audio'),
+      audioAssetFileProvider.overrideWithValue((asset) async {
+        final f = File('${e.env.tempDir.path}/assets/${asset.split('/').last}');
+        if (!f.existsSync()) {
+          f.createSync(recursive: true);
+          f.writeAsBytesSync(List.filled(64, 0));
+        }
+        return f.path;
+      }),
+    ]);
     addTearDown(() async {
       e.http.close(force: true);
       e.c.dispose();
@@ -625,6 +638,132 @@ void main() {
       final res = await req.close();
       expect(res.statusCode, 401);
       await res.drain<void>();
+    });
+  });
+
+  group('audio', () {
+    test('GET and POST need the token', () async {
+      final e = await _Env.start();
+      expect((await e.get('/v1/audio', token: null)).status, 401);
+      expect((await e.get('/v1/audio', token: 'wrong')).status, 401);
+      expect((await e.call('POST', '/v1/audio', body: {'micLevel': 1.5}, token: null)).status, 401);
+      expect(e.c.read(settingsProvider).micLevel, 1.0);
+    });
+
+    test('GET has the documented shape; levels come straight from the engine', () async {
+      final e = await _Env.start(settings: {'musicbedFile': 'builtin:hold_calm', 'micLevel': 1.25, 'captureDev': 'USB Mic'});
+      e.engine.levelsOverride = const MediaLevels(mic: 200, speaker: 100, musicbed: 50);
+      final r = await e.get('/v1/audio');
+      expect(r.status, 200);
+      final j = r.json as Map<String, dynamic>;
+      expect(j.keys.toSet(), {'micLevel', 'speakerLevel', 'levels', 'devices', 'musicbed'});
+      expect(j['micLevel'], 1.25);
+      expect(j['speakerLevel'], 1.0);
+      expect(j['levels'], {'mic': 200, 'speaker': 100, 'musicbed': 50});
+      expect(j['devices'], {'capture': 'USB Mic', 'playback': 'default'});
+      final mb = j['musicbed'] as Map<String, dynamic>;
+      expect(mb.keys.toSet(), {'enabled', 'file', 'active', 'volume', 'monitor', 'monitorVolume', 'paused'});
+      expect(mb['enabled'], false);
+      expect(mb['active'], false);
+      expect(mb['volume'], 0.3);
+      expect(mb['file'], isA<String>());
+      expect(mb['file'], isNotEmpty);
+      expect(mb['file'], isNot(contains('/')), reason: 'a display name, never a path');
+      expect(mb['file'], isNot(contains('builtin:')));
+    });
+
+    test('POST applies through the settings, validates, and answers like GET', () async {
+      final e = await _Env.start();
+      final r = await e.post('/v1/audio', {'micLevel': 0.5, 'speakerLevel': 2, 'musicbedVolume': 1.5, 'musicbedMonitor': true, 'musicbedMonitorVolume': 0.2});
+      expect(r.status, 200);
+      final s = e.c.read(settingsProvider);
+      expect(s.micLevel, 0.5);
+      expect(s.speakerLevel, 2.0);
+      expect(s.musicbedVolume, 1.5);
+      expect(s.musicbedMonitor, isTrue);
+      expect(s.musicbedMonitorVolume, 0.2);
+      expect(r.json['micLevel'], 0.5);
+      expect(r.json['musicbed']['volume'], 1.5);
+      expect(r.json['musicbed']['monitor'], true);
+      expect((await e.get('/v1/audio')).json['speakerLevel'], 2.0);
+
+      for (final bad in [
+        {'micLevel': 2.5},
+        {'micLevel': -0.1},
+        {'speakerLevel': 'loud'},
+        {'musicbedVolume': 3},
+        {'musicbedMonitorVolume': null},
+        {'musicbedEnabled': 'yes'},
+        {'musicbedMonitor': 1},
+      ]) {
+        final x = await e.post('/v1/audio', bad);
+        expect(x.status, 400, reason: '$bad');
+        expect(x.errorCode, startsWith('invalid_'));
+      }
+      expect(e.c.read(settingsProvider).micLevel, 0.5, reason: 'rejected requests change nothing');
+      expect((await e.call('DELETE', '/v1/audio')).status, 405);
+    });
+
+    test('a file or path is never accepted', () async {
+      final e = await _Env.start(settings: {'musicbedFile': 'builtin:hold_calm'});
+      for (final bad in [
+        {'musicbedFile': '/etc/passwd'},
+        {'file': '/etc/passwd'},
+        {'path': 'C:\\x.wav'},
+        {'micLevel': 0.4, 'musicbedFile': 'lib:other.wav'},
+      ]) {
+        final x = await e.post('/v1/audio', bad);
+        expect(x.status, 400, reason: '$bad');
+        expect(x.errorCode, 'invalid_field');
+      }
+      expect(e.c.read(settingsProvider).musicbedFile, 'builtin:hold_calm');
+      expect(e.c.read(settingsProvider).micLevel, 1.0, reason: 'nothing applied from a rejected body');
+    });
+
+    test('enabling without a chosen file is a 409', () async {
+      final e = await _Env.start();
+      final x = await e.post('/v1/audio', {'musicbedEnabled': true});
+      expect(x.status, 409);
+      expect(x.errorCode, 'no_musicbed_file');
+      expect((x.json['error']['message'] as String), contains('choose one in the app'));
+      expect(e.c.read(settingsProvider).musicbedEnabled, isFalse);
+      // Turning it off needs no file.
+      expect((await e.post('/v1/audio', {'musicbedEnabled': false})).status, 200);
+    });
+
+    test('enable, pause and disable drive the engine; the UI state follows', () async {
+      final e = await _Env.start(settings: {'musicbedFile': 'builtin:hold_calm'});
+      var r = await e.post('/v1/audio', {'musicbedEnabled': true});
+      expect(r.status, 200);
+      expect(r.json['musicbed']['enabled'], true);
+      expect(r.json['musicbed']['active'], true);
+      expect(e.engine.musicbed.active, isTrue);
+      expect(e.c.read(musicbedProvider).active, isTrue);
+
+      r = await e.post('/v1/audio', {'musicbedPaused': true, 'musicbedVolume': 0.9});
+      expect(r.json['musicbed']['paused'], true);
+      expect(r.json['musicbed']['volume'], 0.9);
+      expect(e.engine.musicbed.paused, isTrue);
+      expect(e.engine.musicbed.volume, 0.9);
+
+      r = await e.post('/v1/audio', {'musicbedPaused': false, 'musicbedEnabled': false});
+      expect(r.json['musicbed']['enabled'], false);
+      expect(r.json['musicbed']['active'], false);
+      expect(e.engine.musicbed.active, isFalse);
+    });
+
+    test('an audio event is streamed when the musicbed changes', () async {
+      final e = await _Env.start(settings: {'musicbedFile': 'builtin:hold_calm'});
+      final sse = await e.events();
+      await sse.waitFor((t) => t.contains('event: hello'));
+      await e.post('/v1/audio', {'musicbedEnabled': true});
+      await sse.waitFor((_) => sse.events('audio').any((x) => x['musicbed']['active'] == true));
+      final ev = sse.events('audio').last;
+      expect(ev['type'], 'musicbed');
+      expect(ev['musicbed']['file'], isNot(contains('/')));
+      await e.post('/v1/audio', {'musicbedEnabled': false});
+      await sse.waitFor((_) => sse.events('audio').any((x) => x['musicbed']['active'] == false));
+      await sse.close();
     });
   });
 }

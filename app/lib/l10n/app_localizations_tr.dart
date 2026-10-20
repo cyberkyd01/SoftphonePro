@@ -6899,4 +6899,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get musicbedSettingsFile => 'Müzik dosyası';
+
+  @override
+  String get linkImportFlagMusicbed => 'Aramalarınızda müzik çalar';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'iPhone’da bunu aramalar sırasında duyarsınız';
+
+  @override
+  String get musicbedStopFailed =>
+      'Müzik durdurulamadı. Karşınızdakiler hâlâ duyuyor olabilir.';
 }

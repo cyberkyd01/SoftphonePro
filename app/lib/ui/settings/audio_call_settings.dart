@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../audio/audio_levels.dart';
+import '../../audio/audio_platform.dart';
 import '../../l10n/l10n.dart';
 import '../../services/settings_controller.dart';
 import '../pages/audio/audio_files_page.dart';
@@ -171,6 +172,7 @@ class MusicbedGroup extends ConsumerWidget {
           key: const Key('musicbed-monitor'),
           icon: Icons.hearing_rounded,
           title: l.musicbedHearIt,
+          subtitle: ref.watch(isIosProvider) ? l.musicbedMonitorIosHint : null,
           value: s.musicbedMonitor,
           onChanged: (v) => _set(ref, {'musicbedMonitor': v}),
         ),
