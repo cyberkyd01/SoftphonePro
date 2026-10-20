@@ -173,8 +173,12 @@ class RecordingSettingsView extends ConsumerWidget {
                 leading: const Icon(Icons.folder_open_rounded),
                 title: Text(l.recSettingsOpenFolder),
                 onTap: () async {
-                  final dir = s.recordingFolder.isNotEmpty ? s.recordingFolder : await ref.read(recordingsDirProvider)();
-                  await ref.read(recordingExporterProvider).openFolder(dir);
+                  try {
+                    final dir = s.recordingFolder.isNotEmpty ? s.recordingFolder : await ref.read(recordingsDirProvider)();
+                    await ref.read(recordingExporterProvider).openFolder(dir);
+                  } catch (e) {
+                    ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStartRecording, details: '$e');
+                  }
                 },
               ),
           ],

@@ -6885,7 +6885,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Связка ключей заблокирована, поэтому сохранённые пароли не удалось прочитать. Разблокируйте её и перезапустите SoftphonePro.';
+      'Не удалось открыть связку ключей (она заблокирована или не отвечает), поэтому сохранённые пароли не удалось прочитать. Разблокируйте её и перезапустите SoftphonePro.';
 
   @override
   String get mixerTitle => 'Аудиомикшер';
@@ -6963,6 +6963,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get musicbedOn => 'Фоновая музыка включена';
+
+  @override
+  String get musicbedPausedOnHold =>
+      'Фоновая музыка на паузе (вызов на удержании)';
 
   @override
   String get musicbedOnTooltip =>

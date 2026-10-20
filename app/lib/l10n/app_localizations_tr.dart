@@ -6803,7 +6803,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Anahtarlığınız kilitli olduğu için kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
+      'Anahtarlığınız açılamadı (kilitli veya yanıt vermiyor), bu yüzden kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
 
   @override
   String get mixerTitle => 'Ses karıştırıcı';
@@ -6880,6 +6880,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get musicbedOn => 'Fon müziği açık';
+
+  @override
+  String get musicbedPausedOnHold => 'Fon müziği duraklatıldı (beklemede)';
 
   @override
   String get musicbedOnTooltip =>

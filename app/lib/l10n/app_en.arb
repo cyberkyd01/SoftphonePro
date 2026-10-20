@@ -9265,7 +9265,7 @@
       }
     }
   },
-  "secretsKeyringLocked": "Your keyring is locked, so saved passwords couldn''t be read. Unlock it and restart SoftphonePro.",
+  "secretsKeyringLocked": "Your keyring couldn''t be opened (locked or not responding), so saved passwords couldn''t be read. Unlock it and restart SoftphonePro.",
   "@secretsKeyringLocked": {
     "description": "Notice at start-up (Linux): the secret keyring was locked and could not be unlocked, so saved account passwords could not be read this session."
   },
@@ -9374,6 +9374,10 @@
   "musicbedOn": "Musicbed on",
   "@musicbedOn": {
     "description": "Small in-call indicator that the musicbed is playing."
+  },
+  "musicbedPausedOnHold": "Musicbed paused (on hold)",
+  "@musicbedPausedOnHold": {
+    "description": "In-call indicator while the call is on hold: the musicbed is not sent to held calls."
   },
   "musicbedOnTooltip": "A music file is playing to everyone on your calls.",
   "@musicbedOnTooltip": {

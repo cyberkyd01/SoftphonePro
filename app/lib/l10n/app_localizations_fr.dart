@@ -6885,7 +6885,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Votre trousseau est verrouillé : les mots de passe enregistrés n\'ont pas pu être lus. Déverrouillez-le et redémarrez SoftphonePro.';
+      'Votre trousseau n\'a pas pu être ouvert (verrouillé ou ne répond pas) : les mots de passe enregistrés n\'ont pas pu être lus. Déverrouillez-le et redémarrez SoftphonePro.';
 
   @override
   String get mixerTitle => 'Mixeur audio';
@@ -6964,6 +6964,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get musicbedOn => 'Musique de fond active';
+
+  @override
+  String get musicbedPausedOnHold => 'Musique de fond en pause (en attente)';
 
   @override
   String get musicbedOnTooltip =>

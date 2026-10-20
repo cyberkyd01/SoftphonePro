@@ -12,6 +12,7 @@ import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
 import '../models/chat.dart';
 import '../services/accounts_controller.dart';
+import '../services/app_dirs.dart';
 import '../services/calls_controller.dart';
 import '../services/engine_controller.dart';
 import '../services/messages_controller.dart';
@@ -72,9 +73,9 @@ final lanDownloadsDirProvider = Provider<Future<String> Function()>((ref) => () 
       if (s.isNotEmpty) return s;
       Directory base;
       try {
-        base = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+        base = await getDownloadsDirectory() ?? await appDocumentsDir();
       } catch (_) {
-        base = await getApplicationDocumentsDirectory();
+        base = await appDocumentsDir();
       }
       return p.join(base.path, 'SoftphonePro');
     });
@@ -342,6 +343,7 @@ class LanController extends Notifier<LanState> {
     state = state.copyWith(starting: true, error: null);
     try {
       await _multicastLock(true);
+      await _ensureSipListener();
       final dir = await ref.read(lanDownloadsDirProvider)();
       final link = ll.LanLink(ll.LanLinkConfig(
         deviceName: deviceName,
@@ -386,6 +388,23 @@ class LanController extends Notifier<LanState> {
     if (_again) {
       _again = false;
       await restart();
+    }
+  }
+
+  /// The LAN SIP listener lives in the engine and is only bound when the engine
+  /// was started with LAN enabled. If the engine came up before that (or a
+  /// previous start failed midway), restart it so Retry brings up everything.
+  Future<void> _ensureSipListener() async {
+    var st = ref.read(engineProvider);
+    for (var i = 0; i < 150 && st.phase == EnginePhase.starting; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      st = ref.read(engineProvider);
+    }
+    if (_disposed || st.phase != EnginePhase.running || st.startResult?.lan != null) return;
+    if (!_settings.lanEnabled || ref.read(callsProvider).live.isNotEmpty) return;
+    await ref.read(engineProvider.notifier).restart();
+    for (var i = 0; i < 150 && ref.read(engineProvider).phase == EnginePhase.starting; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 

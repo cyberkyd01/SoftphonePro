@@ -6597,7 +6597,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'キーリングがロックされているため、保存されたパスワードを読み取れませんでした。ロックを解除して SoftphonePro を再起動してください。';
+      'キーリングを開けませんでした(ロックされているか応答がありません)。保存されたパスワードを読み取れませんでした。ロックを解除して SoftphonePro を再起動してください。';
 
   @override
   String get mixerTitle => 'オーディオミキサー';
@@ -6674,6 +6674,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get musicbedOn => 'BGMオン';
+
+  @override
+  String get musicbedPausedOnHold => 'BGM一時停止中（保留中）';
 
   @override
   String get musicbedOnTooltip => '通話中の全員に音楽ファイルが再生されています。';

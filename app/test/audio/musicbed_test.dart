@@ -514,6 +514,33 @@ void main() {
       await tester.runAsync(() async => a.dispose());
     });
 
+    testWidgets('repaint rate stays at or below the poll rate while levels change constantly', (tester) async {
+      final e = MbEngine();
+      final a = (await tester.runAsync(() => AudioEnv.create(engine: e)))!;
+      final sub = a.container.listen(audioLevelsProvider, (_, __) {});
+      final hold = a.container.read(meterBoostProvider.notifier)..hold();
+      final meters = sub.read();
+      await tester.pump(const Duration(milliseconds: 100));
+      var repaints = 0;
+      meters.mic.addListener(() => repaints++);
+      final polls = e.levelCalls;
+      // Wildly varying input, stepped at 60 Hz like a vsync would.
+      for (var i = 0; i < 120; i++) {
+        e.levelsOverride = MediaLevels(mic: (i * 97) % 256);
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final seconds = 120 * 16 / 1000;
+      final pollRate = (e.levelCalls - polls) / seconds;
+      final rate = repaints / seconds;
+      expect(pollRate, lessThanOrEqualTo(16));
+      expect(rate, lessThanOrEqualTo(15.5), reason: 'meters repaint at most once per poll, never per frame');
+      expect(repaints, greaterThan(5), reason: 'but they do move');
+      hold.release();
+      sub.close();
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.runAsync(() async => a.dispose());
+    });
+
     testWidgets('pauses in the background and resumes', (tester) async {
       final e = MbEngine();
       final a = (await tester.runAsync(() => AudioEnv.create(engine: e)))!;

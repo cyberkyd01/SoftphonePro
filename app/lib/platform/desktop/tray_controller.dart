@@ -102,11 +102,24 @@ class TrayController with TrayListener {
     return _ready;
   }
 
+  String? _lastMenu;
+
+  String _sig(List<TrayMenuEntry> es) => [
+    for (final e in es)
+      '${e.separator ? '-' : '${e.key}|${e.label}|${e.checked}|${e.disabled}'}'
+          '${e.children == null ? '' : '[${_sig(e.children!)}]'}',
+  ].join(';');
+
   Future<void> setMenu(List<TrayMenuEntry> entries) async {
     if (!_ready) return;
+    // Rebuilding an identical menu makes the AppIndicator re-export it.
+    final sig = _sig(entries);
+    if (sig == _lastMenu) return;
+    _lastMenu = sig;
     try {
       await trayManager.setContextMenu(Menu(items: _convert(entries)));
     } catch (e) {
+      _lastMenu = null;
       debugPrint('tray menu failed: $e');
     }
   }
@@ -163,6 +176,9 @@ class TrayController with TrayListener {
   }
 
   Future<void> _applyTooltip({bool force = false}) async {
+    // tray_manager has no Linux implementation of setToolTip (AppIndicator
+    // has no tooltip): calling it only throws MissingPluginException.
+    if (_linux) return;
     if (_tooltip == _lastTooltip && !force) return;
     _lastTooltip = _tooltip;
     try {

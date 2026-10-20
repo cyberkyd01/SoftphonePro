@@ -71,8 +71,10 @@ you want them gone. For the archive, delete the folder (and run
 
 **Good to know on Linux**
 
-* Audio goes through ALSA. On PulseAudio and PipeWire systems pick the
-  **default** device in **Settings → Audio → Devices**.
+* Audio goes through ALSA. The device pickers in **Settings → Audio → Devices**
+  (and the mixer) list ALSA devices such as **default**, **pulse** and
+  **pipewire**; **default** follows the system sound settings, so pick it on
+  PulseAudio and PipeWire systems unless you need a specific device.
 * Passwords are kept in the Secret Service keyring (GNOME Keyring or KWallet).
   If the system has no keyring, SoftphonePro stores them in an encrypted file
   instead.
@@ -513,9 +515,12 @@ long call.
 
 1. Open **Settings → Audio → Musicbed**, or open the mixer (see *Audio mixer*
    below) and choose **Show devices and musicbed**.
-2. Choose a file under **Music file**. The list is your audio library;
-   **Add a file…** imports an MP3 or WAV (a file can be up to 30 minutes
-   long).
+2. Choose a file under **Music file**. The list shows *Choose a file* (none),
+   the built-in tracks and the files you imported; its last entry,
+   **Add a file…**, imports an MP3 or WAV into your audio library and selects
+   it (a file can be up to 30 minutes long). The same **Add a file…** entry is
+   in the file picker of the mixer. You can also manage imported files under
+   **Settings → Audio → Audio files**.
 3. Turn on **Play musicbed**. The file plays in a loop, with no gap at the
    end.
 4. Set **Musicbed volume**. It goes from 0% to 200% and you can change it
@@ -531,6 +536,8 @@ will pick the music up again.
 * It goes to everyone on your active calls. In a local conference it goes to
   every member.
 * It keeps playing while you **mute** your microphone.
+* While a call is on **hold**, its **Musicbed on** badge turns grey and reads
+  **Musicbed paused (on hold)**.
 * A call on **hold** does not get the musicbed. The held party hears your hold
   music instead, and gets the musicbed back when you resume.
 * Recordings you make with **Record** include the musicbed on your side.
@@ -558,8 +565,11 @@ running.
 
 * **Keypad screen:** a card on desktop and tablets, and a collapsible strip
   on phones (**Show audio mixer** / **Hide audio mixer**).
-* **During a call:** in the calls panel on desktop, and on the in-call page
-  on a phone.
+* **During a call:** in the calls panel on desktop (the call cards come
+  first, then the mixer; the panel scrolls as one column), and on the in-call
+  page on a phone, where the strip with the three level bars sits right under
+  the caller and the timer, above the action buttons. Tap it to open the
+  sliders.
 * **Settings → Audio:** the microphone and speaker bars and sliders sit in the
   levels and test group, and the musicbed settings are in their own group.
 
@@ -605,8 +615,10 @@ SoftphonePro follows your system language by default. To change it, open **Setti
     Windows (see above).
   * **Global shortcuts** (**Settings → Shortcuts**) work on X11 sessions
     only. They are not available on Wayland.
-  * Audio uses ALSA. Pick the **default** device to reach PulseAudio or
-    PipeWire.
+  * Audio uses ALSA. The device pickers list ALSA devices such as
+    **default**, **pulse** and **pipewire**; **default** follows the
+    system sound settings (PulseAudio or PipeWire), so pick it unless you
+    need a specific device.
 * **macOS**
   * The first time you open the app, right-click it and choose **Open**
     (the build isn't notarised yet).

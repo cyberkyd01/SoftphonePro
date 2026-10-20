@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:window_manager/window_manager.dart';
 import 'dart:ui' show Locale;
@@ -160,10 +161,7 @@ class DesktopPlatformServices extends NoopPlatformServices {
     title: title,
     body: body,
     actionLabel: _linuxActionLabel,
-    onClick: () {
-      _routes.add('/recents');
-      unawaited(bringToFront());
-    },
+    onClick: () => unawaited(_openRoute('/recents')),
   );
 
   @override
@@ -177,11 +175,20 @@ class DesktopPlatformServices extends NoopPlatformServices {
       title: title,
       body: body,
       actionLabel: _linuxActionLabel,
-      onClick: () {
-        _routes.add('/messages');
-        unawaited(bringToFront());
-      },
+      onClick: () => unawaited(_openRoute('/messages')),
     );
+  }
+
+  /// Raises the window first, then navigates once it is drawing again: while
+  /// the window is minimised/hidden Flutter schedules no frames, and route
+  /// changes made then (or pops queued by the call screens) are replayed on
+  /// restore and can undo the navigation.
+  Future<void> _openRoute(String route) async {
+    await bringToFront();
+    try {
+      await WidgetsBinding.instance.endOfFrame.timeout(const Duration(milliseconds: 500));
+    } catch (_) {}
+    if (!_routes.isClosed) _routes.add(route);
   }
 
   /// Linux notifications have no body click: add a button that opens the app.

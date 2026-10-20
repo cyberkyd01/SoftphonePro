@@ -6860,7 +6860,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Ihr Schlüsselbund ist gesperrt, daher konnten gespeicherte Passwörter nicht gelesen werden. Entsperren Sie ihn und starten Sie SoftphonePro neu.';
+      'Ihr Schlüsselbund konnte nicht geöffnet werden (gesperrt oder reagiert nicht), daher konnten gespeicherte Passwörter nicht gelesen werden. Entsperren Sie ihn und starten Sie SoftphonePro neu.';
 
   @override
   String get mixerTitle => 'Audio-Mixer';
@@ -6938,6 +6938,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get musicbedOn => 'Hintergrundmusik an';
+
+  @override
+  String get musicbedPausedOnHold => 'Hintergrundmusik pausiert (gehalten)';
 
   @override
   String get musicbedOnTooltip =>

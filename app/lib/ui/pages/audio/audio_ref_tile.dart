@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../audio/audio_library.dart';
 import '../../../l10n/l10n.dart';
+import '../../widgets/audio_mixer.dart' show importAudioFile;
 import '../../widgets/settings_tiles.dart';
 
 /// Dropdown of the audio library for settings. [leading] adds fixed
@@ -17,6 +18,7 @@ class AudioRefTile extends ConsumerWidget {
     this.subtitle,
     this.icon,
     this.holdMusicOnly = false,
+    this.allowImport = false,
   });
   final String title;
   final String? subtitle;
@@ -25,6 +27,12 @@ class AudioRefTile extends ConsumerWidget {
   final Map<String, String> leading;
   final IconData? icon;
   final bool holdMusicOnly;
+
+  /// Adds a last entry "Add a file…" that imports into the audio library and
+  /// selects the new file.
+  final bool allowImport;
+
+  static const _addKey = '\u0000add-file';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,13 +45,18 @@ class AudioRefTile extends ConsumerWidget {
     if (value.isNotEmpty && !opts.containsKey(value) && items.isNotEmpty) {
       opts[value] = context.l10n.audioMissingFile;
     }
+    if (allowImport) opts[_addKey] = context.l10n.musicbedAddFile;
     return SelectTile<String>(
       icon: icon,
       title: title,
       subtitle: subtitle,
       value: value,
       options: opts,
-      onChanged: onChanged,
+      onChanged: (v) async {
+        if (v != _addKey) return onChanged(v);
+        final item = await importAudioFile(ref);
+        if (item != null) onChanged(item.ref);
+      },
     );
   }
 }

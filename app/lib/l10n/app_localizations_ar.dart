@@ -6829,7 +6829,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'سلسلة المفاتيح مقفلة، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro.';
+      'تعذّر فتح سلسلة المفاتيح (مقفلة أو لا تستجيب)، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro.';
 
   @override
   String get mixerTitle => 'خلاط الصوت';
@@ -6906,6 +6906,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get musicbedOn => 'الموسيقى الخلفية قيد التشغيل';
+
+  @override
+  String get musicbedPausedOnHold =>
+      'الموسيقى الخلفية متوقفة (المكالمة معلّقة)';
 
   @override
   String get musicbedOnTooltip =>

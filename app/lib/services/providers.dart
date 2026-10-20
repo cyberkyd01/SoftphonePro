@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../models/account_profile.dart';
@@ -18,6 +17,7 @@ import '../platform/platform_services.dart';
 import '../storage/app_database.dart';
 import '../storage/repositories.dart';
 import '../storage/secrets_store.dart';
+import 'app_dirs.dart';
 import 'safe_connectivity.dart';
 import 'ringtones.dart';
 
@@ -94,7 +94,7 @@ final connectivityStreamProvider = Provider<Stream<List<ConnectivityResult>>>(
 /// Where recordings are written when no folder is configured.
 final recordingsDirProvider = Provider<Future<String> Function()>(
   (ref) => () async {
-    final d = await getApplicationDocumentsDirectory();
+    final d = await appDocumentsDir();
     final dir = Directory(p.join(d.path, 'Recordings'));
     await dir.create(recursive: true);
     return dir.path;

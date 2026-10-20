@@ -78,30 +78,75 @@ class SelectTile<T> extends StatelessWidget {
   final ValueChanged<T> onChanged;
   final IconData? icon;
 
+  /// Below this width the dropdown moves under the label instead of beside it
+  /// (a narrow beside-layout breaks the label mid-word).
+  static const stackBelow = 440.0;
+
+  /// True when the label would not fit beside a 190 px dropdown without
+  /// breaking a word, or when a subtitle would be squeezed into a sliver.
+  bool _needsStack(BuildContext context, double width) {
+    if (width >= stackBelow) return false;
+    if (subtitle != null && width < 400) return true;
+    final style = Theme.of(context).textTheme.bodyLarge;
+    final scaler = MediaQuery.textScalerOf(context);
+    final room = width - (icon == null ? 16 : 56) - 16 - 190 - 16;
+    for (final word in title.split(RegExp(r'\s+'))) {
+      final tp = TextPainter(
+        text: TextSpan(text: word, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final w = tp.width;
+      tp.dispose();
+      if (w > room) return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return ListTile(
-      leading: icon == null ? null : Icon(icon),
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 190),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<T>(
-            value: options.containsKey(value) ? value : null,
-            isExpanded: true,
-            borderRadius: BorderRadius.circular(12),
-            style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
-            items: [
-              for (final e in options.entries) DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
-            ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
-          ),
-        ),
+    final dropdown = DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: options.containsKey(value) ? value : null,
+        isExpanded: true,
+        borderRadius: BorderRadius.circular(12),
+        style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
+        items: [
+          for (final e in options.entries) DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
       ),
+    );
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (_needsStack(context, box.maxWidth)) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: icon == null ? null : Icon(icon),
+                title: Text(title),
+                subtitle: subtitle == null ? null : Text(subtitle!),
+              ),
+              Padding(
+                padding: EdgeInsetsDirectional.only(start: icon == null ? 16 : 72, end: 16, bottom: 8),
+                child: dropdown,
+              ),
+            ],
+          );
+        }
+        return ListTile(
+          leading: icon == null ? null : Icon(icon),
+          title: Text(title),
+          subtitle: subtitle == null ? null : Text(subtitle!),
+          trailing: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 190), child: dropdown),
+        );
+      },
     );
   }
 }

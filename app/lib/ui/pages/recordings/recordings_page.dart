@@ -72,8 +72,12 @@ class _RecordingsPageState extends ConsumerState<RecordingsPage> {
 
   Future<void> _openFolder() async {
     final s = ref.read(settingsProvider);
-    final dir = s.recordingFolder.isNotEmpty ? s.recordingFolder : await ref.read(recordingsDirProvider)();
-    await ref.read(recordingExporterProvider).openFolder(dir);
+    try {
+      final dir = s.recordingFolder.isNotEmpty ? s.recordingFolder : await ref.read(recordingsDirProvider)();
+      await ref.read(recordingExporterProvider).openFolder(dir);
+    } catch (e) {
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStartRecording, details: '$e');
+    }
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,13 @@ class MeterChannel extends ChangeNotifier {
   double peak = 0;
   double _held = 0;
 
+  /// Finest bar resolution the painter draws (its maximum segment count).
+  /// Listeners are only notified when the lit segment of the level or of the
+  /// peak (at this resolution) changes, so a flickering signal does not
+  /// repaint more often than the picture can actually change.
+  static const resolution = 64;
+  int _shownLevel = 0, _shownPeak = 0;
+
   /// Advances by [dtMs] with the raw 0-255 engine sample [raw].
   /// Returns true when [level] or [peak] changed.
   bool step(int raw, double dtMs) {
@@ -57,14 +65,21 @@ class MeterChannel extends ChangeNotifier {
       }
     }
     final changed = level != l0 || peak != p0;
-    if (changed) notifyListeners();
+    _notifyIfVisible();
     return changed;
   }
 
+  void _notifyIfVisible() {
+    final l = (level * resolution).ceil(), p = (peak * resolution).ceil();
+    if (l == _shownLevel && p == _shownPeak) return;
+    _shownLevel = l;
+    _shownPeak = p;
+    notifyListeners();
+  }
+
   void reset() {
-    final changed = level != 0 || peak != 0;
     level = peak = _held = 0;
-    if (changed) notifyListeners();
+    _notifyIfVisible();
   }
 }
 
@@ -144,6 +159,42 @@ const kMeterPollEvery = Duration(milliseconds: 66);
 /// Polling period at idle: the meters are visible but nothing is playing.
 const kMeterIdleEvery = Duration(seconds: 1);
 
+/// Polling period while audio flows when frames are expensive to draw
+/// (software rendering: a VM, a remote desktop, no GPU driver): ~5 Hz.
+const kMeterLowPowerEvery = Duration(milliseconds: 200);
+
+/// Tells from recent frame raster times whether drawing is expensive. Slow
+/// when the median of the last [window] frames exceeds [threshold]; fast again
+/// below half of it (hysteresis, so the rate doesn't flap).
+class RasterCostMonitor {
+  RasterCostMonitor({
+    this.threshold = const Duration(milliseconds: 12),
+    this.window = 30,
+  });
+
+  final Duration threshold;
+  final int window;
+  final _us = <int>[];
+  bool slow = false;
+
+  /// Adds raster durations; returns true when [slow] changed.
+  bool add(Iterable<Duration> raster) {
+    for (final d in raster) {
+      _us.add(d.inMicroseconds);
+    }
+    if (_us.length > window) _us.removeRange(0, _us.length - window);
+    if (_us.length < window ~/ 3) return false;
+    final median = ([..._us]..sort())[_us.length ~/ 2];
+    final limit = slow
+        ? threshold.inMicroseconds ~/ 2
+        : threshold.inMicroseconds;
+    final now = median > limit;
+    if (now == slow) return false;
+    slow = now;
+    return true;
+  }
+}
+
 /// Smoothed meters from `media.levels`, polled only while something watches
 /// this provider and the app is in the foreground: at ~15 Hz while audio
 /// flows (a live call, the musicbed monitor, a mic test or recording) and at
@@ -169,7 +220,15 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   var boost = ref.read(meterBoostProvider);
   // iOS has no audio device outside a call: the monitor plays nowhere then.
   final ios = ref.read(isIosProvider);
-  bool flowing() => inCall || (bedActive && monitor && !ios) || echo || recording || boost > 0;
+  bool flowing() =>
+      inCall ||
+      (bedActive && monitor && !ios) ||
+      echo ||
+      recording ||
+      boost > 0;
+  // Animated meters cost a full-window redraw per update: slow down when
+  // frames are expensive (software rendering).
+  final raster = RasterCostMonitor();
 
   Future<void> poll() async {
     if (busy) return;
@@ -201,11 +260,19 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
       if (!foreground) meters.clear();
       return;
     }
-    final want = flowing() ? kMeterPollEvery : kMeterIdleEvery;
+    final want = !flowing()
+        ? kMeterIdleEvery
+        : raster.slow
+        ? kMeterLowPowerEvery
+        : kMeterPollEvery;
     if (timer != null && want == period) return;
     timer?.cancel();
     period = want;
     timer = zone.run(() => Timer.periodic(period, (_) => unawaited(poll())));
+  }
+
+  void onTimings(List<FrameTiming> timings) {
+    if (raster.add(timings.map((t) => t.rasterDuration))) sync();
   }
 
   ref.listen(callsProvider.select((c) => c.live.isNotEmpty), (_, v) {
@@ -246,18 +313,25 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   final observer = _LifecycleObserver((state) {
     foreground = switch (state) {
       AppLifecycleState.resumed || AppLifecycleState.inactive => true,
-      AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached => false,
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached => false,
     };
     sync();
   });
   final binding = WidgetsBinding.instance;
   binding.addObserver(observer);
+  binding.addTimingsCallback(onTimings);
   final st = binding.lifecycleState;
-  foreground = st == null || st == AppLifecycleState.resumed || st == AppLifecycleState.inactive;
+  foreground =
+      st == null ||
+      st == AppLifecycleState.resumed ||
+      st == AppLifecycleState.inactive;
   sync();
 
   ref.onDispose(() {
     binding.removeObserver(observer);
+    binding.removeTimingsCallback(onTimings);
     timer?.cancel();
     timer = null;
   });

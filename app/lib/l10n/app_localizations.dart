@@ -11415,7 +11415,7 @@ abstract class AppLocalizations {
   /// Notice at start-up (Linux): the secret keyring was locked and could not be unlocked, so saved account passwords could not be read this session.
   ///
   /// In en, this message translates to:
-  /// **'Your keyring is locked, so saved passwords couldn\'\'t be read. Unlock it and restart SoftphonePro.'**
+  /// **'Your keyring couldn\'\'t be opened (locked or not responding), so saved passwords couldn\'\'t be read. Unlock it and restart SoftphonePro.'**
   String get secretsKeyringLocked;
 
   /// Title of the audio mixer (microphone, speaker and musicbed meters and sliders).
@@ -11561,6 +11561,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Musicbed on'**
   String get musicbedOn;
+
+  /// In-call indicator while the call is on hold: the musicbed is not sent to held calls.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed paused (on hold)'**
+  String get musicbedPausedOnHold;
 
   /// Tooltip of the in-call musicbed indicator.
   ///

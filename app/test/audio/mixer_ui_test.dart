@@ -330,6 +330,23 @@ void main() {
       await end(tester, a);
     });
 
+    testWidgets('Settings "Music file" dropdown ends with "Add a file…", which imports and selects the file', (tester) async {
+      final a = await mk(tester, settings: {'musicbedFile': 'builtin:hold_calm'});
+      await pumpIn(tester, a, const MusicbedGroup());
+      await tester.tap(find.descendant(of: find.byKey(const Key('musicbed-file')), matching: find.byType(DropdownButton<String>)));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose a file'), findsWidgets);
+      expect(find.text('Add a file…'), findsOneWidget);
+      final f = (await tester.runAsync(() => a.makeAudio('theme.mp3')))!;
+      a.picked.add(f.path);
+      await tester.tap(find.text('Add a file…'));
+      await io(tester);
+      await tester.pumpAndSettle();
+      await io(tester);
+      expect(a.container.read(settingsProvider).musicbedFile, 'lib:theme.mp3');
+      await end(tester, a);
+    });
+
     testWidgets('"Musicbed on" chip follows the engine state', (tester) async {
       final a = await mk(tester, settings: {'musicbedFile': 'builtin:hold_calm'});
       await pumpIn(tester, a, const MusicbedChip());
