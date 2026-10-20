@@ -137,6 +137,8 @@ static int do_make(cJSON* p, const char* extra_name, const char* extra_val, cJSO
         int tries;
         for (tries = 0; tries < 40; tries++) {
             st = pjsua_call_make_call(acc, &d, NULL, NULL, &md, &slot);
+            if ((st == PJMEDIA_EAUD_NODEFDEV || st == PJMEDIA_EAUD_NODEV) && spc_media_on_connect_error(st))
+                continue;          /* no audio device at all (headless server, VM, CI): place the call on the null device */
             if (st != PJ_ETOOMANY) break;
             spc_sleep_ms(25);      /* a just-finished call may still hold its pjsua slot */
         }

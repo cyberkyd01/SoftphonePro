@@ -4,7 +4,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:dbus/dbus.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -97,6 +98,56 @@ class EncryptedFileSecretsStore implements SecretsStore {
   }
 }
 
+/// Whether a Secret Service is reachable on the session bus *and* usable
+/// without user interaction: it answers within [timeout], has a default
+/// collection and that collection is unlocked.
+///
+/// flutter_secure_storage's Linux plugin calls libsecret synchronously on the
+/// GTK main thread. A service that owns the name but never answers (a locked
+/// keyring waiting for a prompt nobody can see, a hung daemon) blocks that
+/// thread for the D-Bus timeout (25 s) on every libsecret step, which freezes
+/// every platform-channel call (window, provisioning, tray) and a Dart-side
+/// `Future.timeout` cannot help. Probing over Dart's own D-Bus connection costs
+/// nothing on the GTK thread and is bounded by [timeout]. Any error -> false.
+Future<bool> secretServiceUsable({
+  DBusClient? client,
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  DBusClient? c = client;
+  try {
+    c ??= DBusClient.session();
+    final service = DBusRemoteObject(
+      c,
+      name: 'org.freedesktop.secrets',
+      path: DBusObjectPath('/org/freedesktop/secrets'),
+    );
+    return await () async {
+      final reply = await service.callMethod(
+        'org.freedesktop.Secret.Service',
+        'ReadAlias',
+        [DBusString('default')],
+        replySignature: DBusSignature('o'),
+      );
+      final path = reply.returnValues.first as DBusObjectPath;
+      if (path.value == '/') return false; // no default collection
+      final locked = await DBusRemoteObject(
+        c!,
+        name: 'org.freedesktop.secrets',
+        path: path,
+      ).getProperty('org.freedesktop.Secret.Collection', 'Locked');
+      return locked is DBusBoolean && !locked.value;
+    }().timeout(timeout);
+  } catch (_) {
+    return false;
+  } finally {
+    if (client == null) {
+      try {
+        await c?.close().timeout(const Duration(seconds: 1));
+      } catch (_) {}
+    }
+  }
+}
+
 /// OS keystore first; falls back to [EncryptedFileSecretsStore] when the
 /// keystore throws (e.g. unsigned macOS builds without keychain entitlement)
 /// or, on Linux, has no Secret Service / a locked keyring (libsecret then
@@ -108,15 +159,42 @@ class KeystoreSecretsStore implements SecretsStore {
     FlutterSecureStorage? storage,
     Duration? keystoreTimeout,
     bool? isLinux,
+    Future<bool> Function()? probe,
+    Duration probeTimeout = const Duration(seconds: 5),
   }) : _storage = storage ?? const FlutterSecureStorage(),
-       _timeout = keystoreTimeout ?? ((isLinux ?? (!kIsWeb && Platform.isLinux)) ? const Duration(seconds: 8) : null);
+       _timeout = keystoreTimeout ?? ((isLinux ?? (!kIsWeb && Platform.isLinux)) ? const Duration(seconds: 8) : null),
+       _probeTimeout = probeTimeout,
+       _probe = probe ?? ((isLinux ?? (!kIsWeb && Platform.isLinux)) ? secretServiceUsable : null);
 
   final FlutterSecureStorage _storage;
   final SecretsStore _fallback;
   final Duration? _timeout;
+  final Future<bool> Function()? _probe;
+  final Duration _probeTimeout;
+  Future<void>? _probed;
   bool _useFallback = false;
 
+  /// Linux: decide once, before the first libsecret call, whether the Secret
+  /// Service can be used at all (see [secretServiceUsable]).
+  Future<void> _ensureProbed() {
+    final probe = _probe;
+    if (probe == null) return Future.value();
+    return _probed ??= () async {
+      bool ok;
+      try {
+        ok = await probe().timeout(_probeTimeout);
+      } catch (_) {
+        ok = false;
+      }
+      if (!ok) {
+        _useFallback = true;
+        debugPrint('secrets: no usable Secret Service, using the encrypted file store');
+      }
+    }();
+  }
+
   Future<T> _try<T>(Future<T> Function() op, Future<T> Function() fb) async {
+    await _ensureProbed();
     if (_useFallback) return fb();
     try {
       final f = op();

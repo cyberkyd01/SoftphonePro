@@ -1229,6 +1229,7 @@ class CallsController extends Notifier<CallsState> {
       _emit();
       return r.cid;
     } on EngineException catch (e) {
+      debugPrint('dial failed: $e');
       notices.error(ref.read(l10nProvider).callErrCouldNotPlace, details: e.toString());
       return null;
     }

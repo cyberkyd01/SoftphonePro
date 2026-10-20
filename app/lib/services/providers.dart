@@ -18,6 +18,7 @@ import '../platform/platform_services.dart';
 import '../storage/app_database.dart';
 import '../storage/repositories.dart';
 import '../storage/secrets_store.dart';
+import 'safe_connectivity.dart';
 import 'ringtones.dart';
 
 /// An engine plus whether it is the in-memory simulator.
@@ -87,7 +88,7 @@ final lanHandoffProvider = Provider<LanHandoff>((ref) => ref.watch(lanHandoffFac
 
 /// Connectivity changes; override with an empty stream in tests.
 final connectivityStreamProvider = Provider<Stream<List<ConnectivityResult>>>(
-  (ref) => Connectivity().onConnectivityChanged,
+  (ref) => guardedConnectivityStream(),
 );
 
 /// Where recordings are written when no folder is configured.

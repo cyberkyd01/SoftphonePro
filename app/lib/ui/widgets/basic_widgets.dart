@@ -1,4 +1,5 @@
 import '../../core/bidi.dart';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -59,26 +60,48 @@ class _Pulse extends StatefulWidget {
   State<_Pulse> createState() => _PulseState();
 }
 
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat();
+/// Frame rate of the status-dot pulse. An endless 60 fps animation keeps the
+/// raster thread busy for as long as an account is "registering" (an
+/// unreachable server stays there forever), which costs several cores with
+/// software rendering (llvmpipe, VMs, Raspberry Pi). A slow stepped pulse is
+/// enough to show activity.
+const int kStatusPulseFps = 4;
+const int kStatusPulseSteps = 8; // 2 s per cycle at 4 fps
+
+class _PulseState extends State<_Pulse> {
+  Timer? _timer;
+  int _step = 0;
+
+  void _sync(bool animate) {
+    if (animate && _timer == null) {
+      _timer = Timer.periodic(Duration(milliseconds: 1000 ~/ kStatusPulseFps), (_) {
+        if (mounted) setState(() => _step = (_step + 1) % kStatusPulseSteps);
+      });
+    } else if (!animate && _timer != null) {
+      _timer!.cancel();
+      _timer = null;
+    }
+  }
 
   @override
   void dispose() {
-    _c.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) {
-        final t = Curves.easeOutCubic.transform(_c.value);
-        return Stack(
+    // Static when the platform asks for reduced motion or the route is hidden.
+    final animate = !MediaQuery.of(context).disableAnimations && TickerMode.of(context);
+    _sync(animate);
+    final t = animate ? Curves.easeOutCubic.transform(_step / kStatusPulseSteps) : 0.0;
+    return RepaintBoundary(
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: Stack(
           alignment: Alignment.center,
+          clipBehavior: Clip.none,
           children: [
             Container(
               width: widget.size * (1 + 1.2 * t),
@@ -88,11 +111,10 @@ class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
                 color: widget.color.withValues(alpha: 0.35 * (1 - t)),
               ),
             ),
-            child!,
+            widget.child,
           ],
-        );
-      },
-      child: widget.child,
+        ),
+      ),
     );
   }
 }
