@@ -622,6 +622,10 @@ class TestWsProtocol(Base):
         for i, sc in enumerate(HOSTILE):
             c, srv, cfg = self._run(sc, False, timeout=10, n=10 + i)
             if sc not in ("h_garbage", "h_truncated"):
+                # the engine event can arrive before the fake server's thread has read the client's Close frame
+                end = time.time() + 5
+                while not srv.conns[0]["closed"] and time.time() < end:
+                    time.sleep(0.02)
                 closes = [f for f in srv.conns[0]["frames"] if f[0] == 8]
                 self.assertTrue(closes, "%s: client should send a Close frame before dropping" % sc)
                 code = struct.unpack("!H", closes[0][3][:2])[0]
