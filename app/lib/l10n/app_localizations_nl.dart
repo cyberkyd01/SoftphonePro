@@ -6845,4 +6845,8 @@ class AppLocalizationsNl extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '$updated bestaande bijwerken, $added nieuwe toevoegen';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Uw sleutelhanger is vergrendeld, waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.';
 }

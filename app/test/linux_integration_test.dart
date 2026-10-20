@@ -303,7 +303,7 @@ void main() {
   group('keystore fallback (Linux)', () {
     test('no Secret Service: errors fall back to the file store', () async {
       final fb = MemorySecretsStore();
-      final s = KeystoreSecretsStore(fb, storage: _ThrowingStorage(), isLinux: true, probe: () async => true);
+      final s = KeystoreSecretsStore(fb, storage: _ThrowingStorage(), isLinux: true, probe: () async => SecretServiceState.unlocked);
       await s.write('k', 'v');
       expect(await s.read('k'), 'v');
       expect(fb.data, {'k': 'v'});
@@ -313,7 +313,7 @@ void main() {
 
     test('a hanging keyring times out instead of blocking startup', () async {
       final fb = MemorySecretsStore();
-      final s = KeystoreSecretsStore(fb, storage: _HangingStorage(), isLinux: true, probe: () async => true, keystoreTimeout: const Duration(milliseconds: 50));
+      final s = KeystoreSecretsStore(fb, storage: _HangingStorage(), isLinux: true, probe: () async => SecretServiceState.unlocked, keystoreTimeout: const Duration(milliseconds: 50));
       final sw = Stopwatch()..start();
       await s.write('k', 'v');
       expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
@@ -325,7 +325,7 @@ void main() {
     test('unusable Secret Service (locked / unanswering): keystore is never called, file store works', () async {
       final fb = MemorySecretsStore();
       final storage = _CountingStorage();
-      final s = KeystoreSecretsStore(fb, storage: storage, isLinux: true, probe: () async => false);
+      final s = KeystoreSecretsStore(fb, storage: storage, isLinux: true, probe: () async => SecretServiceState.locked);
       await s.write('automation', 'tok');
       expect(await s.read('automation'), 'tok');
       await s.delete('automation');
@@ -334,7 +334,7 @@ void main() {
     });
 
     test('a probe that never answers or throws falls back within its timeout', () async {
-      for (final probe in <Future<bool> Function()>[() => Completer<bool>().future, () async => throw StateError('no bus')]) {
+      for (final probe in <Future<SecretServiceState> Function()>[() => Completer<SecretServiceState>().future, () async => throw StateError('no bus')]) {
         final fb = MemorySecretsStore();
         final storage = _CountingStorage();
         final s = KeystoreSecretsStore(fb, storage: storage, isLinux: true, probe: probe, probeTimeout: const Duration(milliseconds: 50));
@@ -350,15 +350,15 @@ void main() {
     test('usable Secret Service: the keystore is used', () async {
       final fb = MemorySecretsStore();
       final storage = _CountingStorage();
-      final s = KeystoreSecretsStore(fb, storage: storage, isLinux: true, probe: () async => true);
+      final s = KeystoreSecretsStore(fb, storage: storage, isLinux: true, probe: () async => SecretServiceState.unlocked);
       await s.write('k', 'v');
       expect(storage.calls, 1);
       expect(fb.data, isEmpty);
     });
 
-    test('secretServiceUsable never throws and is bounded (no session bus / no service)', () async {
+    test('secretServiceState never throws and is bounded (no session bus / no service)', () async {
       final sw = Stopwatch()..start();
-      expect(await secretServiceUsable(timeout: const Duration(milliseconds: 500)), isA<bool>());
+      expect(await secretServiceState(timeout: const Duration(milliseconds: 500)), isA<SecretServiceState>());
       expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
     });
   });

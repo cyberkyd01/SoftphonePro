@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "Identifiant d''appelant : {callerId}",
   "importAccountSrtpOff": "Pas de chiffrement des médias (SRTP désactivé)",
   "linkLanConnectAddress": "Adresse : {host}:{port}",
-  "provisioningUpdateSummary": "Mettre à jour {updated} existants, ajouter {added} nouveaux"
+  "provisioningUpdateSummary": "Mettre à jour {updated} existants, ajouter {added} nouveaux",
+  "secretsKeyringLocked": "Votre trousseau est verrouillé : les mots de passe enregistrés n''ont pas pu être lus. Déverrouillez-le et redémarrez SoftphonePro."
 }

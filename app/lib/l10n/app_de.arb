@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "Anruferkennung: {callerId}",
   "importAccountSrtpOff": "Keine Medienverschlüsselung (SRTP aus)",
   "linkLanConnectAddress": "Adresse: {host}:{port}",
-  "provisioningUpdateSummary": "{updated} vorhandene aktualisieren, {added} neue hinzufügen"
+  "provisioningUpdateSummary": "{updated} vorhandene aktualisieren, {added} neue hinzufügen",
+  "secretsKeyringLocked": "Ihr Schlüsselbund ist gesperrt, daher konnten gespeicherte Passwörter nicht gelesen werden. Entsperren Sie ihn und starten Sie SoftphonePro neu."
 }

@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "主叫号码：{callerId}",
   "importAccountSrtpOff": "无媒体加密（SRTP 关闭）",
   "linkLanConnectAddress": "地址：{host}:{port}",
-  "provisioningUpdateSummary": "更新 {updated} 个现有账户，添加 {added} 个新账户"
+  "provisioningUpdateSummary": "更新 {updated} 个现有账户，添加 {added} 个新账户",
+  "secretsKeyringLocked": "密钥环已锁定,无法读取已保存的密码。请解锁后重新启动 SoftphonePro。"
 }

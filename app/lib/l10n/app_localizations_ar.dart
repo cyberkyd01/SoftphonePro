@@ -6826,4 +6826,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'تحديث $updated موجودة، وإضافة $added جديدة';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'سلسلة المفاتيح مقفلة، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro.';
 }

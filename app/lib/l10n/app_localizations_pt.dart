@@ -6854,6 +6854,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Atualizar $updated existentes, adicionar $added novas';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'O seu chaveiro está bloqueado, por isso não foi possível ler as palavras-passe guardadas. Desbloqueie-o e reinicie o SoftphonePro.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13705,4 +13709,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Atualizar $updated existentes, adicionar $added novas';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Seu chaveiro está bloqueado, então não foi possível ler as senhas salvas. Desbloqueie-o e reinicie o SoftphonePro.';
 }

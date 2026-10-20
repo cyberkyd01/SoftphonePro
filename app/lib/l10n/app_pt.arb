@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "ID do autor da chamada: {callerId}",
   "importAccountSrtpOff": "Sem cifragem de multimédia (SRTP desativado)",
   "linkLanConnectAddress": "Endereço: {host}:{port}",
-  "provisioningUpdateSummary": "Atualizar {updated} existentes, adicionar {added} novas"
+  "provisioningUpdateSummary": "Atualizar {updated} existentes, adicionar {added} novas",
+  "secretsKeyringLocked": "O seu chaveiro está bloqueado, por isso não foi possível ler as palavras-passe guardadas. Desbloqueie-o e reinicie o SoftphonePro."
 }

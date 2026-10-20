@@ -6772,4 +6772,8 @@ class AppLocalizationsHi extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '$updated मौजूदा अपडेट करें, $added नए जोड़ें';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'आपकी कीरिंग लॉक है, इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को फिर से शुरू करें।';
 }

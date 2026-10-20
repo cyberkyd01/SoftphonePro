@@ -6766,4 +6766,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Update $updated existing, add $added new';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Your keyring is locked, so saved passwords couldn\'t be read. Unlock it and restart SoftphonePro.';
 }

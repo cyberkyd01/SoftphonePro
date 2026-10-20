@@ -29,7 +29,15 @@ Future<void> main(List<String> args) async {
   final desktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
   final supportDir = (await getApplicationSupportDirectory()).path;
-  final secrets = KeystoreSecretsStore(EncryptedFileSecretsStore(p.join(supportDir, 'secrets')));
+  final secrets = KeystoreSecretsStore(EncryptedFileSecretsStore(p.join(supportDir, 'secrets')), markerPath: p.join(supportDir, 'secrets', 'backend'));
+  if (!kIsWeb && Platform.isLinux) {
+    // Picks the secrets backend; if the keyring is locked this waits (up to
+    // 120 s) for the user to answer the desktop's unlock dialog. It must run
+    // before the database opens: its encryption key lives in the secrets store.
+    debugPrint('secrets: choosing backend; the window appears once the keyring is available or the unlock prompt times out');
+    await secrets.init();
+    debugPrint('secrets: backend = ${secrets.linuxStatus?.name}');
+  }
   final db = await openDatabaseOrRecover(supportDir, secrets);
   final boot = await loadBootData(db, secrets);
 
@@ -98,6 +106,10 @@ Future<void> main(List<String> args) async {
   final startupNotice = db.startupNotice;
   if (startupNotice != null) {
     Future<void>.delayed(const Duration(seconds: 1), () => container.read(noticeProvider.notifier).error(container.read(l10nProvider).appDbConversionFailed(startupNotice.encrypt ? 'encrypt' : 'decrypt', startupNotice.error)));
+  }
+
+  if (secrets.linuxStatus == LinuxSecretsStatus.keyringLockedFallback) {
+    Future<void>.delayed(const Duration(seconds: 1), () => container.read(noticeProvider.notifier).error(container.read(l10nProvider).secretsKeyringLocked));
   }
 
   runApp(UncontrolledProviderScope(container: container, child: const SoftphoneApp()));

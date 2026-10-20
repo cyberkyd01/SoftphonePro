@@ -6882,4 +6882,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Mettre à jour $updated existants, ajouter $added nouveaux';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Votre trousseau est verrouillé : les mots de passe enregistrés n\'ont pas pu être lus. Déverrouillez-le et redémarrez SoftphonePro.';
 }

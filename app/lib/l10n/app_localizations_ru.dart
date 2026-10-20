@@ -6882,4 +6882,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Обновить существующие: $updated, добавить новые: $added';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Связка ключей заблокирована, поэтому сохранённые пароли не удалось прочитать. Разблокируйте её и перезапустите SoftphonePro.';
 }

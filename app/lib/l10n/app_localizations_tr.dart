@@ -6800,4 +6800,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '$updated mevcut hesabı güncelle, $added yeni hesap ekle';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Anahtarlığınız kilitli olduğu için kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
 }

@@ -11411,6 +11411,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update {updated} existing, add {added} new'**
   String provisioningUpdateSummary(int updated, int added);
+
+  /// Notice at start-up (Linux): the secret keyring was locked and could not be unlocked, so saved account passwords could not be read this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Your keyring is locked, so saved passwords couldn\'\'t be read. Unlock it and restart SoftphonePro.'**
+  String get secretsKeyringLocked;
 }
 
 class _AppLocalizationsDelegate

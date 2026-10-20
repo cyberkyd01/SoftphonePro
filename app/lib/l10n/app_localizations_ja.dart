@@ -6594,4 +6594,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '既存の $updated 件を更新し、新しい $added 件を追加';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'キーリングがロックされているため、保存されたパスワードを読み取れませんでした。ロックを解除して SoftphonePro を再起動してください。';
 }

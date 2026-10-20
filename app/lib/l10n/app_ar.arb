@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "معرّف المتصل: {callerId}",
   "importAccountSrtpOff": "بدون تشفير الوسائط (SRTP متوقف)",
   "linkLanConnectAddress": "العنوان: {host}:{port}",
-  "provisioningUpdateSummary": "تحديث {updated} موجودة، وإضافة {added} جديدة"
+  "provisioningUpdateSummary": "تحديث {updated} موجودة، وإضافة {added} جديدة",
+  "secretsKeyringLocked": "سلسلة المفاتيح مقفلة، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro."
 }

@@ -6838,4 +6838,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Actualizar $updated existentes, añadir $added nuevas';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Su llavero está bloqueado, por lo que no se pudieron leer las contraseñas guardadas. Desbloquéelo y reinicie SoftphonePro.';
 }

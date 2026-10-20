@@ -6859,4 +6859,8 @@ class AppLocalizationsIt extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Aggiorna $updated esistenti, aggiungi $added nuovi';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Il portachiavi è bloccato, quindi non è stato possibile leggere le password salvate. Sbloccalo e riavvia SoftphonePro.';
 }

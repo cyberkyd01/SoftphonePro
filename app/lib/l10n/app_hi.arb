@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "कॉलर आईडी: {callerId}",
   "importAccountSrtpOff": "मीडिया एन्क्रिप्शन नहीं (SRTP बंद)",
   "linkLanConnectAddress": "पता: {host}:{port}",
-  "provisioningUpdateSummary": "{updated} मौजूदा अपडेट करें, {added} नए जोड़ें"
+  "provisioningUpdateSummary": "{updated} मौजूदा अपडेट करें, {added} नए जोड़ें",
+  "secretsKeyringLocked": "आपकी कीरिंग लॉक है, इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को फिर से शुरू करें।"
 }

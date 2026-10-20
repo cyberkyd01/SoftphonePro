@@ -6539,4 +6539,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '更新 $updated 个现有账户，添加 $added 个新账户';
   }
+
+  @override
+  String get secretsKeyringLocked => '密钥环已锁定,无法读取已保存的密码。请解锁后重新启动 SoftphonePro。';
 }

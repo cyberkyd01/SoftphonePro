@@ -9260,5 +9260,9 @@
       "updated": {"type": "int"},
       "added": {"type": "int"}
     }
+  },
+  "secretsKeyringLocked": "Your keyring is locked, so saved passwords couldn''t be read. Unlock it and restart SoftphonePro.",
+  "@secretsKeyringLocked": {
+    "description": "Notice at start-up (Linux): the secret keyring was locked and could not be unlocked, so saved account passwords could not be read this session."
   }
 }

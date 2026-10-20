@@ -1876,5 +1876,6 @@
   "importAccountCallerId": "Beller-ID: {callerId}",
   "importAccountSrtpOff": "Geen mediaversleuteling (SRTP uit)",
   "linkLanConnectAddress": "Adres: {host}:{port}",
-  "provisioningUpdateSummary": "{updated} bestaande bijwerken, {added} nieuwe toevoegen"
+  "provisioningUpdateSummary": "{updated} bestaande bijwerken, {added} nieuwe toevoegen",
+  "secretsKeyringLocked": "Uw sleutelhanger is vergrendeld, waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw."
 }

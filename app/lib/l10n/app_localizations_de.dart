@@ -6857,4 +6857,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '$updated vorhandene aktualisieren, $added neue hinzufügen';
   }
+
+  @override
+  String get secretsKeyringLocked =>
+      'Ihr Schlüsselbund ist gesperrt, daher konnten gespeicherte Passwörter nicht gelesen werden. Entsperren Sie ihn und starten Sie SoftphonePro neu.';
 }
