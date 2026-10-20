@@ -176,7 +176,7 @@ Every push goes through CI on GitHub Actions:
 
 The engine suite has also been run locally under ASan/UBSan (see [docs/reviews](docs/reviews)); that run is not part of CI.
 
-Device testing is narrower than the automated tests: the macOS app was driven end to end through its automation API ([docs/QA_MACOS.md](docs/QA_MACOS.md)) and the Android app was exercised on an emulator ([docs/QA_ANDROID.md](docs/QA_ANDROID.md)). **Windows and iOS builds are produced by CI and covered by the shared tests, but have not been run on a device or simulator yet.** Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
+Device testing is narrower than the automated tests. For 1.1.0 the Linux app (arm64 Debian 12 and Ubuntu 24.04 containers with fake tray, notification and Secret Service hosts, plus a real gnome-keyring) and the Android app (emulator) were exercised end to end ([docs/QA_LINUX.md](docs/QA_LINUX.md), [docs/QA_ANDROID.md](docs/QA_ANDROID.md)); the Linux packages are also installed and smoke-tested in CI on both architectures. The macOS app was driven end to end for 1.0.0 ([docs/QA_MACOS.md](docs/QA_MACOS.md)). **Not tested:** Raspberry Pi hardware, Wayland, real GNOME/KDE tray hosts, real audio hardware, and Windows and iOS on a device (CI builds and launch smoke only; macOS 1.1.0 calls likewise). Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
 
 ## Known limitations
 

@@ -1,0 +1,68 @@
+[
+ {
+  "id": "API-micLevel",
+  "check": "POST /v1/audio {'micLevel': 2.5}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_mic_level\",\"message\":\"\\\"micLevel\\\" must be a number from 0 to 2\"}}"
+ },
+ {
+  "id": "API-speakerLevel",
+  "check": "POST /v1/audio {'speakerLevel': -1}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_speaker_level\",\"message\":\"\\\"speakerLevel\\\" must be a number from 0 to 2\"}}"
+ },
+ {
+  "id": "API-musicbedVolume",
+  "check": "POST /v1/audio {'musicbedVolume': 'loud'}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_musicbed_volume\",\"message\":\"\\\"musicbedVolume\\\" must be a number from 0 to 2\"}}"
+ },
+ {
+  "id": "API-musicbedMonitorVolume",
+  "check": "POST /v1/audio {'musicbedMonitorVolume': 3}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_musicbed_monitor_volume\",\"message\":\"\\\"musicbedMonitorVolume\\\" must be a number from 0 to 2\"}}"
+ },
+ {
+  "id": "API-bogus",
+  "check": "POST /v1/audio {'bogus': 1}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_field\",\"message\":\"Unknown field \\\"bogus\\\"; the musicbed file can only be chosen in the app\"}}"
+ },
+ {
+  "id": "API-musicbedEnabled",
+  "check": "POST /v1/audio {'musicbedEnabled': 'yes'}",
+  "result": "PASS",
+  "evidence": "400 {\"error\":{\"code\":\"invalid_musicbed_enabled\",\"message\":\"\\\"musicbedEnabled\\\" must be true or false\"}}"
+ },
+ {
+  "id": "API-nofile",
+  "check": "musicbedEnabled:true with no file -> 409 no_musicbed_file",
+  "result": "PASS",
+  "evidence": "409 {\"error\":{\"code\":\"no_musicbed_file\",\"message\":\"No musicbed file is chosen; choose one in the app first\"}}"
+ },
+ {
+  "id": "API-auth",
+  "check": "GET /v1/audio without token -> 401",
+  "result": "PASS",
+  "evidence": "401 {\"error\":{\"code\":\"unauthorized\",\"message\":\"Missing or invalid bearer token\"}}"
+ },
+ {
+  "id": "API-bounds",
+  "check": "edge values 0 and 2 accepted",
+  "result": "PASS",
+  "evidence": "200 mic=2.0 spk=0.0"
+ },
+ {
+  "id": "SSE1",
+  "check": "SSE audio/musicbed events on enable, monitor, pause, resume, disable",
+  "result": "PASS",
+  "evidence": "7 audio events; musicbed:{\"enabled\": true, \"active\": false, \"paused\": false, \"monitor\": false, \"volume\": 0.5} | musicbed:{\"enabled\": true, \"active\": true, \"paused\": false, \"monitor\": false, \"volume\": 0.5} | musicbed:{\"enabled\": true, \"active\": true, \"paused\": false, \"monitor\": true, \"volume\": 0.4} | musicbed:{\"enabled\": true, \"active\": true, \"paused\": true, \"monitor\": true, \"volume\": 0.4} | musicbed:{\"enabled\": true, \"active\": true, \"paused\": false, \"monitor\": true, \"volume\": 0.4} | musicbed:{\"enabled\": false, \"active\": true, \"paused\": false, \"monitor\": false, \"volume\": 0.4} | musicbed:{\"enabled\": false, \"active\": false, \"paused\": false, \"monitor\": false, \"volume\": 0.4}"
+ },
+ {
+  "id": "SSE2",
+  "check": "no audio event just for a volume change (per docs)",
+  "result": "PASS",
+  "evidence": "see event list: volume 0.4 appears only inside events caused by other changes"
+ }
+]

@@ -1,0 +1,92 @@
+[
+ {
+  "id": "B1",
+  "check": "bed 440 Hz audible at B while A mic muted",
+  "result": "PASS",
+  "evidence": "B right p1 440Hz=-9.2 dBFS, 1kHz=-70.2 (muted voice)"
+ },
+ {
+  "id": "B2",
+  "check": "live volume 1.0 -> 0.2 drops level ~14 dB",
+  "result": "PASS",
+  "evidence": "440Hz -9.2 -> -23.5 dBFS, drop 14.3 dB (ideal 13.98)"
+ },
+ {
+  "id": "B3",
+  "check": "bed not sent to held call (>=20 dB below unheld; Asterisk MOH may add music ~-34 dBFS near 430-450 Hz, see test_hold_repeat.py which shows the same with bed off)",
+  "result": "PASS",
+  "evidence": "p3 440Hz=-33.8 peaks=[[444, -33.8], [510, -41.9], [383, -52.7], [572, -61.4], [323, -64.1]] vs unheld -9.2"
+ },
+ {
+  "id": "B4",
+  "check": "440 Hz back after unhold",
+  "result": "PASS",
+  "evidence": "p4 440Hz=-9.0"
+ },
+ {
+  "id": "B5",
+  "check": "no 440 Hz when musicbed disabled",
+  "result": "PASS",
+  "evidence": "p5 440Hz=-180.0"
+ },
+ {
+  "id": "B6",
+  "check": "paused bed: no 440 Hz at B",
+  "result": "PASS",
+  "evidence": "p6 440Hz=-180.0"
+ },
+ {
+  "id": "B7",
+  "check": "A unmuted with 1 kHz mic: B hears 1 kHz and 440 Hz",
+  "result": "PASS",
+  "evidence": "p7 1kHz=-22.3 440Hz=-10.0 880(A hears B? n/a)"
+ },
+ {
+  "id": "B8",
+  "check": "mute really mutes 1 kHz voice (p1)",
+  "result": "PASS",
+  "evidence": "p1 1kHz=-70.2 p7 1kHz=-22.3"
+ },
+ {
+  "id": "B9",
+  "check": "A's own recording has bed on local (left) side",
+  "result": "PASS",
+  "evidence": "A left p1 440=-9.2, p5(off) 440=-180.0, p6(paused) 440=-180.0, p7 1k=-22.3"
+ },
+ {
+  "id": "B9b",
+  "check": "A's recording left has voice 1 kHz when unmuted only",
+  "result": "PASS",
+  "evidence": "p7=-22.3 p1(muted)=-116.0"
+ },
+ {
+  "id": "B10",
+  "check": "A's recording right (remote=B) has B's 880 Hz tone",
+  "result": "PASS",
+  "evidence": "-22.4"
+ },
+ {
+  "id": "L1",
+  "check": "levels.musicbed >0 while bed plays; 0 when off/paused",
+  "result": "PASS",
+  "evidence": "{\"p1\": 100, \"p2\": 65, \"p3\": 0, \"p4\": 100, \"p5\": 0, \"p6\": 0, \"p7\": 100, \"p7B\": 0}"
+ },
+ {
+  "id": "L2",
+  "check": "levels.mic >0 when unmuted and fed (and what it is when muted)",
+  "result": "PASS",
+  "evidence": "mic levels per phase: {\"p1\": 0, \"p2\": 0, \"p3\": 0, \"p4\": 0, \"p5\": 0, \"p6\": 0, \"p7\": 67, \"p7B\": 67}"
+ },
+ {
+  "id": "L3",
+  "check": "levels.speaker >0 when B sends audio",
+  "result": "PASS",
+  "evidence": "speaker levels per phase: {\"p1\": 67, \"p2\": 67, \"p3\": 0, \"p4\": 67, \"p5\": 67, \"p6\": 67, \"p7\": 67, \"p7B\": 101}"
+ },
+ {
+  "id": "B11",
+  "check": "bed loops seamlessly (no >3 dB dip in 20 ms envelope over first ~27 s = 2+ loop seams of the 10 s file)",
+  "result": "PASS",
+  "evidence": "dips before 25 s: []"
+ }
+]

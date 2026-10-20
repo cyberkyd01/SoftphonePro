@@ -1,0 +1,26 @@
+[
+ {
+  "id": "A-deb-reg",
+  "check": "debian:12 install, launch, API up, 1003+1004 registered",
+  "result": "PASS",
+  "evidence": "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"; version reported 1.0.0"
+ },
+ {
+  "id": "A-deb-call",
+  "check": "debian: call 1003->1004 rings, B answers via API, active, hangup ends both",
+  "result": "PASS",
+  "evidence": "ringing_in=True active=True ended=True"
+ },
+ {
+  "id": "B-deb-ui",
+  "check": "debian: musicbed file chosen via UI (zenity)",
+  "result": "PASS",
+  "evidence": "{\"enabled\": false, \"file\": \"tone440\", \"active\": false, \"volume\": 0.3, \"monitor\": false, \"monitorVolume\": 0.5, \"paused\": false}"
+ },
+ {
+  "id": "B-deb-bed",
+  "check": "debian: muted A, bed vol 1.0 audible at B, then 0.2 lower",
+  "result": "PASS",
+  "evidence": "B right 440Hz: -11.5 dBFS (vol 1.0) -> -23.3 dBFS (vol 0.2); levels.musicbed=99"
+ }
+]

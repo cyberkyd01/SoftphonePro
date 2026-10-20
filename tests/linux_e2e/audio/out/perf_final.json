@@ -1,0 +1,28 @@
+{
+ "desktop_1280x800": {
+  "cpu_pct": 78.1,
+  "levels_t1": {
+   "mic": 0,
+   "speaker": 80,
+   "musicbed": 84
+  },
+  "levels_t2": {
+   "mic": 0,
+   "speaker": 93,
+   "musicbed": 84
+  }
+ },
+ "phone_400x820": {
+  "cpu_pct": 22.7,
+  "levels_t1": {
+   "mic": 0,
+   "speaker": 38,
+   "musicbed": 84
+  },
+  "levels_t2": {
+   "mic": 91,
+   "speaker": 34,
+   "musicbed": 84
+  }
+ }
+}

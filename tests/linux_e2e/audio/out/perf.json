@@ -1,0 +1,10 @@
+{
+ "desktop_recents_idle_nocall (baseline, no mixer)": 0.5,
+ "desktop_keypad_mixer_idle_nocall": 0.3,
+ "desktop_keypad_mixer_in_call_meters_animating": 76.3,
+ "desktop_recents_in_call_no_mixer_visible": 73.1,
+ "phone_width_in_call_strip_collapsed_meters_animating": 26.2,
+ "desktop_keypad_mixer_in_call_bed_off (mic+speaker meters only)": 75.8,
+ "in_call_window_minimised (engine mostly)": 2.4,
+ "phone_width_idle_strip_collapsed_no_call": 7.8
+}

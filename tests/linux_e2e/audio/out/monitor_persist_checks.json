@@ -1,0 +1,44 @@
+[
+ {
+  "id": "M1",
+  "check": "monitor off, no call: nothing on A output sink",
+  "result": "PASS",
+  "evidence": "out.monitor 440Hz=-180.0 dBFS"
+ },
+ {
+  "id": "M2",
+  "check": "monitor on (no call, preview): bed on A output sink",
+  "result": "PASS",
+  "evidence": "monitorVolume 0.5: -15.7 dBFS; levels.musicbed=83"
+ },
+ {
+  "id": "M3",
+  "check": "monitor volume scales the monitor (0.5 -> 1.0 = +6 dB)",
+  "result": "PASS",
+  "evidence": "-15.7 -> -9.5 dB"
+ },
+ {
+  "id": "M4",
+  "check": "monitor in call: A output has bed (440) AND far end (880)",
+  "result": "PASS",
+  "evidence": "440=-15.5 880=-33.4; mon vol 1.0: 440=-9.5 880=-21.7"
+ },
+ {
+  "id": "M5",
+  "check": "far-end bed level independent of monitor volume (0.5 vs 1.0)",
+  "result": "PASS",
+  "evidence": "B right 440Hz at monitorVol 0.5 = -10.8, at 1.0 = -11.7"
+ },
+ {
+  "id": "P1",
+  "check": "musicbed enabled/file/volume persist across restart",
+  "result": "PASS",
+  "evidence": "{\"enabled\": true, \"file\": \"tone440\", \"active\": true, \"volume\": 0.7, \"monitor\": false, \"monitorVolume\": 1.0, \"paused\": false}"
+ },
+ {
+  "id": "P2",
+  "check": "after restart the bed plays on the next call (no manual re-enable)",
+  "result": "PASS",
+  "evidence": "B right 440Hz=-12.6 dBFS (vol 0.7 => ~-13); levels.musicbed=91 active=True"
+ }
+]

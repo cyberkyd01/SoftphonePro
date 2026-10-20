@@ -1,0 +1,8 @@
+[
+ {
+  "id": "E1",
+  "check": "file removed + restart: musicbed turns itself off",
+  "result": "PASS",
+  "evidence": "{\"enabled\": false, \"file\": \"tone440.mp3\", \"active\": false, \"volume\": 0.4, \"monitor\": false, \"monitorVolume\": 1.0, \"paused\": false}"
+ }
+]

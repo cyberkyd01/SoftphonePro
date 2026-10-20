@@ -1,0 +1,1 @@
+{"accounts": [{"username": "1002", "password": "pass1002", "domain": "172.30.0.10", "transport": "udp", "label": "1002"}], "settings": {"automationEnabled": true, "automationPort": 7771, "automationToken": "abababababababababababababababababababababababababababababababab", "stunServers": [], "dnd": false, "recordRule": "all", "autoRecord": true, "recordFormat": "wavStereo"}}

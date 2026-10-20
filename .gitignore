@@ -41,3 +41,10 @@ __pycache__/
 app/test/failures/
 third_party/**/pubspec.lock
 app/test/**/failures/
+
+# Raw outputs of the end-to-end QA scripts (recordings, logs)
+tests/linux_e2e/audio/out/*.wav
+tests/linux_e2e/audio/out/*.log
+tests/linux_e2e/audio/out/*.out
+tests/linux_e2e/audio/out/*.err
+tests/linux_e2e/audio/out/*/

@@ -121,3 +121,53 @@ System Back from any Settings sub page, Recordings, LAN, Presence, More, Recents
 * Re-provisioning (a second import of the same account) adds a duplicate account each time (`1016@127.0.0.1` x4 seen on macOS).
 * Initial LAN file offer can be left "Waiting for you" without a dialog if it arrives while the pairing dialogs are closing (see L); could not reproduce on a later offer.
 * `lan_peer.dart` sends the greeting and the file twice at pairing (two code paths); harmless but noisy.
+
+## v1.1.0
+
+Date: 2026-10-20. Debug APK (`flutter build apk --debug --target-platform android-arm64`, Flutter 3.32.1) with the engine rebuilt as 1.1.0, on the `Medium_Phone_API_35` emulator (arm64, Android 15) against the Asterisk test PBX started with `up.sh --emulator`. Fresh install. This run covers the new musicbed and mixer, plus a regression pass of the core call functions. Full tables: [tests/android_e2e/RESULTS_v110.md](../tests/android_e2e/RESULTS_v110.md). Screenshots: `docs/qa-screenshots/v110_android_*.png`.
+
+Result: **24 PASS, 1 BLOCKED, 0 FAIL.** The blocked case is the audio route switch: the emulator exposes only a speaker, so earpiece, Bluetooth and wired routes were not tested.
+
+| Case | Result | Notes |
+|---|---|---|
+| Fresh install, add account, registers; Settings shows 1.1.0 | PASS | PBX lists the contact |
+| Import a 10 s 440 Hz MP3 through the Android file picker, select it, enable the musicbed | PASS | see screenshot 1 |
+| Call 600 with the mic muted, recorded in stereo (the emulator mic is silent) | PASS | clean 440 Hz on both channels: the local side and the PBX echo |
+| Live volume 100 % to 20 % from the in-call mixer | PASS | -13.8 dB (ratio 0.203); effective within one 2 s analysis window |
+| Hold | PASS | exact silence on both channels while held; bed returns at 20 % after resume |
+| Musicbed disabled | PASS | silence (-99 dBFS); no chip |
+| "Musicbed on" chip | PASS | shown whenever the bed is enabled, including in Arabic |
+| Mixer strip collapsed and expanded, in-call mixer with moving meters | PASS | |
+| Landscape, font scale 1.6, dark theme, Arabic | PASS | landscape and large font need a scroll to reach the mixer |
+| Mic and speaker sliders | PASS | 44 % and 153 % read back |
+| Route chips (speaker to earpiece) | BLOCKED | emulator has only a speaker |
+| Regression: inbound call, DTMF 1234, hold/resume, blind transfer | PASS | transfer confirmed on the PBX |
+| CPU | PASS | idle 0 to 0.5 %, in a call with the bed and live meters 7.6 to 10.5 % |
+
+Observations (none blocks the feature): the chip stays visible while the call is on hold although nothing is sent; the expanded in-call mixer is partly under the End button until you scroll; a caption sits right above the speaker meter; the Settings guide text mentions an "Add a file..." entry that the dropdown does not have (import is under Audio files); the echoed bed from the PBX wobbles slightly at exactly 440 Hz in some windows while its level stays constant (probably the emulator and PBX path).
+
+The emulator microphone is silent, and nothing was listened to; audio was judged from recordings. No real earpiece, Bluetooth or wired headset was available.
+
+1. Settings, Audio: musicbed on, file `bed440`, volume 30 %.
+
+   ![Settings, Audio](qa-screenshots/v110_android_B3_enabled.png)
+
+2. In a call to 600, mic muted, recording: "Musicbed on" and REC chips, meters.
+
+   ![In call with musicbed](qa-screenshots/v110_android_B4_incall_muted_rec.png)
+
+3. In-call mixer after setting the volume to 20 %.
+
+   ![Volume 20 percent](qa-screenshots/v110_android_B5_vol20.png)
+
+4. On hold: Resume button, the bed meter is empty.
+
+   ![On hold](qa-screenshots/v110_android_D_hold.png)
+
+5. Expanded mixer: the only route chip is "Speaker" because the emulator has no other output.
+
+   ![Expanded mixer](qa-screenshots/v110_android_C5_devices_route.png)
+
+6. Arabic in-call page, mirrored, with the musicbed chip translated.
+
+   ![Arabic in call](qa-screenshots/v110_android_C16_ar_incall.png)
