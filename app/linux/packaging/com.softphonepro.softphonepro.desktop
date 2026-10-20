@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=SoftphonePro
+GenericName=SIP Softphone
+Comment=Free, open-source SIP softphone for voice calls
+Exec=softphonepro %u
+Icon=com.softphonepro.softphonepro
+Terminal=false
+StartupNotify=true
+StartupWMClass=softphonepro
+Categories=Network;Telephony;
+MimeType=x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/softphonepro;
+Keywords=SIP;VoIP;Phone;Softphone;Call;Telephony;PBX;Asterisk;

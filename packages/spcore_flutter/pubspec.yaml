@@ -1,5 +1,5 @@
 name: spcore_flutter
-description: "Bundles the prebuilt SoftphonePro C engine (libspcore) for Android, iOS, macOS and Windows. Loading logic lives in spcore_dart."
+description: "Bundles the prebuilt SoftphonePro C engine (libspcore) for Android, iOS, macOS, Windows and Linux. Loading logic lives in spcore_dart."
 version: 1.0.0
 publish_to: 'none'
 
@@ -26,4 +26,6 @@ flutter:
       macos:
         ffiPlugin: true
       windows:
+        ffiPlugin: true
+      linux:
         ffiPlugin: true

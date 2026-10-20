@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.softphonepro.softphonepro</id>
+  <name>SoftphonePro</name>
+  <summary>Free, open-source SIP softphone</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>SoftphonePro</developer_name>
+  <description>
+    <p>
+      SoftphonePro is a free SIP softphone for making and receiving voice calls from your desktop.
+      It is built on the PJSIP stack and supports SIP over UDP, TCP, TLS and WebSocket, SRTP and
+      DTLS-SRTP, ICE/STUN/TURN, and a wide range of audio codecs including Opus.
+    </p>
+    <p>
+      Features include multiple accounts, call history, contacts, call recording, voice isolation,
+      desktop notifications, and handling of sip:, tel: and callto: links.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.softphonepro.softphonepro.desktop</launchable>
+  <url type="homepage">https://github.com/cyberkyd01/SoftphonePro</url>
+  <url type="bugtracker">https://github.com/cyberkyd01/SoftphonePro/issues</url>
+  <categories>
+    <category>Network</category>
+    <category>Telephony</category>
+  </categories>
+  <provides>
+    <binary>softphonepro</binary>
+    <id>com.softphonepro.softphonepro.desktop</id>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="1.1.0" date="2026-10-20">
+      <description>
+        <p>First release for Linux (Ubuntu, Debian and Raspberry Pi OS, 64-bit).</p>
+      </description>
+    </release>
+  </releases>
+</component>
