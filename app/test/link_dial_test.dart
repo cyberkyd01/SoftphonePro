@@ -195,7 +195,7 @@ void main() {
         'tel': {'name': 'FaceTime', 'bundleId': 'com.apple.FaceTime', 'isSelf': false},
         'callto': {'name': 'SoftphonePro', 'bundleId': 'com.softphonepro.softphonepro', 'isSelf': true},
       };
-      final svc = DefaultHandlerService(channel: ch, isMacOS: true, isWindows: false);
+      final svc = DefaultHandlerService(channel: ch, isMacOS: true, isWindows: false, isLinux: false);
       expect(svc.supported, isTrue);
       final h = await svc.current();
       expect(h.map((e) => e.scheme), ['sip', 'tel', 'callto']);
@@ -206,7 +206,7 @@ void main() {
     });
 
     test('makeDefault asks macOS and reports failures per scheme', () async {
-      final svc = DefaultHandlerService(channel: ch, isMacOS: true, isWindows: false);
+      final svc = DefaultHandlerService(channel: ch, isMacOS: true, isWindows: false, isLinux: false);
       setResult = {'ok': true, 'failed': <String>[]};
       expect((await svc.makeDefault()).ok, isTrue);
       setResult = {'ok': false, 'failed': ['tel']};
@@ -217,14 +217,14 @@ void main() {
     });
 
     test('missing native side degrades quietly', () async {
-      final svc = DefaultHandlerService(channel: const MethodChannel('test/none'), isMacOS: true, isWindows: false);
+      final svc = DefaultHandlerService(channel: const MethodChannel('test/none'), isMacOS: true, isWindows: false, isLinux: false);
       expect(await svc.current(), isEmpty);
       expect((await svc.makeDefault()).ok, isFalse);
     });
 
     test('Windows opens the Default apps settings page; other platforms are unsupported', () async {
       final opened = <String>[];
-      final win = DefaultHandlerService(channel: ch, isMacOS: false, isWindows: true, openUri: (u) async => opened.add(u));
+      final win = DefaultHandlerService(channel: ch, isMacOS: false, isWindows: true, isLinux: false, openUri: (u) async => opened.add(u));
       expect(win.supported, isTrue);
       expect(await win.current(), isEmpty);
       final r = await win.makeDefault();
@@ -233,7 +233,7 @@ void main() {
       expect(opened, ['ms-settings:defaultapps']);
       expect(calls, isEmpty, reason: 'no native channel call on Windows');
 
-      final other = DefaultHandlerService(channel: ch, isMacOS: false, isWindows: false);
+      final other = DefaultHandlerService(channel: ch, isMacOS: false, isWindows: false, isLinux: false);
       expect(other.supported, isFalse);
       expect((await other.makeDefault()).ok, isFalse);
     });
@@ -246,7 +246,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
-      overrides: [...env.overrides, defaultHandlerServiceProvider.overrideWithValue(fake)],
+      overrides: env.overridesWith(defaultHandler: fake),
       child: const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: CallsSection())),
     ));
     await tester.pump();
@@ -263,7 +263,7 @@ void main() {
 }
 
 class _FakeHandlerService extends DefaultHandlerService {
-  _FakeHandlerService() : super(isMacOS: true, isWindows: false);
+  _FakeHandlerService() : super(isMacOS: true, isWindows: false, isLinux: false);
   int made = 0;
   @override
   Future<List<SchemeHandler>> current() async => const [

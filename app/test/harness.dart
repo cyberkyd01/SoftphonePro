@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:softphonepro/automation/automation_service.dart';
@@ -9,6 +10,7 @@ import 'package:softphonepro/app.dart';
 import 'package:softphonepro/models/account_profile.dart';
 import 'package:softphonepro/models/app_settings.dart';
 import 'package:softphonepro/models/contact.dart';
+import 'package:softphonepro/platform/desktop/default_handler.dart';
 import 'package:softphonepro/services/accounts_controller.dart';
 import 'package:softphonepro/services/providers.dart';
 import 'package:softphonepro/storage/app_database.dart';
@@ -50,7 +52,7 @@ class TestEnv {
 
   List<Override> get overrides => overridesWith();
 
-  List<Override> overridesWith({bool automationSupported = true}) => [
+  List<Override> overridesWith({bool automationSupported = true, DefaultHandlerService? defaultHandler}) => [
     appDatabaseProvider.overrideWithValue(db),
     secretsStoreProvider.overrideWithValue(secrets),
     bootDataProvider.overrideWithValue(boot),
@@ -59,6 +61,12 @@ class TestEnv {
     recordingsDirProvider.overrideWithValue(() async => tempDir.path),
     // Widget tests report Android as the platform; the API itself is desktop-only.
     automationSupportedProvider.overrideWithValue(automationSupported),
+    // Pin the host-dependent default-link-handler service: never run xdg-mime (or any process) from a widget
+    // test. The macOS flavour with no native side reports "no handlers" and keeps the tile visible on every host.
+    defaultHandlerServiceProvider.overrideWithValue(
+      defaultHandler ??
+          DefaultHandlerService(channel: const MethodChannel('test/no-native-desktop'), isMacOS: true, isWindows: false, isLinux: false),
+    ),
   ];
 
   Widget app() => ProviderScope(overrides: overrides, child: const SoftphoneApp());

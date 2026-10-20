@@ -412,6 +412,9 @@ jobs:
       - name: Install build dependencies (same list as native/scripts/docker/Dockerfile.linux-app)
         run: |
           sudo apt-get update
+          # GitHub's ubuntu-22.04 images preinstall libunwind-14-dev, which conflicts with the libunwind-dev
+          # that libgstreamer1.0-dev depends on. Harmless when the package is absent (e.g. the arm64 image).
+          sudo apt-get remove -y libunwind-14-dev || true
           sudo apt-get install -y --no-install-recommends \
             build-essential clang pkg-config ninja-build perl curl ca-certificates git file unzip xz-utils zip \
             python3 python3-pip rsync patchelf \
