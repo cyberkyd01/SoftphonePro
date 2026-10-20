@@ -253,9 +253,24 @@ static int enum_devs(pjmedia_aud_dev_info* info, unsigned* count)
     return pjsua_enum_aud_devs(info, count) == PJ_SUCCESS ? 0 : -1;
 }
 
+/* Device names as UTF-8. WMME reports them in the ANSI code page ("Intel\xAE" for "Intel®"), and JSON
+ * that is not valid UTF-8 is dropped by the Dart VM: the device list would never arrive. */
+static void dev_str(const char* s, char* out, size_t n)
+{
+#if defined(_WIN32)
+    wchar_t w[256];
+    if (n > 0 && MultiByteToWideChar(CP_ACP, 0, s, -1, w, 256) > 0 &&
+        WideCharToMultiByte(CP_UTF8, 0, w, -1, out, (int)n, NULL, NULL) > 0) return;
+#endif
+    spc_strlcpy(out, s, n);
+}
+
 static void dev_id(const pjmedia_aud_dev_info* d, char* out, size_t n)
 {
-    snprintf(out, n, "%s:%s", d->driver, d->name);
+    char drv[96], name[200];
+    dev_str(d->driver, drv, sizeof(drv));
+    dev_str(d->name, name, sizeof(name));
+    snprintf(out, n, "%s:%s", drv, name);
 }
 
 cJSON* spc_media_devices_json(void)
@@ -277,13 +292,15 @@ cJSON* spc_media_devices_json(void)
             }
         }
         for (i = 0; i < count; i++) {
-            char id[200];
+            char id[300], name[200], drv[96];
             dev_id(&info[i], id, sizeof(id));
+            dev_str(info[i].name, name, sizeof(name));
+            dev_str(info[i].driver, drv, sizeof(drv));
             if (info[i].input_count > 0) {
                 cJSON* d = cJSON_CreateObject();
                 cJSON_AddStringToObject(d, "devId", id);
-                cJSON_AddStringToObject(d, "name", info[i].name);
-                cJSON_AddStringToObject(d, "driver", info[i].driver);
+                cJSON_AddStringToObject(d, "name", name);
+                cJSON_AddStringToObject(d, "driver", drv);
                 cJSON_AddNumberToObject(d, "inputs", info[i].input_count);
                 cJSON_AddNumberToObject(d, "outputs", info[i].output_count);
                 cJSON_AddBoolToObject(d, "isDefault", (int)i == cap_def);
@@ -292,8 +309,8 @@ cJSON* spc_media_devices_json(void)
             if (info[i].output_count > 0) {
                 cJSON* d = cJSON_CreateObject();
                 cJSON_AddStringToObject(d, "devId", id);
-                cJSON_AddStringToObject(d, "name", info[i].name);
-                cJSON_AddStringToObject(d, "driver", info[i].driver);
+                cJSON_AddStringToObject(d, "name", name);
+                cJSON_AddStringToObject(d, "driver", drv);
                 cJSON_AddNumberToObject(d, "inputs", info[i].input_count);
                 cJSON_AddNumberToObject(d, "outputs", info[i].output_count);
                 cJSON_AddBoolToObject(d, "isDefault", (int)i == play_def);
@@ -321,7 +338,7 @@ static int resolve_dev(const char* id, int capture, int* idx, int* special)
     if (spc_strieq(id, "none")) { *special = 3; *idx = PJSUA_SND_NO_DEV; return 0; }
     if (enum_devs(info, &count) != 0) return -1;
     for (i = 0; i < count; i++) {
-        char d[200];
+        char d[300];
         dev_id(&info[i], d, sizeof(d));
         if (strcmp(d, id) == 0 && (capture ? info[i].input_count : info[i].output_count) > 0) { *idx = (int)i; return 0; }
     }

@@ -106,19 +106,55 @@ static void ring_drop_oldest(void)
     G.ring_count--;
 }
 
+/* length of the valid UTF-8 sequence at s, 0 if invalid */
+static size_t utf8_seq(const unsigned char* s)
+{
+    size_t n, i;
+    unsigned c = s[0];
+    if (c < 0x80) return 1;
+    if (c >= 0xC2 && c <= 0xDF) n = 2;
+    else if (c >= 0xE0 && c <= 0xEF) n = 3;
+    else if (c >= 0xF0 && c <= 0xF4) n = 4;
+    else return 0;
+    for (i = 1; i < n; i++) if ((s[i] & 0xC0) != 0x80) return 0;
+    if (c == 0xE0 && s[1] < 0xA0) return 0;   /* overlong */
+    if (c == 0xED && s[1] > 0x9F) return 0;   /* surrogate */
+    if (c == 0xF0 && s[1] < 0x90) return 0;   /* overlong */
+    if (c == 0xF4 && s[1] > 0x8F) return 0;   /* > U+10FFFF */
+    return n;
+}
+
+/* The Dart VM silently drops a kString message that is not valid UTF-8 (a request would then time out).
+ * Text from the OS can be in the ANSI code page on Windows (device names, FormatMessage errors): post
+ * such strings with the invalid bytes replaced by '?'. Returns 1 when posted. */
+static int post_dart(const char* s)
+{
+    Dart_CObject o;
+    const unsigned char* p;
+    char* fixed = NULL;
+    size_t k;
+    if (!(G.dart_port && G.dart_ok && Dart_PostCObject_DL)) return 0;
+    for (p = (const unsigned char*)s; *p; p += k)
+        if ((k = utf8_seq(p)) == 0) break;
+    if (*p && (fixed = spc_strdup(s)) != NULL) {
+        unsigned char* q;
+        for (q = (unsigned char*)fixed + (p - (const unsigned char*)s); *q; q += k)
+            if ((k = utf8_seq(q)) == 0) { *q = '?'; k = 1; }
+    }
+    o.type = Dart_CObject_kString;
+    o.value.as_string = fixed ? fixed : (char*)s;
+    Dart_PostCObject_DL((Dart_Port_DL)G.dart_port, &o);
+    free(fixed);
+    return 1;
+}
+
 static void deliver_locked(const char* s)
 {
     int delivered = 0;
     t_in_cb++;
     if (G.cb) { G.cb(s, G.cb_user); delivered = 1; }
     t_in_cb--;
-    if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
-        Dart_CObject o;
-        o.type = Dart_CObject_kString;
-        o.value.as_string = (char*)s;
-        Dart_PostCObject_DL((Dart_Port_DL)G.dart_port, &o);
-        delivered = 1;
-    }
+    if (post_dart(s)) delivered = 1;
     if (!delivered) {
         int idx;
         size_t len = strlen(s);
@@ -178,12 +214,7 @@ static void post_response(const char* s)
     t_in_cb++;
     if (G.cb) G.cb(s, G.cb_user);
     t_in_cb--;
-    if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
-        Dart_CObject o;
-        o.type = Dart_CObject_kString;
-        o.value.as_string = (char*)s;
-        Dart_PostCObject_DL((Dart_Port_DL)G.dart_port, &o);
-    }
+    post_dart(s);
     spc_mutex_unlock(&G.emit_mtx);
 }
 
@@ -200,12 +231,7 @@ static int replay_ring_locked(void)
             t_in_cb++;
             if (G.cb) G.cb(s, G.cb_user);
             t_in_cb--;
-            if (G.dart_port && G.dart_ok && Dart_PostCObject_DL) {
-                Dart_CObject o;
-                o.type = Dart_CObject_kString;
-                o.value.as_string = s;
-                Dart_PostCObject_DL((Dart_Port_DL)G.dart_port, &o);
-            }
+            post_dart(s);
             free(s);
             n++;
         }

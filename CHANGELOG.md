@@ -4,6 +4,9 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+* Windows: the microphone and speaker pickers offered only "System default", and a device could not be chosen. Windows reports audio device names in the ANSI code page (for example the `®` in "Intel® Smart Sound"); the engine passed them on as they were, and the app discarded the device list because it was not valid UTF-8. The engine now converts device names to UTF-8, and it replaces any invalid UTF-8 in a reply or event so that a message from the engine is never lost.
+
 ## [1.1.0] - 2026-10-20
 
 Adds a Linux app, a musicbed and a live audio mixer. See [docs/RELEASE_NOTES_v1.1.0.md](docs/RELEASE_NOTES_v1.1.0.md) for downloads, install notes and known limitations. Installs over 1.0.0 and keeps your accounts and settings.
