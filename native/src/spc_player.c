@@ -232,6 +232,7 @@ static int wav_open(spc_src* s, FILE* f, char* err, size_t en)
     return 0;
 }
 
+/* 0 ok; -1 the file is unreadable or not supported; -2 out of memory */
 static int src_open(spc_src* s, const char* path, char* err, size_t en)
 {
     FILE* f;
@@ -255,7 +256,8 @@ static int src_open(spc_src* s, const char* path, char* err, size_t en)
         if (sz <= 0) { fclose(f); snprintf(err, en, "file is empty"); return -1; }
         if ((uint64_t)sz > SPC_PLAY_MAX_MP3_BYTES) { fclose(f); snprintf(err, en, "file too large (max 64 MB for MP3)"); return -1; }
         s->mp3buf = (uint8_t*)malloc((size_t)sz);
-        if (!s->mp3buf || fread(s->mp3buf, 1, (size_t)sz, f) != (size_t)sz) {
+        if (!s->mp3buf) { fclose(f); memset(s, 0, sizeof(*s)); snprintf(err, en, "out of memory"); return -2; }
+        if (fread(s->mp3buf, 1, (size_t)sz, f) != (size_t)sz) {
             fclose(f); free(s->mp3buf); memset(s, 0, sizeof(*s));
             snprintf(err, en, "cannot read file");
             return -1;
@@ -344,7 +346,8 @@ typedef struct spc_play {
     int bed;                     /* the musicbed (spc_musicbed_*): not in g_plays, volume applied per connection */
     volatile int paused;         /* bed: output silence, keep the position */
     volatile int lvl_avg;        /* bed: mean |sample| of the last frame before any gain (written by the clock thread) */
-    volatile int64_t lvl_ms;     /* bed: spc_mono_ms() of the last get_frame */
+    volatile uint32_t lvl_ms32;  /* bed: low 32 bits of spc_mono_ms() at the last get_frame. 32 bits so that the
+                                  * worker's read cannot tear on 32-bit ARM; compared with wrap-safe arithmetic */
     int slot, spf, rate;
     int gain_q10;
     /* store */
@@ -429,7 +432,7 @@ static pj_status_t pl_get_frame(pjmedia_port* port, pjmedia_frame* frame)
     if (p->bed && p->paused) {        /* silence, position kept */
         memset(out, 0, spf * sizeof(int16_t));
         p->lvl_avg = 0;
-        p->lvl_ms = spc_mono_ms();
+        p->lvl_ms32 = (uint32_t)spc_mono_ms();
         frame->size = spf * sizeof(int16_t);
         frame->type = PJMEDIA_FRAME_TYPE_AUDIO;
         frame->timestamp.u64 = 0;
@@ -455,7 +458,7 @@ static pj_status_t pl_get_frame(pjmedia_port* port, pjmedia_frame* frame)
         long acc = 0;
         for (i = 0; i < n; i++) acc += out[i] < 0 ? -(long)out[i] : (long)out[i];
         p->lvl_avg = n ? (int)(acc / (long)n) : 0;
-        p->lvl_ms = spc_mono_ms();
+        p->lvl_ms32 = (uint32_t)spc_mono_ms();
     }
     if (p->gain_q10 != 1024)
         for (i = 0; i < n; i++) {
@@ -643,22 +646,32 @@ void spc_player_apply_call(uint64_t cid, int cslot, int active, int lhold, int h
 }
 
 /* Validates `file`, builds the conference port and starts the decoder. The play is registered in the bridge but not
- * connected anywhere and not in g_plays. NULL + err on failure (nothing is left behind). */
+ * connected anywhere and not in g_plays. NULL + err on failure (nothing is left behind); *ecode is then
+ * SPC_E_INVALID_PARAM for a bad file, SPC_E_BUSY for the per-call limit, SPC_E_NOT_STARTED when the bridge is not
+ * there, SPC_E_INTERNAL for out of memory / no thread and SPC_E_PJ_ERROR (*est) when the bridge refuses the port. */
 static spc_play* play_new(uint64_t cid, const char* file, int loop, float volume, int local_monitor, int mute_mic,
-                          int moh, int bed, char* err, size_t en)
+                          int moh, int bed, int* ecode, pj_status_t* est, char* err, size_t en)
 {
     spc_play* p;
     spc_src src;
     pj_status_t st;
     pjsua_conf_port_info pi;
     pj_str_t nm;
-    int rate, spf, ncall = 0;
+    int rate, spf, ncall = 0, so;
     uint64_t maxs;
     char perr[160];
-    if (src_open(&src, file, perr, sizeof(perr)) != 0) { snprintf(err, en, "%s", perr); return NULL; }
+    *ecode = SPC_E_INVALID_PARAM;
+    *est = PJ_SUCCESS;
+    if ((so = src_open(&src, file, perr, sizeof(perr))) != 0) {
+        if (so == -2) *ecode = SPC_E_INTERNAL;
+        snprintf(err, en, "%s", perr);
+        return NULL;
+    }
     if (src.frames <= 0) { src_close(&src); snprintf(err, en, "file contains no audio"); return NULL; }
     if (src.frames * 1000 / src.rate > SPC_PLAY_MAX_MS) { src_close(&src); snprintf(err, en, "file too long (max 30 minutes)"); return NULL; }
-    if (pjsua_conf_get_port_info(0, &pi) != PJ_SUCCESS) { src_close(&src); snprintf(err, en, "audio engine not ready"); return NULL; }
+    if (pjsua_conf_get_port_info(0, &pi) != PJ_SUCCESS) {
+        src_close(&src); *ecode = SPC_E_NOT_STARTED; snprintf(err, en, "audio engine not ready"); return NULL;
+    }
     rate = (int)pi.clock_rate;
     spf = (int)pi.samples_per_frame;
     maxs = (uint64_t)src.frames * (uint64_t)rate / (uint64_t)src.rate + (uint64_t)rate;
@@ -669,9 +682,12 @@ static spc_play* play_new(uint64_t cid, const char* file, int loop, float volume
         spc_mutex_lock(&g_pl_mtx);
         for (q = g_plays; q; q = q->next) if (q->cid == cid) ncall++;
         spc_mutex_unlock(&g_pl_mtx);
-        if (ncall >= MAX_PLAYS_PER_CALL) { src_close(&src); snprintf(err, en, "too many concurrent plays on this call"); return NULL; }
+        if (ncall >= MAX_PLAYS_PER_CALL) {
+            src_close(&src); *ecode = SPC_E_BUSY; snprintf(err, en, "too many concurrent plays on this call"); return NULL;
+        }
     }
 
+    *ecode = SPC_E_INTERNAL;                 /* from here on, nothing is the file's fault */
     p = (spc_play*)calloc(1, sizeof(*p));
     if (!p) { src_close(&src); snprintf(err, en, "out of memory"); return NULL; }
     p->src = src;
@@ -700,6 +716,7 @@ static spc_play* play_new(uint64_t cid, const char* file, int loop, float volume
     st = pjsua_conf_add_port(spc_media_pool, &p->port, &p->slot);
     if (st != PJ_SUCCESS) {
         p->slot = -1;
+        *ecode = SPC_E_PJ_ERROR; *est = st;
         snprintf(err, en, "conference port: pj status %d", (int)st);
         play_destroy(p);
         return NULL;
@@ -709,13 +726,16 @@ static spc_play* play_new(uint64_t cid, const char* file, int loop, float volume
     spc_mutex_unlock(&g_pl_mtx);
     if (spc_thread_create(&p->th, dec_thread, p) != 0) { snprintf(err, en, "cannot start decoder thread"); play_destroy(p); return NULL; }
     p->th_started = 1;
+    *ecode = SPC_OK;
     return p;
 }
 
 int spc_player_start(uint64_t cid, const char* file, int loop, float volume, int local_monitor, int mute_mic,
                      int moh, int* id, char* err, size_t en)
 {
-    spc_play* p = play_new(cid, file, loop, volume, local_monitor, mute_mic, moh, 0, err, en);
+    int ec;
+    pj_status_t est;
+    spc_play* p = play_new(cid, file, loop, volume, local_monitor, mute_mic, moh, 0, &ec, &est, err, en);
     if (!p) return -1;
     spc_mutex_lock(&g_pl_mtx);
     p->next = g_plays; g_plays = p;
@@ -801,45 +821,76 @@ void spc_moh_on_media(uint64_t cid, int media_status)
 /* musicbed                                                            */
 /* ------------------------------------------------------------------ */
 /* One looping play (g_bed, a spc_play with bed=1) whose port is connected to the conference slot of every call the
- * microphone is (or would be) connected to, whatever call.mute says. Volumes are per-connection levels
- * (pjmedia_conf_adjust_conn_level), so the bed's own port output stays unscaled and the monitor level is independent
- * of the call level. g_bed and everything below is guarded by g_pl_mtx. Port teardown is the same as for a play
- * (play_destroy: pjsua_conf_remove_port + pjmedia_port_destroy; pl_on_destroy frees when the bridge lets go). */
-#define BED_MAX_DST (4 * PJSUA_MAX_CALLS + 4)
+ * microphone is (or would be) connected to, whatever call.mute says, and to the recorder sinks that carry those calls'
+ * local side. Volumes are per-connection levels (pjmedia_conf_adjust_conn_level), so the bed's own port output stays
+ * unscaled and the monitor level is independent of the call level: every bed connection except slot 0 (the monitor)
+ * is at g_bc.vol.
+ *
+ * Audio correctness does not depend on bookkeeping. spc_call_apply_topology() runs on several threads (worker, pjsua
+ * thread, IAX2 thread); every pass is authoritative for each call it sees: it connects (the bridge leaves an existing
+ * pair alone) AND re-applies the current level, or it disconnects unconditionally. Bridge operations are queued and run
+ * in order at the next clock tick, and the level a pass applies is read under g_pl_mtx in the same critical section
+ * that queues the operation, so the last level queued for a connection is always the current g_bc.vol. A volume
+ * change also re-levels the bed's connection to every live call slot and recorder sink (spc_call_bed_sinks), so it
+ * reaches every call whatever the last pass recorded. The per-pass call list (spc_bed_pass, on the caller's stack) only
+ * feeds musicbedState.calls and the level meter, and is filtered by spc_call_alive() when read.
+ *
+ * g_bed and g_bc are guarded by g_pl_mtx. Each state transition (start/replace/stop/error/shutdown) emits its
+ * media.musicbed event inside the critical section that makes it, so events come out in transition order, exactly one
+ * per transition (spc_emit only takes emit_mtx, a leaf: call.state is emitted under the registry lock the same way).
+ * Port teardown is the same as for a play (play_destroy, outside the lock: pjsua_conf_remove_port +
+ * pjmedia_port_destroy; pl_on_destroy frees when the bridge lets go). */
 static spc_play* g_bed;
 static struct {
     char file[600], format[8];
     int duration_ms, monitor, mon_conn;
     double vol, monvol;
-    int ndst, dst[BED_MAX_DST];                 /* connected call/recorder sinks */
-    int pnd, pdst[BED_MAX_DST];                 /* being rebuilt by the running topology pass */
-    int ncid, pncid;
-    uint64_t cid[PJSUA_MAX_CALLS], pcid[PJSUA_MAX_CALLS];
+    int ncid;
+    uint64_t cid[SPC_BED_MAX_CALLS];            /* calls the last complete pass for this bed connected it to */
 } g_bc;
 
 static int bed_adj_of(double lvl) { return (int)lrint(lvl * 128.0) - 128; }
 
+/* a real conference slot (pjsua getters return PJ_EINVAL, a large positive number, for a port that is gone) */
+static int bed_slot_ok(int s) { return s >= 0 && (unsigned)s < pjsua_var.media_cfg.max_media_ports; }
+
+/* g_pl_mtx held, g_bed set. Queues a level for the bed -> dst connection. The operation fails harmlessly (when the
+ * bridge runs it) if the pair is not connected; a synchronous failure means a slot is invalid or being removed. */
 static void bed_set_level(int dst, double lvl)
 {
-    if (g_bed && g_bed->slot >= 0 && pjsua_var.mconf)
-        pjmedia_conf_adjust_conn_level(pjsua_var.mconf, (unsigned)g_bed->slot, (unsigned)dst, bed_adj_of(lvl));
+    pj_status_t st;
+    if (!bed_slot_ok(dst) || g_bed->slot < 0 || !pjsua_var.mconf) return;
+    st = pjmedia_conf_adjust_conn_level(pjsua_var.mconf, (unsigned)g_bed->slot, (unsigned)dst, bed_adj_of(lvl));
+    if (st != PJ_SUCCESS) PJ_PERROR(4, ("spcore", st, "musicbed: level %d->%d", g_bed->slot, dst));
 }
 
-static void bed_connect(int dst, double lvl)
+/* g_pl_mtx held, g_bed set. Connects the bed to dst and then always queues the level: connecting an existing pair
+ * does not change its level (the queued connect fails with PJ_EEXISTS), the explicit adjust does. 1 if queued. */
+static int bed_connect(int dst, double lvl)
 {
     pjsua_conf_connect_param prm;
     pj_status_t st;
+    if (!bed_slot_ok(dst) || g_bed->slot < 0) return 0;
     pjsua_conf_connect_param_default(&prm);
     prm.level = (float)lvl;
     st = pjsua_conf_connect2(g_bed->slot, dst, &prm);
-    if (st != PJ_SUCCESS && dst == 0 && spc_media_on_connect_error(st)) pjsua_conf_connect2(g_bed->slot, dst, &prm);
+    if (st != PJ_SUCCESS && dst == 0 && spc_media_on_connect_error(st)) st = pjsua_conf_connect2(g_bed->slot, dst, &prm);
+    if (st != PJ_SUCCESS) { PJ_PERROR(4, ("spcore", st, "musicbed: connect %d->%d", g_bed->slot, dst)); return 0; }
+    bed_set_level(dst, lvl);
+    return 1;
 }
 
-static int bed_has_dst(int dst)
+/* g_pl_mtx held, g_bed set. Unconditional: disconnecting a pair that is not connected is harmless. */
+static void bed_disconnect(int dst)
 {
-    int i;
-    for (i = 0; i < g_bc.ndst; i++) if (g_bc.dst[i] == dst) return 1;
-    return 0;
+    if (bed_slot_ok(dst) && g_bed->slot >= 0) pjsua_conf_disconnect(g_bed->slot, dst);
+}
+
+/* g_pl_mtx held, g_bed set: slot 0 follows g_bc.monitor, authoritatively like the call connections */
+static void bed_apply_monitor(void)
+{
+    if (g_bc.monitor) g_bc.mon_conn = bed_connect(0, g_bc.monvol);
+    else { bed_disconnect(0); g_bc.mon_conn = 0; }
 }
 
 static void bed_emit(int active, const char* file, const char* reason, const char* msg)
@@ -852,129 +903,139 @@ static void bed_emit(int active, const char* file, const char* reason, const cha
     spc_emit("media.musicbed", f);
 }
 
-void spc_musicbed_apply_begin(void)
+void spc_musicbed_apply_begin(spc_bed_pass* bp)
 {
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
-    g_bc.pnd = 0; g_bc.pncid = 0;
+    bp->bed_id = g_bed ? g_bed->id : 0;
+    bp->ncid = 0;
     spc_mutex_unlock(&g_pl_mtx);
 }
 
-/* cslot: the call's conference slot; local_ok: the call takes the local microphone path (active media, not
- * locally held, not detached); rec_sink1/2: recorder sinks that carry the local side (or -1). */
-void spc_musicbed_apply_call(uint64_t cid, int cslot, int local_ok, int rec_sink1, int rec_sink2)
+void spc_musicbed_apply_call(spc_bed_pass* bp, uint64_t cid, int cslot, int local_ok, int rec_sink1, int rec_sink2)
 {
     int d[3], i;
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
     if (!g_bed) { spc_mutex_unlock(&g_pl_mtx); return; }
+    if (cslot < 0) local_ok = 0;            /* no media: the bed goes nowhere, so not into the recording either */
     d[0] = cslot; d[1] = rec_sink1; d[2] = rec_sink2;
     for (i = 0; i < 3; i++) {
         if (d[i] < 0) continue;
-        if (local_ok) {
-            if (g_bc.pnd < BED_MAX_DST) {
-                bed_connect(d[i], g_bc.vol);
-                g_bc.pdst[g_bc.pnd++] = d[i];
-            }
-        } else if (bed_has_dst(d[i])) pjsua_conf_disconnect(g_bed->slot, d[i]);
+        if (local_ok) bed_connect(d[i], g_bc.vol);
+        else bed_disconnect(d[i]);
     }
-    if (local_ok && cslot >= 0 && g_bc.pncid < PJSUA_MAX_CALLS) g_bc.pcid[g_bc.pncid++] = cid;
+    if (local_ok && bp->ncid < SPC_BED_MAX_CALLS) bp->cid[bp->ncid++] = cid;
     spc_mutex_unlock(&g_pl_mtx);
 }
 
-void spc_musicbed_apply_end(void)
+void spc_musicbed_apply_end(spc_bed_pass* bp)
 {
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
     if (g_bed) {
-        memcpy(g_bc.dst, g_bc.pdst, sizeof(int) * (size_t)g_bc.pnd);
-        g_bc.ndst = g_bc.pnd;
-        memcpy(g_bc.cid, g_bc.pcid, sizeof(uint64_t) * (size_t)g_bc.pncid);
-        g_bc.ncid = g_bc.pncid;
-        if (g_bc.monitor) { bed_connect(0, g_bc.monvol); g_bc.mon_conn = 1; }
-        else if (g_bc.mon_conn) { pjsua_conf_disconnect(g_bed->slot, 0); g_bc.mon_conn = 0; }
+        /* a bed that replaced another mid-pass gets its call list from the pass its own start runs */
+        if (g_bed->id == bp->bed_id) {
+            memcpy(g_bc.cid, bp->cid, sizeof(uint64_t) * (size_t)bp->ncid);
+            g_bc.ncid = bp->ncid;
+        }
+        bed_apply_monitor();
     }
     spc_mutex_unlock(&g_pl_mtx);
 }
 
-int spc_musicbed_start(const char* file, double volume, int monitor, double monvol, spc_fileinfo* fi, char* err, size_t en)
+int spc_musicbed_start(const char* file, double volume, int monitor, double monvol, spc_fileinfo* fi,
+                       int* pst, char* err, size_t en)
 {
     spc_play *p, *old;
+    char of[600];
+    int ec;
+    pj_status_t est;
     memset(fi, 0, sizeof(*fi));
-    p = play_new(0, file, 1, 1.0f, 0, 0, 0, 1, err, en);       /* validates everything; the running bed is untouched on failure */
-    if (!p) return -1;
+    *pst = PJ_SUCCESS;
+    p = play_new(0, file, 1, 1.0f, 0, 0, 0, 1, &ec, &est, err, en);   /* validates everything; the running bed is untouched on failure */
+    if (!p) { *pst = (int)est; return ec; }
     spc_strlcpy(fi->format, p->fmt_kind == 1 ? "wav" : "mp3", sizeof(fi->format));
     fi->durationMs = p->dur_ms;
+    if (monitor) spc_media_ensure_clock();     /* before any pass can connect slot 0 (honours the device choice) */
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
     old = g_bed;
+    of[0] = 0;
+    if (old) spc_strlcpy(of, g_bc.file, sizeof(of));
     g_bed = p;
     memset(&g_bc, 0, sizeof(g_bc));
     spc_strlcpy(g_bc.file, file, sizeof(g_bc.file));
     spc_strlcpy(g_bc.format, fi->format, sizeof(g_bc.format));
     g_bc.duration_ms = p->dur_ms;
     g_bc.vol = volume; g_bc.monitor = monitor; g_bc.monvol = monvol;
-    spc_mutex_unlock(&g_pl_mtx);
-    if (old) { char of[600]; spc_strlcpy(of, old->file, sizeof(of)); play_destroy(old); bed_emit(0, of, "replaced", NULL); }
+    /* in the critical section of the swap: no decoder-error timer of the new bed can get in before "started" */
+    if (old) bed_emit(0, of, "replaced", NULL);
     bed_emit(1, file, "started", NULL);
-    if (monitor) spc_media_ensure_clock();
+    spc_mutex_unlock(&g_pl_mtx);
+    if (old) play_destroy(old);
     spc_call_apply_topology();
     return 0;
 }
 
-/* returns 1 when a bed was stopped */
-int spc_musicbed_stop(const char* reason, const char* msg)
+/* Takes the bed out (any bed when id == 0, else only bed `id`, so that a stale timer cannot stop its successor),
+ * emits media.musicbed(reason) in the same critical section and destroys it. 1 when a bed was stopped. */
+static int bed_finish(int id, const char* reason, const char* msg)
 {
     spc_play* p;
-    char file[600];
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
     p = g_bed;
+    if (!p || (id && p->id != id)) { spc_mutex_unlock(&g_pl_mtx); return 0; }
     g_bed = NULL;
-    if (p) spc_strlcpy(file, g_bc.file, sizeof(file));
+    bed_emit(0, g_bc.file, reason, msg);
     memset(&g_bc, 0, sizeof(g_bc));
     spc_mutex_unlock(&g_pl_mtx);
-    if (!p) return 0;
     play_destroy(p);
-    bed_emit(0, file, reason, msg);
     return 1;
 }
 
-static void spc_musicbed_shutdown(void) { spc_musicbed_stop("shutdown", NULL); }
+int spc_musicbed_stop(const char* reason, const char* msg) { return bed_finish(0, reason, msg); }
 
+static void spc_musicbed_shutdown(void) { bed_finish(0, "shutdown", NULL); }
+
+/* EOF of a looping bed: the decoder produced nothing playable (pl_get_frame schedules this once per bed, by id) */
 static void bed_done_timer(void* ud)
 {
-    int id = (int)(uintptr_t)ud, mine;
-    pl_ensure();
-    spc_mutex_lock(&g_pl_mtx);
-    mine = g_bed && g_bed->id == id;
-    spc_mutex_unlock(&g_pl_mtx);
-    if (mine) spc_musicbed_stop("error", "the audio file could not be decoded");
+    int id = (int)(uintptr_t)ud;
+    if (id > 0) bed_finish(id, "error", "the audio file could not be decoded");
 }
 
-/* 0 ok, -1 no musicbed. A negative volume / monitorVolume / (paused|monitor) < 0 means "unchanged". */
+/* 0 ok, -1 no musicbed. A negative volume / monitorVolume / (paused|monitor) < 0 means "unchanged".
+ * Called for every slider tick (the app throttles to ~50 ms): it never runs a topology pass. */
 int spc_musicbed_set(double volume, double monvol, int monitor, int paused)
 {
-    int i, need_clock = 0;
+    int sinks[3 * SPC_BED_MAX_CALLS], ns = 0, i, turn_on;
     pl_ensure();
+    spc_mutex_lock(&g_pl_mtx);
+    if (!g_bed) { spc_mutex_unlock(&g_pl_mtx); return -1; }
+    turn_on = monitor == 1 && !g_bc.monitor;
+    spc_mutex_unlock(&g_pl_mtx);
+    if (turn_on) spc_media_ensure_clock();                   /* before slot 0 is connected (honours the device choice) */
+    if (volume >= 0.0) ns = spc_call_bed_sinks(sinks, (int)(sizeof(sinks) / sizeof(sinks[0])));   /* not under g_pl_mtx */
     spc_mutex_lock(&g_pl_mtx);
     if (!g_bed) { spc_mutex_unlock(&g_pl_mtx); return -1; }
     if (volume >= 0.0) {
         g_bc.vol = volume;
-        for (i = 0; i < g_bc.ndst; i++) bed_set_level(g_bc.dst[i], volume);
+        /* every live call/recorder sink, connected or not: a pass that queued a connect at the old level just before
+         * this is overridden by the adjust queued after it, and a missing pair is left alone by the bridge */
+        for (i = 0; i < ns; i++) if (sinks[i] > 0) bed_set_level(sinks[i], volume);
     }
     if (monvol >= 0.0) {
         g_bc.monvol = monvol;
-        if (g_bc.mon_conn) bed_set_level(0, monvol);
+        if (g_bc.monitor) bed_set_level(0, monvol);
     }
-    if (paused >= 0) g_bed->paused = paused;
-    if (monitor >= 0 && monitor != g_bc.monitor) {
+    if (paused >= 0) g_bed->paused = paused;                 /* silence from get_frame; connections stay as they are */
+    if (monitor >= 0 && monitor != g_bc.monitor) {           /* only an actual change touches slot 0 */
         g_bc.monitor = monitor;
-        if (monitor) need_clock = 1;
+        bed_apply_monitor();
     }
     spc_mutex_unlock(&g_pl_mtx);
-    if (need_clock) spc_media_ensure_clock();
-    if (monitor >= 0) spc_call_apply_topology();     /* connects / disconnects the monitor */
     return 0;
 }
 
@@ -999,7 +1060,7 @@ int spc_musicbed_state(spc_bed_state* st)
         spc_mutex_unlock(&g_bed->mtx);
     }
     spc_mutex_unlock(&g_pl_mtx);
-    {   /* drop calls that ended since the last topology pass (hangup does not always trigger one) */
+    {   /* live: hangup does not run a pass, so drop calls that have ended since the last one */
         int i, n = 0;
         for (i = 0; i < st->ncalls; i++) if (spc_call_alive(st->calls[i])) st->calls[n++] = st->calls[i];
         st->ncalls = n;
@@ -1010,17 +1071,24 @@ int spc_musicbed_state(spc_bed_state* st)
 /* 0..255, the bed's signal after its volume; 0 when absent, paused or nobody pulls frames from it */
 int spc_musicbed_level(void)
 {
-    int lvl = 0;
+    int avg = 0, ncid = 0, mon = 0, fresh = 0, calls = 0, i;
+    double vol = 0.0, monvol = 0.0, gain = 0.0, v;
+    uint64_t cid[SPC_BED_MAX_CALLS];
     pl_ensure();
     spc_mutex_lock(&g_pl_mtx);
-    if (g_bed && !g_bed->paused && spc_mono_ms() - g_bed->lvl_ms < 300) {
-        double gain = 0.0, v;
-        if (g_bc.ndst > 0 && g_bc.vol > gain) gain = g_bc.vol;
-        if (g_bc.mon_conn && g_bc.monvol > gain) gain = g_bc.monvol;
-        v = (double)g_bed->lvl_avg * gain;
-        if (v > 32767.0) v = 32767.0;
-        lvl = pjmedia_linear2ulaw((pj_int16_t)lrint(v)) ^ 0xff;
+    if (g_bed && !g_bed->paused) {
+        fresh = (uint32_t)((uint32_t)spc_mono_ms() - g_bed->lvl_ms32) < 300u;    /* wrap-safe */
+        avg = g_bed->lvl_avg;
+        vol = g_bc.vol; monvol = g_bc.monvol; mon = g_bc.mon_conn;
+        ncid = g_bc.ncid;
+        memcpy(cid, g_bc.cid, sizeof(uint64_t) * (size_t)ncid);
     }
     spc_mutex_unlock(&g_pl_mtx);
-    return lvl;
+    if (!fresh) return 0;
+    for (i = 0; i < ncid && !calls; i++) calls = spc_call_alive(cid[i]);      /* an ended call no longer counts */
+    if (calls && vol > gain) gain = vol;
+    if (mon && monvol > gain) gain = monvol;
+    v = (double)avg * gain;
+    if (v > 32767.0) v = 32767.0;
+    return pjmedia_linear2ulaw((pj_int16_t)lrint(v)) ^ 0xff;
 }

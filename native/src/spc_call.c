@@ -840,9 +840,26 @@ static void conn_speaker(topo_ent* t, int want, int in_want)
     }
 }
 
-void spc_call_apply_topology(void)
+/* pjsua_recorder_get_conf_port() returns PJ_EINVAL (a positive number) for a recorder that is already gone */
+static int rec_conf_port(int rec_id)
+{
+    int r;
+    if (rec_id < 0) return -1;
+    r = pjsua_recorder_get_conf_port(rec_id);
+    return (r >= 0 && (unsigned)r < pjsua_var.media_cfg.max_media_ports) ? r : -1;
+}
+
+#ifdef SPC_TEST_HOOKS
+/* __topoDelay {ms}: every pass sleeps this long after each call, so that passes on different threads overlap in
+ * tests (native/tests/test_musicbed.py stress). Test builds only. */
+static volatile int g_topo_test_delay_ms;
+void spc_call_test_topo_delay(int ms) { g_topo_test_delay_ms = ms; }
+#endif
+
+static void topology_pass(void)
 {
     topo_ent e[PJSUA_MAX_CALLS];
+    spc_bed_pass bp;                  /* musicbed per-pass state: on this stack, never shared with another pass */
     int n = 0, i, j, k;
     spc_call* c;
     spc_registry_lock();
@@ -875,17 +892,23 @@ void spc_call_apply_topology(void)
         int msrc = (n > 0 && spc_denoise_mic_wanted()) ? spc_denoise_mic_slot() : -1;
         int dnm = spc_denoise_mic_slot_peek();
         if (dnm >= 0) conn(0, dnm, msrc >= 0);       /* processor input: only while it is the active mic source */
-        spc_musicbed_apply_begin();
+        spc_musicbed_apply_begin(&bp);
         for (i = 0; i < n; i++) {
         topo_ent* t = &e[i];
-        int local_ok;
-        if (t->cslot < 0) continue;
+        int local_ok, rs1 = -1, rs2;
+        /* musicbed recorder sinks: the local side of the call's recording (mono mix both/local, stereo left) */
+        if (t->rec_id >= 0 && (t->rec_mix == 0 || t->rec_mix == 2)) rs1 = rec_conf_port(t->rec_id);
+        rs2 = spc_rec_local_sink(t->rec2_id);
+        if (t->cslot < 0) {           /* no media: nothing else to wire, but the bed leaves the recording */
+            spc_musicbed_apply_call(&bp, t->cid, -1, 0, rs1, rs2);
+            continue;
+        }
         local_ok = t->active && !t->detached && !t->held;
         if (in_want && local_ok) ensure_in_processor(t);
         conn_mic(t->cslot, local_ok && !t->muted && !t->ann_mute, msrc, dnm);
         conn_speaker(t, local_ok, in_want);
         if (t->rec_id >= 0) {
-            int rp = pjsua_recorder_get_conf_port(t->rec_id);
+            int rp = rec_conf_port(t->rec_id);
             if (rp >= 0) {
                 conn(t->cslot, rp, t->active && (t->rec_mix == 0 || t->rec_mix == 1));
                 conn_mic(rp, (t->rec_mix == 0 || t->rec_mix == 2) && !t->muted && !t->detached, msrc, dnm);
@@ -893,12 +916,12 @@ void spc_call_apply_topology(void)
         }
         spc_rec_apply_call(t->rec2_id, t->cslot, t->active, t->muted, t->detached, msrc, dnm);
         spc_player_apply_call(t->cid, t->cslot, t->active, t->lhold, t->held);     /* media files + music on hold (spc_player.c) */
-        {   /* musicbed: wherever the microphone would go, regardless of call.mute / announcement mute */
-            int rs1 = -1, rs2 = -1;
-            if (t->rec_id >= 0 && (t->rec_mix == 0 || t->rec_mix == 2)) rs1 = pjsua_recorder_get_conf_port(t->rec_id);
-            rs2 = spc_rec_local_sink(t->rec2_id);
-            spc_musicbed_apply_call(t->cid, t->cslot, local_ok, rs1, rs2);
-        }
+        /* musicbed: wherever the microphone would go, regardless of call.mute / announcement mute; while the call is
+         * locally held (or detached) it is neither sent to the call nor in its recording */
+        spc_musicbed_apply_call(&bp, t->cid, t->cslot, local_ok, rs1, rs2);
+#ifdef SPC_TEST_HOOKS
+        if (g_topo_test_delay_ms > 0) spc_sleep_ms(g_topo_test_delay_ms);
+#endif
         if (t->tg_slot >= 0) conn(t->tg_slot, t->cslot, t->active);
         for (k = 0; k < t->nconf + t->nbr; k++) {
             uint64_t peer = k < t->nconf ? t->conf[k] : t->bridged[k - t->nconf];
@@ -907,9 +930,80 @@ void spc_call_apply_topology(void)
             conn(t->cslot, e[j].cslot, t->active && e[j].active && !t->held && !e[j].held);
         }
         }
-        spc_musicbed_apply_end();
+        spc_musicbed_apply_end(&bp);
         spc_rec_apply_global(msrc, dnm);        /* microphone recorder (media.recordMicStart), independent of calls */
     }
+}
+
+/* Topology passes run on the worker (requests), the pjsua thread (timer_topology after a media-state change, play and
+ * music-on-hold timers, and on_call_state(DISCONNECTED) -> announcement end) and the IAX2 thread (media start). Each
+ * pass snapshots the registry and then queues bridge operations, so two concurrent passes could finish in the wrong
+ * order and leave the older snapshot's connections in place (e.g. the microphone or the musicbed still going to a
+ * call that has just been put on hold). Passes are therefore serialised, but WITHOUT a blocking lock: a caller that
+ * finds a pass running only marks the topology dirty and returns, and the running pass's thread runs one more full
+ * pass (with a fresh snapshot, taken after the caller's state change) before it stops. A blocking "topology mutex"
+ * could deadlock: a caller can hold a dialog lock (on_call_state(DISCONNECTED) runs under it, also synchronously
+ * inside pjsua_call_hangup on the worker, and ending an announcement there runs ann_refresh -> topology), the pass
+ * that owns the mutex waits for PJSUA_LOCK (pjsua_call_get_info, pjsua_conf_connect), and pjsua's thread can hold
+ * PJSUA_LOCK while it waits for that dialog lock (incoming INVITE with Replaces). Here g_topo_mtx is a leaf: it is
+ * held only to test and set two flags, never while calling anything, so it cannot take part in a lock cycle, and no
+ * thread ever waits for another thread's pass. A pass that triggers topology from inside (none does today) just causes
+ * one more iteration. A runner does at most TOPO_MAX_RUNS passes per call, so that a burst of triggers from other
+ * threads cannot keep, say, pjsua's SIP thread busy with passes; what is left is handed to a zero-delay pjsua timer
+ * (timer_topology), whose pass snapshots after every change made so far.
+ * Bridge operations are asynchronous anyway (queued until the next clock tick), so callers never relied on the
+ * connections being in place when this returns. */
+#define TOPO_MAX_RUNS 3
+static spc_mutex_t g_topo_mtx;
+static volatile long g_topo_once;
+static int g_topo_running, g_topo_dirty;
+static void topo_init_once(void) { spc_mutex_init(&g_topo_mtx); }
+static void timer_topology(void* ud);
+
+void spc_call_apply_topology(void)
+{
+    int runs = 0, handoff = 0;
+    spc_once(&g_topo_once, topo_init_once);
+    spc_mutex_lock(&g_topo_mtx);
+    g_topo_dirty = 1;
+    if (g_topo_running) { spc_mutex_unlock(&g_topo_mtx); return; }
+    g_topo_running = 1;
+    while (g_topo_dirty) {
+        if (runs == TOPO_MAX_RUNS) { handoff = 1; break; }      /* g_topo_dirty stays set: the timer's pass runs it */
+        g_topo_dirty = 0;
+        spc_mutex_unlock(&g_topo_mtx);
+        topology_pass();
+        runs++;
+        spc_mutex_lock(&g_topo_mtx);
+    }
+    g_topo_running = 0;
+    spc_mutex_unlock(&g_topo_mtx);
+    /* not while pjsua is being destroyed (its timers die with it); should scheduling fail, the next trigger runs it */
+    if (handoff && pjsua_get_state() == PJSUA_STATE_RUNNING) pjsua_schedule_timer2(&timer_topology, NULL, 0);
+}
+
+/* Every conference slot the musicbed may be connected to besides slot 0, from live state (no topology bookkeeping):
+ * the conf slot of each call with media and the recorder sinks that carry its local side. */
+int spc_call_bed_sinks(int* out, int max)
+{
+    struct { uint64_t cid; int slot, rec_id, rec_mix, rec2_id; } s[PJSUA_MAX_CALLS];
+    int n = 0, i, k = 0;
+    spc_call* c;
+    spc_registry_lock();
+    for (c = g_calls; c && n < PJSUA_MAX_CALLS; c = c->next) {
+        s[n].cid = c->cid; s[n].slot = c->slot; s[n].rec_id = c->rec_id; s[n].rec_mix = c->rec_mix; s[n].rec2_id = c->rec2_id;
+        n++;
+    }
+    spc_registry_unlock();
+    for (i = 0; i < n && k + 3 <= max; i++) {
+        int cs = -1, act = 0, r;
+        if (s[i].slot >= SPC_ID_IAX_BASE) { if (spc_iax2_call_conf(s[i].cid, &cs, &act) != 0) cs = -1; }
+        else cs = pjsua_call_get_conf_port(s[i].slot);
+        if (cs >= 0 && (unsigned)cs < pjsua_var.media_cfg.max_media_ports) out[k++] = cs;
+        if (s[i].rec_id >= 0 && (s[i].rec_mix == 0 || s[i].rec_mix == 2) && (r = rec_conf_port(s[i].rec_id)) >= 0) out[k++] = r;
+        if ((r = spc_rec_local_sink(s[i].rec2_id)) >= 0) out[k++] = r;
+    }
+    return k;
 }
 
 /* media.levels "calls": conference slot levels of every call with active media */

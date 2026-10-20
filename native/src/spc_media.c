@@ -770,14 +770,17 @@ static int h_musicbed_start(cJSON* p, cJSON** res)
 {
     const char* file = spc_jstr(p, "file");
     double vol, mvol;
-    int mon = 0;
+    int mon = 0, rc, pst = 0;
     spc_fileinfo fi;
     char err[200];
     if (!file || !file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
     if (!vol_param(p, "volume", 0.3, &vol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'volume' must be 0.0..2.0");
     if (!vol_param(p, "monitorVolume", 0.5, &mvol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitorVolume' must be 0.0..2.0");
     if (spc_jhas(p, "monitor") && !spc_jbool_strict(p, "monitor", &mon)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitor' must be a bool");
-    if (spc_musicbed_start(file, vol, mon, mvol, &fi, err, sizeof(err)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    /* INVALID_PARAM only for the file itself (the app gives up on that file); NOT_STARTED / INTERNAL / PJ_ERROR when
+     * the engine side fails, so that the app may retry */
+    if ((rc = spc_musicbed_start(file, vol, mon, mvol, &fi, &pst, err, sizeof(err))) != 0)
+        return spc_err(rc, (pj_status_t)pst, "%s", err);
     *res = cJSON_CreateObject();
     cJSON_AddStringToObject(*res, "file", file);
     cJSON_AddStringToObject(*res, "format", fi.format);
@@ -832,6 +835,18 @@ static int h_musicbed_state(cJSON* p, cJSON** res)
     return SPC_OK;
 }
 
+#ifdef SPC_TEST_HOOKS
+/* __topoDelay {ms:0..200}: widen every topology pass (concurrency tests only) */
+static int h_topo_delay(cJSON* p, cJSON** res)
+{
+    int ms = 0;
+    (void)res;
+    if (!spc_jint_range(p, "ms", 0, 0, 200, &ms)) return spc_err(SPC_E_INVALID_PARAM, 0, "'ms' must be 0..200");
+    spc_call_test_topo_delay(ms);
+    return SPC_OK;
+}
+#endif
+
 const spc_method spc_methods_media[] = {
     { "media.devices", h_devices, 0 }, { "media.setDevices", h_set_devices, 0 },
     { "media.refreshDevices", h_refresh_devices, 0 }, { "media.codecs", h_codecs, 0 },
@@ -845,5 +860,8 @@ const spc_method spc_methods_media[] = {
     { "media.recordMicStart", h_record_mic_start, 0 }, { "media.recordMicStop", h_record_mic_stop, 0 },
     { "media.musicbedStart", h_musicbed_start, 0 }, { "media.musicbedStop", h_musicbed_stop, 0 },
     { "media.musicbedSet", h_musicbed_set, 0 }, { "media.musicbedState", h_musicbed_state, 0 },
+#ifdef SPC_TEST_HOOKS
+    { "__topoDelay", h_topo_delay, 0 },
+#endif
     { NULL, NULL, 0 }
 };

@@ -924,33 +924,54 @@ There is at most one musicbed per engine.
   and `paused` must be booleans). Everything is validated before the running
   musicbed is touched, so a bad `musicbedStart` leaves the current one playing.
   `musicbedState` reports volumes as sent (they are stored as doubles).
+* **`musicbedStart` errors:** `INVALID_PARAM` means the request or the file is
+  bad (missing/out-of-range parameter; file unreadable, unsupported, without
+  audio, too long, or too large once decoded); retrying the same file is
+  pointless. Everything else is on the engine's side and may succeed later:
+  `NOT_STARTED` (the audio engine / conference bridge is not ready),
+  `INTERNAL` (out of memory, the decoder thread cannot be started), `PJ_ERROR`
+  with `status` (the bridge refuses the port, e.g. no free slot). In every case
+  a running bed is left untouched and no event is emitted.
 * **Looping and replacing:** the bed always loops seamlessly (the file is decoded
   once into memory by the `call.playFile` decoder, resampler included).
   `musicbedStart` while one runs replaces it: `media.musicbed` with
-  `reason:"replaced"` for the old one, then `reason:"started"` for the new one.
+  `reason:"replaced"` for the old one, then `reason:"started"` for the new one
+  (both before the response).
 * **Routing:** the bed goes to exactly the conference slots the microphone is (or
   would be) connected to, **regardless of `call.mute` and of the announcement
   mute** (`muteMic`). That is every call with active media that is not locally
   held (SIP and IAX2, including calls created by transfer once their media is
   active) and all members of a local conference. A locally held call gets its
-  music on hold instead; the bed comes back on unhold. It is part of
+  music on hold instead (or silence); the bed comes back on unhold. A held
+  conference member gets no bed while the other members keep it. It is part of
   `spc_call_apply_topology()` (`spc_musicbed_apply_*`), so it is recomputed
-  wherever the microphone topology is. `musicbedState.calls` lists the calls it is
-  connected to.
+  wherever the microphone topology is. `musicbedState.calls` lists the calls the
+  last topology pass connected it to, without calls that have ended since.
 * **Volume:** `volume` is a per-connection gain (`pjmedia_conf_adjust_conn_level`),
-  so the monitor level is independent of it. Changes apply live and glitch-free.
+  so the monitor level is independent of it. Changes apply live and glitch-free,
+  to every call and recording sink at once, including calls that connect later.
+  `musicbedSet` is cheap enough for every slider tick: `volume`,
+  `monitorVolume` and `paused` only re-level or silence existing connections,
+  and `monitor` only touches the speaker connection when its value changes;
+  none of them runs a topology pass.
 * **Monitor:** `monitor:true` also connects the bed to the speaker (slot 0) at
   `monitorVolume`. With no call that is a preview, and it opens the sound device
-  like other slot-0 connections.
+  like other slot-0 connections. It survives a replace when the new
+  `musicbedStart` asks for it (`monitor` defaults to false there).
 * **Pause:** `paused:true` outputs silence and keeps the position; unpausing
-  resumes from there.
+  resumes from there. The connections stay as they are.
 * **Clock and idle:** the bed advances only while something pulls audio from it,
   i.e. a call is connected to it or the monitor is on. With no call and the
   monitor off it stands still and resumes where it was when the next call
   connects. Starting a bed does not open the sound device by itself.
 * **Recording:** `call.recordStart` recordings include the bed on the local side,
-  at the call volume: mixed in for mono `wav` (`mix` both or local), the left
-  channel for `wavStereo`, mono `opus` like `wav`. (Not in `media.recordMicStart`.)
+  at the call volume: mixed in for mono `wav` (`mix` both or local, not `remote`),
+  the left channel for `wavStereo`, mono `opus` like `wav`. (Not in
+  `media.recordMicStart`.) The bed is in a call's recording exactly when it is
+  sent to that call: also while the call is muted (the microphone is not), but
+  not while the call is locally held, detached or without media. A held call's
+  recording therefore has no bed, while the microphone (unless muted or detached)
+  is still recorded. Volume changes apply to the recording as to the call.
 * **Levels:**
   * `musicbed` is the bed's signal after its volume (the louder of the call
     volume and, with the monitor on, the monitor volume). It is 0 when there is
@@ -964,8 +985,25 @@ There is at most one musicbed per engine.
 * **Event `media.musicbed`:** emitted on every start, stop, replace, decoder error
   (`reason:"error"`, with `message`, and the bed is stopped) and `core.stop`
   (`reason:"shutdown"`). `active` says whether a bed is running after the event.
-* **Threading:** like every request it runs on the engine worker. The bed port
-  follows the `call.playFile` lifetime rules (removed from the bridge, destroyed
-  through the port's `on_destroy`); the clock thread only copies decoded samples.
+  Exactly one event per transition, in the order of the transitions: a bed's
+  `started` always comes before its `error`, and a bed that was replaced or
+  stopped never reports anything afterwards. A decoder error is a file that
+  validates but yields no audio when decoded (e.g. a truncated MP3 whose header
+  promises frames that are not there); it is detected once the bed is pulled
+  (a call or the monitor). Unlike `INVALID_PARAM` from `musicbedStart`, it
+  arrives asynchronously.
+* **Threading:** the requests run on the engine worker, but the routing does not:
+  `spc_call_apply_topology()` runs on the worker (requests), on pjsua's thread
+  (media-state changes, play and music-on-hold timers, call end) and on the IAX2
+  thread (IAX2 media start). Topology passes are serialised without a blocking
+  lock (a pass requested while another runs is coalesced into one more pass by
+  the running thread, at most a few in a row, then handed to a pjsua timer), so
+  the last pass always sees the latest state. Each pass is also authoritative for
+  every call it sees (connect and re-apply the current level, or disconnect), and
+  a volume change re-levels every live call and recorder sink, so nothing depends
+  on bookkeeping from earlier passes. State transitions and their events happen
+  under the player lock. The bed port follows the `call.playFile` lifetime rules
+  (removed from the bridge, destroyed through the port's `on_destroy`); the
+  clock thread only copies decoded samples.
 
 Tests: `native/tests/test_musicbed.py`.

@@ -266,6 +266,10 @@ int       spc_account_filter_codecs_for(int acc, pjmedia_sdp_session* sdp);
 spc_call* spc_call_lock_find(uint64_t cid);      /* returns with registry lock held if found, else unlocked NULL */
 void      spc_call_apply_topology(void);
 cJSON*    spc_call_levels_json(void);            /* [{cid, rx, tx}] for calls with active media */
+int       spc_call_bed_sinks(int* out, int max); /* live conf slots the musicbed may feed: every call slot + its local-side recorder sinks */
+#ifdef SPC_TEST_HOOKS
+void      spc_call_test_topo_delay(int ms);      /* __topoDelay */
+#endif
 int       spc_call_mic_source(void);             /* conf slot every "microphone -> X" connection must use: 0, or the voice-isolation processor */
 void      spc_call_cleanup_media(spc_call* c);   /* registry lock NOT held */
 int       spc_lan_register_account(int tp, int* acc);
