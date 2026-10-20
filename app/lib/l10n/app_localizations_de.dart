@@ -1734,6 +1734,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get shortcutsEndCall => 'Anruf beenden';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Globale Tastenkürzel benötigen eine X11-Sitzung. Wayland erlaubt Apps nicht, Tasten systemweit abzufangen.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Fügen Sie einem Buchstaben oder einer Ziffer Ctrl, Alt, Shift oder $key hinzu';
   }

@@ -1739,6 +1739,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shortcutsEndCall => 'Encerrar ligação';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Os atalhos globais requerem uma sessão X11. O Wayland não permite que as aplicações capturem teclas em todo o sistema.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Adicione Ctrl, Alt, Shift ou $key a uma letra ou dígito';
   }
@@ -8585,6 +8589,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shortcutsEndCall => 'Encerrar ligação';
+
+  @override
+  String get shortcutsNeedX11 =>
+      'Os atalhos globais exigem uma sessão X11. O Wayland não permite que aplicativos capturem teclas em todo o sistema.';
 
   @override
   String shortcutsNeedModifier(String key) {

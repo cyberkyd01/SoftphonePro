@@ -22,6 +22,8 @@ import '../../ui/router.dart';
 import '../desktop_platform_services.dart';
 import 'hotkeys.dart';
 import 'media_keys.dart';
+import 'mpris.dart';
+import 'shortcuts_section.dart' show hotkeysSupported;
 import 'tray_controller.dart';
 import 'window_state.dart';
 
@@ -119,9 +121,12 @@ class DesktopShell with WindowListener {
       await windowManager.setPreventClose(true);
     } catch (_) {}
 
+    // Linux: a panel started at login may publish its StatusNotifierWatcher
+    // a few seconds after us, so look longer when autostarted.
     _trayOk = await _platform.tray.init(
       onMenu: _onMenu,
       onToggleWindow: () => unawaited(_toggleWindow()),
+      linuxHostAttempts: _platform.startMinimized ? 8 : 1,
     );
     _refreshTray();
 
@@ -136,6 +141,8 @@ class DesktopShell with WindowListener {
         ? ChannelMediaKeyBackend(_platform.channel)
         : Platform.isWindows
         ? (_winMediaBackend = HotkeyMediaKeyBackend())
+        : Platform.isLinux
+        ? MprisMediaKeyBackend(onRaise: () => unawaited(_platform.bringToFront()))
         : null;
     if (mediaBackend != null) {
       _media = MediaKeyController(ref, mediaBackend)..start();
@@ -163,7 +170,7 @@ class DesktopShell with WindowListener {
       s.close();
     }
     try {
-      await hotKeyManager.unregisterAll();
+      if (hotkeysSupported) await hotKeyManager.unregisterAll();
     } catch (_) {}
   }
 
@@ -244,6 +251,8 @@ class DesktopShell with WindowListener {
   // ---- hotkeys -------------------------------------------------------------------
 
   Future<void> _applyHotkeys() async {
+    // Linux/Wayland has no global key grabs; keybinder is X11 only.
+    if (!hotkeysSupported) return;
     final wanted = resolveHotkeys(_settings.hotkeys);
     if (mapEquals(wanted, _activeHotkeys)) return;
     try {
@@ -357,7 +366,7 @@ class DesktopShell with WindowListener {
     _quitting = true;
     _saveBounds?.cancel();
     try {
-      await hotKeyManager.unregisterAll();
+      if (hotkeysSupported) await hotKeyManager.unregisterAll();
     } catch (_) {}
     try {
       await _platform.tray.dispose();

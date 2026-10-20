@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "Halten / Fortsetzen",
   "shortcutsTransfer": "Vermitteln",
   "shortcutsEndCall": "Anruf beenden",
+  "shortcutsNeedX11": "Globale Tastenkürzel benötigen eine X11-Sitzung. Wayland erlaubt Apps nicht, Tasten systemweit abzufangen.",
   "shortcutsNeedModifier": "Fügen Sie einem Buchstaben oder einer Ziffer Ctrl, Alt, Shift oder {key} hinzu",
   "shortcutsPressNew": "Neue Tastenkombination drücken",
   "defaultHandlerChooseInSettings": "Wählen Sie unter Standard-Apps SoftphonePro für SIP, TEL und CALLTO aus",

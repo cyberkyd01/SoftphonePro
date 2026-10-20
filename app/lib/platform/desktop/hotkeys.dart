@@ -73,12 +73,12 @@ class HotkeyBinding {
   }
 
   /// Human readable, e.g. `Ctrl+Alt+A`.
-  String display({bool mac = false}) {
+  String display({bool mac = false, bool linux = false}) {
     final m = [
       if (ctrl) 'Ctrl',
       if (alt) mac ? 'Option' : 'Alt',
       if (shift) 'Shift',
-      if (meta) mac ? 'Cmd' : 'Win',
+      if (meta) mac ? 'Cmd' : (linux ? 'Super' : 'Win'),
     ];
     return [...m, key.length == 1 ? key.toUpperCase() : (key == 'space' ? 'Space' : key.toUpperCase())].join('+');
   }

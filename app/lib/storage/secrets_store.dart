@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -96,23 +98,36 @@ class EncryptedFileSecretsStore implements SecretsStore {
 }
 
 /// OS keystore first; falls back to [EncryptedFileSecretsStore] when the
-/// keystore throws (e.g. unsigned macOS builds without keychain entitlement).
+/// keystore throws (e.g. unsigned macOS builds without keychain entitlement)
+/// or, on Linux, has no Secret Service / a locked keyring (libsecret then
+/// errors or waits for an unlock prompt: [keystoreTimeout] bounds the wait so
+/// startup never hangs).
 class KeystoreSecretsStore implements SecretsStore {
-  KeystoreSecretsStore(this._fallback, {FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+  KeystoreSecretsStore(
+    this._fallback, {
+    FlutterSecureStorage? storage,
+    Duration? keystoreTimeout,
+    bool? isLinux,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _timeout = keystoreTimeout ?? ((isLinux ?? (!kIsWeb && Platform.isLinux)) ? const Duration(seconds: 8) : null);
 
   final FlutterSecureStorage _storage;
   final SecretsStore _fallback;
+  final Duration? _timeout;
   bool _useFallback = false;
 
   Future<T> _try<T>(Future<T> Function() op, Future<T> Function() fb) async {
     if (_useFallback) return fb();
     try {
-      return await op();
+      final f = op();
+      return await (_timeout == null ? f : f.timeout(_timeout));
     } on PlatformException {
       _useFallback = true;
       return fb();
     } on MissingPluginException {
+      _useFallback = true;
+      return fb();
+    } on TimeoutException {
       _useFallback = true;
       return fb();
     }

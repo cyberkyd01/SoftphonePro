@@ -1717,6 +1717,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shortcutsEndCall => 'End call';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Global shortcuts need an X11 session. Wayland does not allow apps to grab keys system-wide.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Add Ctrl, Alt, Shift or $key to a letter or digit';
   }

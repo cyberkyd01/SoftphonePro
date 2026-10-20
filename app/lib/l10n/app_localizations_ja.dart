@@ -1677,6 +1677,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get shortcutsEndCall => '通話を終了';
 
   @override
+  String get shortcutsNeedX11 =>
+      'グローバルショートカットにはX11セッションが必要です。Waylandではアプリがシステム全体でキーを取得することはできません。';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return '文字または数字に Ctrl、Alt、Shift、$key のいずれかを組み合わせてください';
   }

@@ -8,16 +8,18 @@ import 'dart:ui' show Locale;
 
 import '../l10n/l10n.dart';
 import 'desktop/desktop_channel.dart';
+import 'desktop/default_handler.dart' show desktopExecArg;
 import 'desktop/desktop_notifier.dart';
 import 'desktop/tray_controller.dart';
 import 'platform_services.dart';
 
-/// macOS + Windows implementation of [PlatformServices]:
+/// macOS, Windows + Linux implementation of [PlatformServices]:
 ///  * notifications with Answer / Decline actions (local_notifier)
 ///  * tray / menu bar icon, flashing on incoming calls ([tray])
 ///  * sip:/sips:/tel:/callto:/softphonepro: links and second-launch arguments
 ///    ([DesktopChannel])
-///  * start at login, bring-to-front, dock / taskbar badge
+///  * start at login (macOS login item; launch_at_startup on Windows and
+///    Linux), bring-to-front, dock / taskbar badge
 ///
 /// The app-level wiring (tray menu contents, hotkeys, close-to-tray, quit)
 /// lives in `DesktopShell`.
@@ -73,12 +75,17 @@ class DesktopPlatformServices extends NoopPlatformServices {
     });
     _showSub = channel.showRequests.listen((_) => unawaited(bringToFront()));
     await notifier.init();
-    if (Platform.isWindows) {
-      launchAtStartup.setup(
-        appName: 'SoftphonePro',
-        appPath: Platform.resolvedExecutable,
-        args: const ['--minimized'],
-      );
+    if (Platform.isWindows || Platform.isLinux) {
+      try {
+        launchAtStartup.setup(
+          appName: 'SoftphonePro',
+          // Linux writes this verbatim into the autostart file's Exec= line.
+          appPath: Platform.isLinux ? desktopExecArg(Platform.resolvedExecutable) : Platform.resolvedExecutable,
+          args: const ['--minimized'],
+        );
+      } catch (e) {
+        debugPrint('launch at startup unavailable: $e');
+      }
     }
   }
 
@@ -152,6 +159,7 @@ class DesktopPlatformServices extends NoopPlatformServices {
   }) => notifier.show(
     title: title,
     body: body,
+    actionLabel: _linuxActionLabel,
     onClick: () {
       _routes.add('/recents');
       unawaited(bringToFront());
@@ -168,12 +176,16 @@ class DesktopPlatformServices extends NoopPlatformServices {
     await notifier.show(
       title: title,
       body: body,
+      actionLabel: _linuxActionLabel,
       onClick: () {
         _routes.add('/messages');
         unawaited(bringToFront());
       },
     );
   }
+
+  /// Linux notifications have no body click: add a button that opens the app.
+  String? get _linuxActionLabel => !kIsWeb && Platform.isLinux ? _l.trayShowApp : null;
 
   Future<bool> _windowInFront() async {
     try {
@@ -250,7 +262,7 @@ class DesktopPlatformServices extends NoopPlatformServices {
     try {
       if (Platform.isMacOS) {
         await channel.setLoginItem(enabled);
-      } else if (Platform.isWindows) {
+      } else if (Platform.isWindows || Platform.isLinux) {
         if (enabled) {
           await launchAtStartup.enable();
         } else {

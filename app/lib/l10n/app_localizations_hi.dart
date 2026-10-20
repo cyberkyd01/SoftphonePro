@@ -1719,6 +1719,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get shortcutsEndCall => 'कॉल समाप्त करें';
 
   @override
+  String get shortcutsNeedX11 =>
+      'ग्लोबल शॉर्टकट के लिए X11 सत्र ज़रूरी है। Wayland ऐप्स को पूरे सिस्टम में कुंजियाँ पकड़ने की अनुमति नहीं देता।';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'किसी अक्षर या अंक के साथ Ctrl, Alt, Shift या $key जोड़ें';
   }

@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "انتظار / استئناف",
   "shortcutsTransfer": "تحويل",
   "shortcutsEndCall": "إنهاء المكالمة",
+  "shortcutsNeedX11": "تتطلب الاختصارات العامة جلسة X11. لا يسمح Wayland للتطبيقات بالتقاط المفاتيح على مستوى النظام.",
   "shortcutsNeedModifier": "أضف Ctrl أو Alt أو Shift أو {key} إلى حرف أو رقم",
   "shortcutsPressNew": "اضغط تركيبة المفاتيح الجديدة",
   "defaultHandlerChooseInSettings": "اختر SoftphonePro لروابط SIP وTEL وCALLTO في التطبيقات الافتراضية",

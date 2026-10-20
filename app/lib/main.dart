@@ -27,23 +27,21 @@ Future<void> main(List<String> args) async {
   registerNativeLicenses();
 
   final desktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
-  // Tray, hotkeys, URL handlers and notifications exist for macOS + Windows.
-  final fullDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows);
 
   final supportDir = (await getApplicationSupportDirectory()).path;
   final secrets = KeystoreSecretsStore(EncryptedFileSecretsStore(p.join(supportDir, 'secrets')));
   final db = await openDatabaseOrRecover(supportDir, secrets);
   final boot = await loadBootData(db, secrets);
 
-  final PlatformServices platform = fullDesktop
+  // Tray, hotkeys (not Wayland), URL handlers and notifications exist on
+  // macOS, Windows and Linux.
+  final PlatformServices platform = desktop
       ? DesktopPlatformServices(startupArgs: args)
-      : desktop
-          ? NoopPlatformServices()
-          : (!kIsWeb && Platform.isAndroid)
-              ? AndroidPlatformServices()
-              : (!kIsWeb && Platform.isIOS)
-                  ? IosPlatformServices()
-                  : NoopPlatformServices(mobile: true);
+      : (!kIsWeb && Platform.isAndroid)
+          ? AndroidPlatformServices()
+          : (!kIsWeb && Platform.isIOS)
+              ? IosPlatformServices()
+              : NoopPlatformServices(mobile: true);
   await platform.init();
   final startMinimized = platform is DesktopPlatformServices ? platform.startMinimized : args.contains('--minimized');
 
@@ -70,8 +68,9 @@ Future<void> main(List<String> args) async {
         if (restore != null) await windowManager.setBounds(restore);
         if (startMinimized) {
           // Autostart: stay in the tray (DesktopShell shows the window again
-          // if there is no tray icon).
-          if (Platform.isMacOS) await windowManager.hide();
+          // if there is no tray icon). The Linux runner creates the window
+          // hidden; hiding again is harmless.
+          if (Platform.isMacOS || Platform.isLinux) await windowManager.hide();
         } else {
           if (saved?.maximized == true) await windowManager.maximize();
           await windowManager.show();

@@ -1737,6 +1737,10 @@ class AppLocalizationsNl extends AppLocalizations {
   String get shortcutsEndCall => 'Gesprek beëindigen';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Globale sneltoetsen vereisen een X11-sessie. Wayland staat niet toe dat apps systeembreed toetsen onderscheppen.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Voeg Ctrl, Alt, Shift of $key toe aan een letter of cijfer';
   }

@@ -3089,6 +3089,12 @@ abstract class AppLocalizations {
   /// **'End call'**
   String get shortcutsEndCall;
 
+  /// Shown instead of the global hotkeys on Linux Wayland sessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Global shortcuts need an X11 session. Wayland does not allow apps to grab keys system-wide.'**
+  String get shortcutsNeedX11;
+
   /// Hint in the hotkey capture dialog; {key} is Cmd (macOS) or Win.
   ///
   /// In en, this message translates to:

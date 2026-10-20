@@ -2251,6 +2251,10 @@
   "@shortcutsEndCall": {
     "description": "Description of an in-app keyboard shortcut."
   },
+  "shortcutsNeedX11": "Global shortcuts need an X11 session. Wayland does not allow apps to grab keys system-wide.",
+  "@shortcutsNeedX11": {
+    "description": "Shown instead of the global hotkeys on Linux Wayland sessions."
+  },
   "shortcutsNeedModifier": "Add Ctrl, Alt, Shift or {key} to a letter or digit",
   "@shortcutsNeedModifier": {
     "description": "Hint in the hotkey capture dialog; {key} is Cmd (macOS) or Win.",

@@ -1730,6 +1730,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get shortcutsEndCall => 'Aramayı bitir';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Genel kısayollar için X11 oturumu gerekir. Wayland, uygulamaların tuşları sistem genelinde yakalamasına izin vermez.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Bir harfe veya rakama Ctrl, Alt, Shift ya da $key ekleyin';
   }

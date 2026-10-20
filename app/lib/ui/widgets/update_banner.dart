@@ -28,7 +28,7 @@ class UpdateBanner extends ConsumerWidget {
             Icon(Icons.system_update_alt_rounded, size: 18, color: t.colorScheme.onPrimaryContainer),
             Text(l.updatesAvailable('${r.version}'), key: const Key('update-banner'), style: TextStyle(color: t.colorScheme.onPrimaryContainer)),
             TextButton(key: const Key('update-notes'), onPressed: () => ctl.open(r.url), child: Text(l.updatesReleaseNotes)),
-            TextButton(key: const Key('update-download'), onPressed: () => ctl.open(r.url), child: Text(l.updatesDownload)),
+            TextButton(key: const Key('update-download'), onPressed: () => ctl.open(r.downloadUrl), child: Text(l.updatesDownload)),
             TextButton(key: const Key('update-skip'), onPressed: ctl.skipVersion, child: Text(l.updatesSkipVersion)),
             IconButton(key: const Key('update-dismiss'), tooltip: l.updatesDismiss, icon: const Icon(Icons.close_rounded, size: 18), onPressed: ctl.dismiss),
           ],

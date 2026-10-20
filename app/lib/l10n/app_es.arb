@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "Poner en espera / reanudar",
   "shortcutsTransfer": "Transferir",
   "shortcutsEndCall": "Finalizar llamada",
+  "shortcutsNeedX11": "Los atajos globales requieren una sesión X11. Wayland no permite que las aplicaciones capturen teclas en todo el sistema.",
   "shortcutsNeedModifier": "Añade Ctrl, Alt, Shift o {key} a una letra o dígito",
   "shortcutsPressNew": "Pulsa la nueva combinación de teclas",
   "defaultHandlerChooseInSettings": "Elige SoftphonePro para SIP, TEL y CALLTO en Aplicaciones predeterminadas",

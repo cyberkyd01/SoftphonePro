@@ -26,7 +26,7 @@ final List<SettingsEntry> kSettingsEntries = [
   SettingsEntry('network', (l) => l.settingsEntryNetwork, Icons.lan_rounded, () => const NetworkSection(), subtitle: (l) => l.settingsEntryNetworkSub),
   SettingsEntry('recording', (l) => l.settingsEntryRecording, Icons.fiber_manual_record_rounded, () => const RecordingSection()),
   SettingsEntry('notifications', (l) => l.settingsEntryNotifications, Icons.notifications_rounded, () => const NotificationsSection()),
-  if (hotkeysSupported)
+  if (shortcutsSectionSupported)
     SettingsEntry('shortcuts', (l) => l.settingsEntryShortcuts, Icons.keyboard_rounded, () => const ShortcutsSection(), subtitle: (l) => l.settingsEntryShortcutsSub),
   SettingsEntry('appearance', (l) => l.settingsEntryAppearance, Icons.palette_rounded, () => const AppearanceSection()),
   SettingsEntry('privacy', (l) => l.settingsEntryPrivacy, Icons.shield_rounded, () => const PrivacySection()),

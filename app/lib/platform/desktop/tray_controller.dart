@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
 
+import 'linux_session.dart';
+
 /// Platform independent description of a tray menu entry.
 class TrayMenuEntry {
   const TrayMenuEntry(
@@ -29,13 +31,31 @@ class TrayMenuEntry {
   final bool separator;
 }
 
-/// System tray (Windows) / menu bar (macOS) icon with a context menu, a
-/// tooltip and an alert state (flashing while ringing, steady for missed
-/// calls / unread messages).
+/// System tray (Windows) / menu bar (macOS) / AppIndicator (Linux) icon with
+/// a context menu, a tooltip and an alert state (flashing while ringing,
+/// steady for missed calls / unread messages).
+///
+/// Linux: AppIndicator gives no click events (a click opens the menu, which
+/// therefore carries a Show / Hide item) and only shows up when a
+/// StatusNotifierItem host runs, so [init] probes for one first.
 class TrayController with TrayListener {
+  TrayController({bool? isLinux, Future<bool> Function()? linuxHostCheck})
+    : _linux = isLinux ?? (!kIsWeb && Platform.isLinux),
+      _mac = isLinux == true ? false : (!kIsWeb && Platform.isMacOS),
+      _hostCheck = linuxHostCheck;
+
   static const _iconWin = 'assets/branding/tray_icon.ico';
   static const _iconWinAlert = 'assets/branding/tray_icon_alert.ico';
   static const _iconMac = 'assets/branding/tray_mac_template.png';
+  static const _iconLinux = 'assets/branding/tray_linux.png';
+  static const _iconLinuxAlert = 'assets/branding/tray_linux_alert.png';
+
+  final bool _linux;
+  final bool _mac;
+  final Future<bool> Function()? _hostCheck;
+
+  /// Asset used for the tray icon on Linux (AppIndicator needs PNG / SVG).
+  static String linuxIcon({required bool alert}) => alert ? _iconLinuxAlert : _iconLinux;
 
   bool _ready = false;
   bool get ready => _ready;
@@ -54,12 +74,22 @@ class TrayController with TrayListener {
 
   /// Creates the tray icon. Returns false if the platform refuses (the app
   /// then must not hide its window).
+  ///
+  /// Linux: false without a StatusNotifierWatcher (e.g. stock GNOME), checked
+  /// [linuxHostAttempts] times one second apart (use more at login, when the
+  /// panel may still be starting).
   Future<bool> init({
     required void Function(String key) onMenu,
     required VoidCallback onToggleWindow,
+    int linuxHostAttempts = 1,
   }) async {
     _onMenu = onMenu;
     _onToggleWindow = onToggleWindow;
+    if (_linux && !await waitForTrayHost(check: _hostCheck, attempts: linuxHostAttempts)) {
+      debugPrint('tray unavailable: no StatusNotifierWatcher on the session bus');
+      _ready = false;
+      return false;
+    }
     try {
       trayManager.addListener(this);
       await _applyIcon(force: true);
@@ -108,7 +138,7 @@ class TrayController with TrayListener {
 
   Future<void> _applyIcon({bool force = false}) async {
     try {
-      if (Platform.isMacOS) {
+      if (_mac) {
         if (_lastIcon != _iconMac || force) {
           _lastIcon = _iconMac;
           await trayManager.setIcon(_iconMac, isTemplate: true);
@@ -121,7 +151,7 @@ class TrayController with TrayListener {
           await trayManager.setTitle(title);
         }
       } else {
-        final icon = _alert ? _iconWinAlert : _iconWin;
+        final icon = _linux ? linuxIcon(alert: _alert) : (_alert ? _iconWinAlert : _iconWin);
         if (icon != _lastIcon || force) {
           _lastIcon = icon;
           await trayManager.setIcon(icon);
@@ -179,7 +209,7 @@ class TrayController with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    if (Platform.isMacOS) {
+    if (_mac) {
       unawaited(trayManager.popUpContextMenu());
     } else {
       _onToggleWindow?.call();

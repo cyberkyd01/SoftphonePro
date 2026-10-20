@@ -1744,6 +1744,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get shortcutsEndCall => 'Завершить звонок';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Глобальные сочетания клавиш работают только в сеансе X11. Wayland не позволяет приложениям перехватывать клавиши во всей системе.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Добавьте к букве или цифре Ctrl, Alt, Shift или $key';
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,9 +9,20 @@ import '../../l10n/l10n.dart';
 import '../../services/settings_controller.dart';
 import '../../ui/widgets/settings_tiles.dart';
 import 'hotkeys.dart';
+import 'linux_session.dart';
 
-/// Global hotkeys are implemented for macOS and Windows.
-bool get hotkeysSupported => Platform.isMacOS || Platform.isWindows;
+/// Global hotkeys: macOS, Windows and Linux X11 sessions (keybinder cannot
+/// grab keys under Wayland).
+bool get hotkeysSupported => !kIsWeb && hotkeysSupportedOn(
+  isMacOS: Platform.isMacOS,
+  isWindows: Platform.isWindows,
+  isLinux: Platform.isLinux,
+  env: Platform.environment,
+);
+
+/// The Shortcuts page exists wherever the desktop shell runs (media keys and
+/// the in-app reference apply even when global hotkeys do not).
+bool get shortcutsSectionSupported => !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
 /// Settings > Shortcuts: system-wide hotkeys (work while the app is in the
 /// background) plus a reference of the in-app shortcuts.
@@ -41,6 +53,18 @@ class ShortcutsSection extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
+        if (!hotkeysSupported)
+          SettingsGroup(
+            title: l.shortcutsGlobalTitle,
+            children: [
+              ListTile(
+                key: const Key('hotkeys-need-x11'),
+                leading: const Icon(Icons.info_outline_rounded),
+                title: Text(l.shortcutsNeedX11),
+              ),
+            ],
+          )
+        else
         SettingsGroup(
           title: l.shortcutsGlobalTitle,
           footer: l.shortcutsGlobalFooter,
@@ -49,7 +73,7 @@ class ShortcutsSection extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.keyboard_rounded),
                 title: Text(a.label(l)),
-                subtitle: Text(bindings[a]?.display(mac: Platform.isMacOS) ?? l.commonNotSet, textDirection: bindings[a] == null ? null : TextDirection.ltr),
+                subtitle: Text(bindings[a]?.display(mac: Platform.isMacOS, linux: Platform.isLinux) ?? l.commonNotSet, textDirection: bindings[a] == null ? null : TextDirection.ltr),
                 onTap: () => edit(a),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -140,7 +164,7 @@ class _CaptureDialogState extends State<_CaptureDialog> {
     final b = HotkeyBinding.fromKeyEvent(e, pressed: HardwareKeyboard.instance.logicalKeysPressed);
     if (b == null) return KeyEventResult.handled; // a modifier alone, or an unsupported key
     if (HotkeyBinding.parse(b.serialize()) == null) {
-      setState(() => _hint = context.l10n.shortcutsNeedModifier(Platform.isMacOS ? 'Cmd' : 'Win'));
+      setState(() => _hint = context.l10n.shortcutsNeedModifier(Platform.isMacOS ? 'Cmd' : (Platform.isLinux ? 'Super' : 'Win')));
       return KeyEventResult.handled;
     }
     Navigator.of(context).pop(b);

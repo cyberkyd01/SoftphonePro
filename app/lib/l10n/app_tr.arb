@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "Beklemeye al / sürdür",
   "shortcutsTransfer": "Aktar",
   "shortcutsEndCall": "Aramayı bitir",
+  "shortcutsNeedX11": "Genel kısayollar için X11 oturumu gerekir. Wayland, uygulamaların tuşları sistem genelinde yakalamasına izin vermez.",
   "shortcutsNeedModifier": "Bir harfe veya rakama Ctrl, Alt, Shift ya da {key} ekleyin",
   "shortcutsPressNew": "Yeni tuş kombinasyonuna basın",
   "defaultHandlerChooseInSettings": "Varsayılan uygulamalarda SIP, TEL ve CALLTO için SoftphonePro''yu seçin",

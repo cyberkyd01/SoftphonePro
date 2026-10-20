@@ -1735,6 +1735,10 @@ class AppLocalizationsIt extends AppLocalizations {
   String get shortcutsEndCall => 'Termina chiamata';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Le scorciatoie globali richiedono una sessione X11. Wayland non consente alle app di intercettare i tasti a livello di sistema.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Aggiungi Ctrl, Alt, Maiusc o $key a una lettera o cifra';
   }

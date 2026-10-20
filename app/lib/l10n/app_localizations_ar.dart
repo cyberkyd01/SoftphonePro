@@ -1736,6 +1736,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shortcutsEndCall => 'إنهاء المكالمة';
 
   @override
+  String get shortcutsNeedX11 =>
+      'تتطلب الاختصارات العامة جلسة X11. لا يسمح Wayland للتطبيقات بالتقاط المفاتيح على مستوى النظام.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'أضف Ctrl أو Alt أو Shift أو $key إلى حرف أو رقم';
   }

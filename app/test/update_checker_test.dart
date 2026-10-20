@@ -105,6 +105,55 @@ void main() {
     });
   });
 
+  group('Linux release assets', () {
+    const v = SemVer(1, 1, 0);
+    List<Map<String, String>> assets(Iterable<String> names) => [
+      for (final n in names) {'name': n, 'browser_download_url': 'https://github.com/x/releases/download/v1.1.0/$n'},
+    ];
+    final all = assets([
+      'SoftphonePro-1.1.0-linux-amd64.deb',
+      'SoftphonePro-1.1.0-linux-arm64.deb',
+      'SoftphonePro-1.1.0-linux-amd64.tar.gz',
+      'SoftphonePro-1.1.0-linux-arm64.tar.gz',
+      'SoftphonePro-1.1.0-windows-x64.zip',
+    ]);
+    String? pick(Object? a, {String? arch = 'amd64', bool deb = true, bool linux = true}) =>
+        pickReleaseAsset(a, v, UpdatePlatform(isLinux: linux, arch: arch, installedFromDeb: deb))?.split('/').last;
+
+    test('.deb install gets the .deb for its architecture', () {
+      expect(pick(all), 'SoftphonePro-1.1.0-linux-amd64.deb');
+      expect(pick(all, arch: 'arm64'), 'SoftphonePro-1.1.0-linux-arm64.deb');
+    });
+    test('a bundle outside /opt/softphonepro prefers the tarball', () {
+      expect(pick(all, deb: false), 'SoftphonePro-1.1.0-linux-amd64.tar.gz');
+      expect(pick(all, arch: 'arm64', deb: false), 'SoftphonePro-1.1.0-linux-arm64.tar.gz');
+    });
+    test('falls back to the other package, then to the release page', () {
+      expect(pick(assets(['SoftphonePro-1.1.0-linux-amd64.tar.gz'])), 'SoftphonePro-1.1.0-linux-amd64.tar.gz');
+      expect(pick(assets(['SoftphonePro-1.1.0-linux-amd64.deb']), deb: false), 'SoftphonePro-1.1.0-linux-amd64.deb');
+      expect(pick(assets(['SoftphonePro-1.1.0-linux-arm64.deb'])), isNull); // other arch
+      expect(pick(const []), isNull);
+      expect(pick(null), isNull);
+      expect(pick(all, arch: null), isNull); // unknown architecture
+      expect(pick(all, linux: false), isNull); // other OS
+      expect(pick([{'name': 'SoftphonePro-1.1.0-linux-amd64.deb', 'browser_download_url': 'http://insecure/x'}]), isNull);
+    });
+    test('checkForUpdate puts the asset on the ReleaseInfo; the page stays the url', () async {
+      final body = {...release('v1.1.0'), 'assets': all};
+      final r = await checkForUpdate(
+        client: replying(200, body),
+        current: const SemVer(1, 0, 0),
+        platform: const UpdatePlatform(isLinux: true, arch: 'arm64', installedFromDeb: true),
+      );
+      expect(r.release!.assetUrl, endsWith('SoftphonePro-1.1.0-linux-arm64.deb'));
+      expect(r.release!.downloadUrl, r.release!.assetUrl);
+      expect(r.release!.url, startsWith('https://github.com/cyberkyd01/SoftphonePro/releases/tag/'));
+      final none = await checkForUpdate(client: replying(200, body), current: const SemVer(1, 0, 0), platform: UpdatePlatform.none);
+      expect(none.release!.assetUrl, isNull);
+      expect(none.release!.downloadUrl, none.release!.url);
+    });
+  });
+
   group('UpdateController', () {
     test('weekly schedule, opt-out and skip version', () async {
       final log = <Uri>[];

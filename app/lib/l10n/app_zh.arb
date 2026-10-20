@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "保持/恢复通话",
   "shortcutsTransfer": "转接",
   "shortcutsEndCall": "结束通话",
+  "shortcutsNeedX11": "全局快捷键需要 X11 会话。Wayland 不允许应用在系统范围内捕获按键。",
   "shortcutsNeedModifier": "请在字母或数字上加 Ctrl、Alt、Shift 或 {key}",
   "shortcutsPressNew": "请按下新的组合键",
   "defaultHandlerChooseInSettings": "请在“默认应用”中为 SIP、TEL 和 CALLTO 选择 SoftphonePro",

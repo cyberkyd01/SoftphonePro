@@ -8,6 +8,8 @@ import 'launch_args.dart';
 /// The native side of desktop integration (`softphonepro/desktop`):
 ///  * macOS: URL (Apple) events and the login-item API (MainFlutterWindow.swift)
 ///  * Windows: command lines forwarded by a second launch (WM_COPYDATA)
+///  * Linux: the same protocol as Windows; the GTK runner forwards a second
+///    launch's argv (joined with newlines, `--show` when empty) as `onArgs`
 class DesktopChannel {
   DesktopChannel([MethodChannel? channel, bool? isMacOS])
     : _channel = channel ?? const MethodChannel('softphonepro/desktop'),
@@ -80,7 +82,8 @@ class DesktopChannel {
   /// they go through [parseLink] ONLY (sip/sips/tel/callto/softphonepro) and are
   /// never split into command-line flags: a URL can not become `--provision`.
   ///
-  /// Windows: the payload is the argv of a second launch (WM_COPYDATA) and is
+  /// Windows / Linux: the payload is the argv of a second launch (WM_COPYDATA /
+  /// the GTK runner's single-instance forwarding) and is
   /// parsed as a command line, so `--provision` / `--dial` are honoured. That
   /// is the same-user privilege level as launching the program yourself, which
   /// is acceptable (any process of this user can already run it with flags).

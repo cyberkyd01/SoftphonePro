@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "Attente / reprise",
   "shortcutsTransfer": "Transférer",
   "shortcutsEndCall": "Terminer l’appel",
+  "shortcutsNeedX11": "Les raccourcis globaux nécessitent une session X11. Wayland n'autorise pas les applications à capter les touches à l'échelle du système.",
   "shortcutsNeedModifier": "Ajoutez Ctrl, Alt, Maj ou {key} à une lettre ou un chiffre",
   "shortcutsPressNew": "Appuyez sur la nouvelle combinaison de touches",
   "defaultHandlerChooseInSettings": "Choisissez SoftphonePro pour SIP, TEL et CALLTO dans Applications par défaut",

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
@@ -8,7 +11,10 @@ import 'biometric_auth.dart';
 
 final appLockServiceProvider = Provider<AppLockService>((ref) => AppLockService(ref.watch(secretsStoreProvider)));
 
-final biometricAuthProvider = Provider<BiometricAuth>((ref) => LocalAuthBiometrics());
+/// Linux has no biometric plugin: PIN only.
+final biometricAuthProvider = Provider<BiometricAuth>(
+  (ref) => !kIsWeb && Platform.isLinux ? const NoBiometrics() : LocalAuthBiometrics(),
+);
 
 /// Whether the app is currently locked. Starts locked when the lock is on.
 class AppLockController extends Notifier<bool> {

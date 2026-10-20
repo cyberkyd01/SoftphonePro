@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "保留／再開",
   "shortcutsTransfer": "転送",
   "shortcutsEndCall": "通話を終了",
+  "shortcutsNeedX11": "グローバルショートカットにはX11セッションが必要です。Waylandではアプリがシステム全体でキーを取得することはできません。",
   "shortcutsNeedModifier": "文字または数字に Ctrl、Alt、Shift、{key} のいずれかを組み合わせてください",
   "shortcutsPressNew": "新しいキーの組み合わせを押してください",
   "defaultHandlerChooseInSettings": "既定のアプリで、SIP、TEL、CALLTOにSoftphoneProを選択してください",

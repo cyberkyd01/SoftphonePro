@@ -5,7 +5,9 @@ import 'package:local_notifier/local_notifier.dart';
 
 enum NotificationTap { body, answer, decline }
 
-/// Desktop notifications (macOS Notification Center, Windows toasts).
+/// Desktop notifications (macOS Notification Center, Windows toasts, Linux
+/// libnotify). libnotify reports action buttons but no body click, so Linux
+/// callers pass an `actionLabel` to make a plain notification actionable.
 class DesktopNotifier {
   bool _ready = false;
   final Map<String, LocalNotification> _incoming = {};
@@ -61,15 +63,22 @@ class DesktopNotifier {
     } catch (_) {}
   }
 
-  /// A plain notification; [onClick] runs when the body is clicked.
+  /// A plain notification; [onClick] runs when the body (or the optional
+  /// [actionLabel] button) is clicked.
   Future<void> show({
     required String title,
     required String body,
     required VoidCallback onClick,
+    String? actionLabel,
   }) async {
     if (!_ready) return;
-    final n = LocalNotification(title: title, body: body);
+    final n = LocalNotification(
+      title: title,
+      body: body,
+      actions: actionLabel == null ? null : [LocalNotificationAction(text: actionLabel)],
+    );
     n.onClick = onClick;
+    if (actionLabel != null) n.onClickAction = (_) => onClick();
     n.onClose = (_) => _alive.remove(n);
     _alive.add(n);
     await _show(n);

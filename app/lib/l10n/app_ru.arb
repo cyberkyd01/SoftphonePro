@@ -494,6 +494,7 @@
   "shortcutsHoldResume": "Удержание / продолжить",
   "shortcutsTransfer": "Перевод",
   "shortcutsEndCall": "Завершить звонок",
+  "shortcutsNeedX11": "Глобальные сочетания клавиш работают только в сеансе X11. Wayland не позволяет приложениям перехватывать клавиши во всей системе.",
   "shortcutsNeedModifier": "Добавьте к букве или цифре Ctrl, Alt, Shift или {key}",
   "shortcutsPressNew": "Нажмите новую комбинацию клавиш",
   "defaultHandlerChooseInSettings": "Выберите SoftphonePro для SIP, TEL и CALLTO в разделе «Приложения по умолчанию»",

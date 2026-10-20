@@ -1666,6 +1666,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shortcutsEndCall => '结束通话';
 
   @override
+  String get shortcutsNeedX11 => '全局快捷键需要 X11 会话。Wayland 不允许应用在系统范围内捕获按键。';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return '请在字母或数字上加 Ctrl、Alt、Shift 或 $key';
   }

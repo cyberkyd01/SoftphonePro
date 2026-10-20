@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 import 'dart:ui' show Locale;
 
@@ -88,10 +89,68 @@ class SemVer implements Comparable<SemVer> {
 }
 
 class ReleaseInfo {
-  const ReleaseInfo({required this.version, required this.url, this.notes = ''});
+  const ReleaseInfo({required this.version, required this.url, this.notes = '', this.assetUrl});
   final SemVer version;
+
+  /// The release page.
   final String url;
   final String notes;
+
+  /// Direct download of the matching package (Linux .deb / .tar.gz), if the
+  /// release has one for this machine.
+  final String? assetUrl;
+
+  /// What the "Download" button opens.
+  String get downloadUrl => assetUrl ?? url;
+}
+
+/// What the update checker needs to know about the machine to choose a
+/// download. Only Linux has per-machine assets today.
+class UpdatePlatform {
+  const UpdatePlatform({this.isLinux = false, this.arch, this.installedFromDeb = false});
+
+  /// `amd64` or `arm64` (the Debian names); null when unknown.
+  final String? arch;
+  final bool isLinux;
+
+  /// The running executable lives under [kDebInstallDir].
+  final bool installedFromDeb;
+
+  static const none = UpdatePlatform();
+
+  factory UpdatePlatform.current() {
+    if (kIsWeb || !Platform.isLinux) return none;
+    final abi = Abi.current();
+    return UpdatePlatform(
+      isLinux: true,
+      arch: abi == Abi.linuxX64 ? 'amd64' : (abi == Abi.linuxArm64 ? 'arm64' : null),
+      installedFromDeb: Platform.resolvedExecutable.startsWith(kDebInstallDir),
+    );
+  }
+}
+
+/// Where the .deb installs the bundle.
+const kDebInstallDir = '/opt/softphonepro/';
+
+/// The release asset to download on Linux: `SoftphonePro-<ver>-linux-<arch>.deb`
+/// for a .deb install, otherwise the matching `.tar.gz` (a .deb install falls
+/// back to the tarball when the release has no .deb, and the reverse). Null
+/// when nothing fits; the release page is used then.
+String? pickReleaseAsset(Object? assets, SemVer version, UpdatePlatform platform) {
+  if (!platform.isLinux || platform.arch == null || assets is! List) return null;
+  final byName = <String, String>{};
+  for (final a in assets) {
+    if (a is! Map) continue;
+    final name = a['name'], url = a['browser_download_url'];
+    if (name is String && url is String && url.startsWith('https://')) byName[name] = url;
+  }
+  final base = 'SoftphonePro-$version-linux-${platform.arch}';
+  final order = platform.installedFromDeb ? ['deb', 'tar.gz'] : ['tar.gz', 'deb'];
+  for (final ext in order) {
+    final u = byName['$base.$ext'];
+    if (u != null) return u;
+  }
+  return null;
 }
 
 enum UpdateOutcome { available, upToDate, rateLimited, failed }
@@ -113,6 +172,7 @@ Future<UpdateCheckResult> checkForUpdate({
   Duration timeout = const Duration(seconds: 10),
   Uri? endpoint,
   AppLocalizations? l10n,
+  UpdatePlatform? platform,
 }) async {
   final l = l10n ?? lookupAppLocalizations(const Locale('en'));
   try {
@@ -142,7 +202,12 @@ Future<UpdateCheckResult> checkForUpdate({
     if (v.compareTo(current) > 0) {
       return UpdateCheckResult(
         UpdateOutcome.available,
-        release: ReleaseInfo(version: v, url: url, notes: '${j['body'] ?? ''}'),
+        release: ReleaseInfo(
+          version: v,
+          url: url,
+          notes: '${j['body'] ?? ''}',
+          assetUrl: pickReleaseAsset(j['assets'], v, platform ?? UpdatePlatform.current()),
+        ),
         answered: true,
       );
     }
@@ -176,6 +241,8 @@ final currentVersionProvider = Provider<Future<SemVer>>((ref) async {
 final updatesSupportedProvider = Provider<bool>(
   (ref) => !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux),
 );
+
+final updatePlatformProvider = Provider<UpdatePlatform>((ref) => UpdatePlatform.current());
 
 final urlOpenerProvider = Provider<Future<bool> Function(Uri)>(
   (ref) => (u) => launchUrl(u, mode: LaunchMode.externalApplication),
@@ -242,6 +309,7 @@ class UpdateController extends Notifier<UpdateState> {
       client: ref.read(updateHttpClientProvider),
       current: await ref.read(currentVersionProvider),
       l10n: ref.read(l10nProvider),
+      platform: ref.read(updatePlatformProvider),
     );
     final settings = ref.read(settingsProvider.notifier);
     if (res.answered) {

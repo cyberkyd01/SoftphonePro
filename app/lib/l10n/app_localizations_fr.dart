@@ -1748,6 +1748,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get shortcutsEndCall => 'Terminer l’appel';
 
   @override
+  String get shortcutsNeedX11 =>
+      'Les raccourcis globaux nécessitent une session X11. Wayland nautorise pas les applications à capter les touches à léchelle du système.';
+
+  @override
   String shortcutsNeedModifier(String key) {
     return 'Ajoutez Ctrl, Alt, Maj ou $key à une lettre ou un chiffre';
   }
