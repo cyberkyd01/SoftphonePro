@@ -4,6 +4,10 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-20
+
+A bug-fix release for Windows. See [docs/RELEASE_NOTES_v1.1.1.md](docs/RELEASE_NOTES_v1.1.1.md). Installs over 1.1.0 and keeps your accounts and settings.
+
 ### Fixed
 * Windows: the microphone and speaker pickers offered only "System default", and a device could not be chosen. Windows reports audio device names in the ANSI code page (for example the `®` in "Intel® Smart Sound"); the engine passed them on as they were, and the app discarded the device list because it was not valid UTF-8. The engine now converts device names to UTF-8, and it replaces any invalid UTF-8 in a reply or event so that a message from the engine is never lost.
 
@@ -140,6 +144,7 @@ Found by the independent reviews and the device runs before release:
 * Builds are not code-signed or notarised.
 * Hold music through Asterisk is the PBX's own; Ogg Opus recordings play in the app on Android and Linux only.
 
-[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/cyberkyd01/SoftphonePro/releases/tag/v1.0.0

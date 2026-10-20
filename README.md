@@ -144,7 +144,7 @@ The full list of about 115 features, each with its status and the test that back
 
 **More guides:**
 * [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
-* [Release notes for v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
+* [Release notes for v1.1.1](docs/RELEASE_NOTES_v1.1.1.md), [v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built
@@ -221,3 +221,11 @@ It's built on these open-source components. The complete list, with versions and
 | Mozilla CA bundle | MPL-2.0 |
 
 The in-app **Settings → About** page lists these notices, and its licence page lists the Flutter and Dart packages.
+
+---
+
+## ⭐ Support
+
+Please give stars and if possible Buy me a coffee (USDT-TRC20) - `TA216k3WgWTrKnUKxZrSDNGzSJj3eHtEcH`
+
+Telegram: [@Cyberkyd](https://t.me/Cyberkyd)
