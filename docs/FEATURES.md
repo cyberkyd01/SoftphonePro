@@ -1,17 +1,17 @@
 # SoftphonePro — Feature List and Status
 
-Status as of v1.0.0 (2026-10-19). Every status below is backed by the evidence in the last column. A claim that has no test is not marked ✅.
+Status as of v1.1.0 (2026-10-20). Every status below is backed by the evidence in the last column. A claim that has no test is not marked ✅.
 
 ## Summary
 
 | Status | Meaning | Rows |
 |---|---|---|
-| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **70** |
-| ◐ | Implemented, but only checked by hand or on a device, or only partly tested (the Evidence column says what is missing) | **34** |
-| ☐ | Not implemented, or deferred | **7** |
-| | Total rows | **111** |
+| ✅ | Implemented and covered by an automated test (named in the Evidence column) | **72** |
+| ◐ | Implemented, but only checked by hand or on a device, or only partly tested (the Evidence column says what is missing) | **36** |
+| ☐ | Not implemented, or deferred | **6** |
+| | Total rows | **114** |
 
-Not implemented: video calls (M8) and ZRTP (S6), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat, a Linux desktop app).
+Not implemented: video calls (M8) and ZRTP (S6), plus the items in the last table (push notifications, CardDAV/LDAP, visual voicemail, LAN group chat).
 
 How to read this list:
 
@@ -139,6 +139,8 @@ How to read this list:
 | L6 | Transfer or hand off **any external call** to a LAN device (relay bridge, or REFER when possible), blind or attended | P2 | C/D | ✅ | A: `lan/lan_handoff_test.dart` (relay, take back, REFER mode, attended relay, forward a ringing call, failure paths); `lan/lan_ui_test.dart` "hand-off offer dialog, then the transferred call is answered and labelled". Run only with fakes and the engine simulator; not run between two real devices. |
 | L7 | Call pull: take over a call that is active on another LAN device | P2 | D | ✅ | A: `lan/lan_handoff_test.dart` "call pull: peer lists active calls and pulls; owner relays automatically", "call pull is ignored unless the owner allowed it". |
 | L8 | LAN device presence (available, on a call, DND) | P2 | D | ✅ | L: `link_test.dart` "status update propagates". |
+| M11 | Musicbed: an MP3 or WAV file loops under your voice to everyone on your calls; own volume 0-200% (live), optional "Hear it myself" monitor with its own volume; keeps playing while muted, not sent to held calls, reaches all conference members, included in your side of recordings, pauses between calls | P2 | C/D | ✅ | N: `test_musicbed.py` (16 tests: start/stop/events, validation, replace, far end receives it while muted, MP3, held call and unhold, conference, IAX2, monitor, pause and position, recording, repeated start/stop); A: `audio/musicbed_test.dart` (controller: start, stop, replace, engine restart, live volume, errors, missing file), `audio/mixer_ui_test.dart` (musicbed switch, volume, "hear it myself", file picker, settings group, "Musicbed on" chip). Contract: ENGINE_API.md section 10. Not in the automation API. |
+| M12 | Live audio mixer: level meters and sliders for microphone, speaker and musicbed; input/output device pickers (audio route on phones); on the keypad screen, in calls and in Settings > Audio | P2 | C/D | ✅ | N: `test_musicbed.py` `test_levels_and_per_call_levels` (`media.levels`); A: `audio/mixer_ui_test.dart` (sliders reach the engine, semantics labels, device pickers, mobile route chips, meters repaint without rebuilding, golden images), `audio/mixer_layout_test.dart` (fits keypad and in-call screens at large text sizes and in Arabic), `audio/musicbed_test.dart` (meter maths, polling rate). Meter accuracy against real hardware was not measured. |
 
 ## UI / UX
 | ID | Feature | Pri | Layer | Status | Evidence |
@@ -164,6 +166,8 @@ How to read this list:
 | X6 | Desktop command line: `--dial <target>`, `--provision <file\|url>`, `--minimized`; single running instance | P1 | P | ✅ | A: `polish_a1_test.dart` "--dial places the call even with the setting off", "--provision <file> imports without a prompt", "CLI flags become local intents; links cannot forge them"; `link_dial_test.dart` "--dial at launch waits for the account to register"; `desktop_platform_test.dart` (forwarded command lines); macOS: QA_MACOS 1, 14, 15. The Windows single-instance code (`single_instance.cpp`) is not tested. |
 | X7 | Blocking engine-error screen with Retry / network settings / explicit "Use simulator" (no silent demo fallback) | P0 | D | ✅ | A: `polish_a1_test.dart` "blocking error with Retry / network settings / simulator", "Retry starts the engine again", "a library that cannot load still falls back to the demo engine". |
 | X8 | Update checker (desktop): weekly check of the GitHub latest release, banner with Release notes / Download / Skip this version, opt-out and Check now in Settings > About | P2 | D | ✅ | A: `update_checker_test.dart` (semver and pre-release ordering, rate limit, 404, timeout, junk replies, weekly schedule, opt-out, skip version, banner opens the release page, hidden on mobile) with a mocked HTTP client. Nothing is downloaded or installed. |
+| X9 | Linux app: GTK runner and engine plugin; `.deb` and portable `.tar.gz` for amd64 and arm64 (Ubuntu 22.04+, Debian 12+, Raspberry Pi OS 64-bit Bookworm); audio through ALSA | P1 | P | ◐ | Packaging and runner: `app/linux/`, `app/linux/packaging/`; CI builds the engine for Linux x86_64 and runs the engine tests there. Missing: no automated test of the packages or the GTK runner, and no hands-on run on a Raspberry Pi is recorded in a QA report. Not on Linux: QR camera scanning, biometric unlock, mDNS discovery (multicast is used), system contacts. |
+| X10 | Linux desktop integration: tray icon (StatusNotifierItem), Answer/Decline notifications, `sip:`/`tel:` link handling through `xdg-mime`, single instance, start at login, headset/media keys through MPRIS, global shortcuts on X11 only, passwords in the Secret Service keyring with an encrypted-file fallback | P1 | P | ◐ | A: `linux_integration_test.dart` (X11 vs Wayland detection, tray host availability and retries, MPRIS properties and transport calls, default handler through `xdg-mime` and desktop-file quoting, keystore fallback and keyring timeout) with fake backends. Missing: no test runs a real tray host, session bus, xdg-mime or keyring. |
 
 ## Automation and integrations
 | ID | Feature | Pri | Layer | Status | Evidence |
@@ -186,7 +190,6 @@ How to read this list:
 | Z2 | CardDAV / LDAP / Outlook contacts | P1 | D | ☐ | Not implemented (no code in `app/lib`). |
 | Z4 | Visual voicemail | P2 | D | ☐ | Not implemented; only the MWI indicator and voicemail dial exist (P4). |
 | Z5 | Group chat on LAN Link | P2 | D | ☐ | Not implemented; LAN chat is one to one (L3). |
-| Z7 | Linux desktop app | P2 | P | ☐ | Not a target: there is no `app/linux` runner. Linux is built only to run the engine tests in CI. |
 
 ## Compared with Zoiper Premium, Bria, Groundwire, MicroSIP and Linphone
 

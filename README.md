@@ -4,7 +4,7 @@
 
 # SoftphonePro
 
-**A free, open-source softphone for Windows, macOS, Android and iOS, with many of the features of paid apps like Zoiper Premium and Bria.**
+**A free, open-source softphone for Windows, macOS, Linux, Android and iOS, with many of the features of paid apps like Zoiper Premium and Bria.**
 
 Run as many SIP/IAX2 accounts as you need at the same time · Encrypted calls · Hand calls to other devices on your network · No ads, no tracking, no subscription
 
@@ -30,6 +30,8 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 |---|---|---|
 | **Windows** 10/11 (x64) | `SoftphonePro-Setup-<ver>-x64.exe` (installer) or `SoftphonePro-<ver>-windows-x64-portable.zip` | The installer registers `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links. The build isn't code-signed yet, so if SmartScreen appears choose **More info → Run anyway**. |
 | **macOS** 11+ (Apple Silicon and Intel) | `SoftphonePro-<ver>-macOS.dmg` | Drag the app to Applications. The build isn't notarised, so open it the first time with **right-click → Open**, or run `xattr -dr com.apple.quarantine /Applications/SoftphonePro.app`. |
+| **Linux** (Ubuntu 22.04+, Debian 12+, Raspberry Pi OS 64-bit Bookworm) on PCs (amd64) | `SoftphonePro-<ver>-linux-amd64.deb` or `SoftphonePro-<ver>-linux-amd64.tar.gz` | Install the `.deb` with `sudo apt install ./SoftphonePro-<ver>-linux-amd64.deb`, or open it in your software centre. The tarball runs in place with `./softphonepro`. See [Install on Linux / Raspberry Pi](docs/USER_GUIDE.md#install-on-linux--raspberry-pi). |
+| **Linux** on ARM (arm64): Raspberry Pi 4/5 (also Pi 3) with 64-bit Raspberry Pi OS, ARM Ubuntu and Debian | `SoftphonePro-<ver>-linux-arm64.deb` or `SoftphonePro-<ver>-linux-arm64.tar.gz` | Same steps as above. 32-bit Raspberry Pi OS is not supported. |
 | **Android** 7+ | `SoftphonePro-<ver>-android-universal.apk` (or a per-ABI `…-android-<abi>.apk`) | Allow "Install unknown apps" for your browser or file manager. |
 | **iOS** 15.5+ | `SoftphonePro-<ver>-unsigned.ipa` | Install it with AltStore or Sideloadly. The App Store doesn't allow GPL apps. |
 | **Browser** (Chrome, Edge, Brave, Firefox) | `SoftphonePro-ClickToDial-*.zip` | Click any phone number on a web page to call it with SoftphonePro. See [extensions/browser](extensions/browser/README.md). |
@@ -52,6 +54,8 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * **Voice isolation:** AI noise cancellation (RNNoise) that runs on your device. It cleans up your microphone and, separately, the incoming audio from noisy callers, with adjustable strength and a live speech meter.
 * Echo cancellation (WebRTC AEC3 where available, otherwise Speex), noise suppression and a jitter buffer you can tune.
 * Hold, mute, call waiting and swap.
+* **Musicbed:** loop an MP3 or WAV file under your voice to everyone on your calls, with its own volume (0-200%) and an optional "Hear it myself" monitor. It keeps playing while you are muted.
+* **Live audio mixer:** level bars and sliders for your microphone, speaker and musicbed, with input and output device pickers, on the keypad screen, during calls and in Settings > Audio.
 * **Hold music** from a built-in track or your own file, and **announcements**: a message played when a call connects, a notice before recording starts, and a notice played to the caller before a transfer.
 * An **audio library** for those files: import WAV or MP3, or record your own.
 * **Blind and attended transfer**, and a **local N-way conference** with per-person volume.
@@ -78,7 +82,7 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * Presence, a **Busy Lamp Field** board, and voicemail (MWI) badges with one-tap voicemail.
 
 **LAN Link: features other apps don't have.** SoftphonePro devices on the same network can:
-* **Find each other automatically** (mDNS/Bonjour).
+* **Find each other automatically** (mDNS/Bonjour, plus multicast beacons, which are all Linux uses).
 * **Pair securely** after you compare a 6-digit code on both screens. The link is end-to-end encrypted (X25519 + AES-256-GCM).
 * **Hand off any external call to another device**, blind or after talking first. If the other device can be reached through your PBX, a SIP REFER is used. Otherwise the call is relayed through the device that holds it.
 * **Pull a call** that's active on another device to your own.
@@ -92,12 +96,12 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * Audio tests, a log viewer, and a support bundle you can export.
 
 **Integrations**
-* **Local automation API** (Windows/macOS, off by default): place and control calls, receive call events and send messages from a CRM, helpdesk or script, over HTTP on `127.0.0.1` with a token. It's the free counterpart of Bria's paid Desktop API. See [docs/AUTOMATION_API.md](docs/AUTOMATION_API.md).
+* **Local automation API** (Windows, macOS and Linux; off by default): place and control calls, receive call events and send messages from a CRM, helpdesk or script, over HTTP on `127.0.0.1` with a token. It's the free counterpart of Bria's paid Desktop API. See [docs/AUTOMATION_API.md](docs/AUTOMATION_API.md).
 * **Browser extension** for Chrome, Edge, Brave and Firefox: click any phone number on a web page to call it with SoftphonePro. See [extensions/browser](extensions/browser/README.md).
 * `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links, and `--dial` / `--provision` on the desktop command line.
 
 **Platform integration**
-* **Windows/macOS:**
+* **Windows/macOS/Linux:**
   * a tray or menu-bar icon;
   * notifications with Answer/Decline;
   * global hotkeys;
@@ -106,6 +110,8 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
   * the option to make SoftphonePro your default app for `sip:`/`tel:` links;
   * the headset or media play/pause key answers and hangs up calls;
   * an update checker (opt-out) that tells you when a new release is on GitHub.
+  * On Linux the tray icon needs a desktop with a StatusNotifierItem host, and global hotkeys work on X11 sessions only (see the [user guide](docs/USER_GUIDE.md#10-platform-notes)).
+* **Linux:** also media-key support through MPRIS, `sip:`/`tel:` link handling through `xdg-mime`, and passwords in the Secret Service keyring (GNOME Keyring or KWallet).
 * **Android:**
   * a foreground service keeps your accounts registered;
   * full-screen incoming calls;
@@ -117,9 +123,9 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
   * T9 search in the dialer;
   * light and dark themes with an adaptive layout for phones, tablets and desktops.
 * **13 languages:** English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية (right-to-left), 简体中文 and 日本語. The language follows the system by default and can be changed in Settings > Appearance > Language. Log and trace contents, SIP tokens and codec names stay in English.
-* **Phones and Mac:** import contacts from the device, and scan QR codes with the camera (other platforms can paste the code).
+* **Phones and Mac:** import contacts from the device, and scan QR codes with the camera (Windows and Linux can paste the code).
 
-The full list of about 110 features, each with its status and the test that backs it, is in [docs/FEATURES.md](docs/FEATURES.md). Some features are only partly tested (marked ◐ there); read [Known limitations](#known-limitations) before you rely on them.
+The full list of about 115 features, each with its status and the test that backs it, is in [docs/FEATURES.md](docs/FEATURES.md). Some features are only partly tested (marked ◐ there); read [Known limitations](#known-limitations) before you rely on them.
 
 ## Screenshots
 
@@ -138,14 +144,14 @@ The full list of about 110 features, each with its status and the test that back
 
 **More guides:**
 * [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
-* [Release notes for v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
+* [Release notes for v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built
 
-* **One UI for all four platforms**, written in Flutter and compiled to native code.
+* **One UI for all five platforms**, written in Flutter and compiled to native code.
 * **One calling engine** written in C (`spcore`, built on [PJSIP 2.17](https://www.pjsip.org/)). Flutter talks to it through a small JSON API (FFI).
-* **Thin native layers** for the rest: Kotlin for Android (foreground service, Telecom), Swift for iOS (CallKit) and macOS, and C++ for Windows.
+* **Thin native layers** for the rest: Kotlin for Android (foreground service, Telecom), Swift for iOS (CallKit) and macOS, and C++ for Windows, and a GTK runner for Linux.
 
 Details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the engine contract is in [docs/ENGINE_API.md](docs/ENGINE_API.md).
 
@@ -162,7 +168,7 @@ tests/sipserver         Asterisk test PBX (Docker) used by the integration tests
 ## Quality and testing
 
 Every push goes through CI on GitHub Actions:
-* builds for Windows, macOS, iOS and Android, and Linux for the engine tests;
+* builds for Windows, macOS, Linux (amd64 and arm64), iOS and Android;
 * the engine test suite (over 200 tests) against a real Asterisk PBX: SIP, IAX2, WS/WSS, SRTP, transfers, conferences, BLF, MWI, recording, voice isolation, mutual TLS and more;
 * Dart tests of the engine API (over 60) and of the LAN Link protocol (over 50, including fuzzing and stress tests);
 * over 360 Flutter unit and widget tests, including golden-image tests;
@@ -179,6 +185,11 @@ Device testing is narrower than the automated tests: the macOS app was driven en
 * **Translations** are machine-assisted, so some wording may sound unnatural. Corrections are welcome in `app/lib/l10n/`.
 * **Recording files** are not encrypted, even when the database is.
 * **Unsigned builds:** builds aren't code-signed or notarised yet, so expect a one-time security prompt on Windows and macOS, and sideloading on iOS.
+* **Linux:**
+  * Supported on 64-bit systems only (Ubuntu 22.04+, Debian 12+, Raspberry Pi OS Bookworm 64-bit). 32-bit Raspberry Pi OS is not supported, because Flutter has no 32-bit ARM Linux build.
+  * There is no QR camera scanning (paste the code), no biometric app unlock (PIN only), no mDNS discovery (LAN Link uses its multicast discovery, which still finds the other platforms) and no system contacts import.
+  * The tray icon needs a StatusNotifierItem host (stock GNOME needs the AppIndicator extension); without one, closing the window quits. Global shortcuts work on X11, not Wayland.
+* **Musicbed** cannot be controlled through the automation API, and calls on hold hear the hold music instead of it.
 * **Hold music through Asterisk:** when the PBX answers a hold request itself, the caller hears the PBX's own music, not yours. Your music plays on direct calls and on PBXs that relay the held party's audio.
 * **Ogg Opus recordings** play inside the app on Android and Linux only. On iPhone, Mac and Windows use *Open with…* or export the file.
 * **Partly tested areas:** see the ◐ rows in [docs/FEATURES.md](docs/FEATURES.md), for example STUN/TURN against real servers, IPv6, session timers, 100rel, SIP Outbound, camera QR scanning, device contacts, CallKit and the Android Telecom integration.
