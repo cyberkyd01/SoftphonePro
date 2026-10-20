@@ -19,6 +19,9 @@ done
 [ -n "$ARCH" ] && [ -n "$VERSION" ] && [ -n "$OUT" ] || die "usage: make_deb.sh --bundle DIR --arch ARCH --version V --out DIR"
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 DEB="$OUT/SoftphonePro-$VERSION-linux-$ARCH.deb"
+# Debian pre-release ordering: 1.2.0-dev.5 sorts after 1.2.0 unless written 1.2.0~dev.5.
+TILDE='~'
+DEB_VERSION="${VERSION/-/$TILDE}"
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 ROOT="$WORK/root"
@@ -68,7 +71,7 @@ License: GPL-3+
 EOC
 gzip -9n -c "$REPO_DIR/THIRD_PARTY_NOTICES.md" > "$DOC/THIRD_PARTY_NOTICES.md.gz"
 {
-  echo "softphonepro ($VERSION) unstable; urgency=medium"
+  echo "softphonepro ($DEB_VERSION) unstable; urgency=medium"
   echo
   echo "  * SoftphonePro $VERSION for Linux."
   echo "  * Release notes: https://github.com/cyberkyd01/SoftphonePro/releases"
@@ -139,7 +142,7 @@ RECOMMENDS="zenity | kdialog, gnome-keyring | kwalletmanager, xdg-utils, libasou
 INSTALLED_KB="$(du -sk --apparent-size "$ROOT" | cut -f1)"
 cat > "$ROOT/DEBIAN/control" <<EOC
 Package: softphonepro
-Version: $VERSION
+Version: $DEB_VERSION
 Architecture: $ARCH
 Maintainer: $MAINTAINER
 Installed-Size: $INSTALLED_KB

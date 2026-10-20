@@ -390,6 +390,145 @@ jobs:
           path: dist/*.dmg
 
   # ---------------------------------------------------------------------------------------------
+  # Linux desktop app (.deb + .tar.gz), built natively on each architecture. Ubuntu 22.04 (glibc 2.35) is the
+  # baseline so the packages install on Ubuntu 22.04/24.04, Debian 12/13 and Raspberry Pi OS Bookworm.
+  # ubuntu-22.04-arm = GitHub's free arm64 hosted runner (public repositories).
+  linux:
+    name: linux-${{ matrix.arch }}
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-22.04, native: x86_64 }
+          - { arch: arm64, runner: ubuntu-22.04-arm, native: arm64 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      BUILD_NAME: ${{ needs.meta.outputs.build_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies (same list as native/scripts/docker/Dockerfile.linux-app)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang pkg-config ninja-build perl curl ca-certificates git file unzip xz-utils zip \
+            python3 python3-pip rsync patchelf \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libasound2-dev libsecret-1-dev \
+            libayatana-appindicator3-dev libnotify-dev libkeybinder-3.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev uuid-dev \
+            dpkg-dev fakeroot lintian desktop-file-utils appstream imagemagick librsvg2-bin \
+            xvfb dbus-x11 jq
+      - name: CMake >= 3.28 (pjproject 2.17 needs it; the image may ship an older one)
+        run: |
+          if ! cmake --version 2>/dev/null | head -1 | awk '{split($3,v,"."); exit !(v[1]>3 || (v[1]==3 && v[2]>=28))}'; then
+            python3 -m pip install --user --no-cache-dir 'cmake==3.31.*'
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          cmake --version
+      - name: Cache native dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            native/out/linux-${{ matrix.native }}
+            native/deps/src
+          key: deps-linux-app-${{ matrix.arch }}-${{ hashFiles('native/scripts/**', 'native/config/**', '!native/scripts/build_spcore*', '!native/scripts/package/**') }}
+      # amd64: the same action as every other job.
+      - uses: subosito/flutter-action@v2
+        if: matrix.arch == 'amd64'
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # arm64: flutter-action only installs the x64 Linux SDK archive (Flutter publishes no arm64 Linux archive;
+      # an arm64 host builds the SDK's engine artifacts on first use), so use a pinned git checkout instead.
+      - name: Flutter SDK cache (arm64)
+        if: matrix.arch == 'arm64'
+        id: flutter-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/flutter-sdk
+          key: flutter-sdk-linux-arm64-${{ env.FLUTTER_VERSION }}
+      - name: Flutter SDK (arm64, git checkout)
+        if: matrix.arch == 'arm64'
+        run: |
+          if [ ! -x "$HOME/flutter-sdk/bin/flutter" ]; then
+            git clone --depth 1 -b "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter-sdk"
+          fi
+          echo "$HOME/flutter-sdk/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/flutter-sdk/bin:$PATH"
+          git config --global --add safe.directory '*'
+          flutter config --no-analytics --enable-linux-desktop
+          flutter precache --linux
+      - name: Flutter version
+        run: flutter --version
+      - name: Build packages (.deb + .tar.gz)
+        run: app/linux/packaging/build_linux.sh --arch ${{ matrix.arch }} --version "$VERSION" --build-number "$GITHUB_RUN_NUMBER" --out dist
+      - name: Package list
+        run: ls -la dist && dpkg-deb -I dist/*.deb | head -30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages-${{ matrix.arch }}
+          path: |
+            dist/SoftphonePro-*-linux-${{ matrix.arch }}.deb
+            dist/SoftphonePro-*-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+      # ---- install tests: clean containers of this runner's architecture ----------------------------------
+      - name: "Install test (debian:12, ubuntu:22.04, ubuntu:24.04, debian:13)"
+        shell: bash
+        run: |
+          rc=0
+          for img in debian:12 ubuntu:22.04 ubuntu:24.04 debian:13; do
+            echo "::group::$img"
+            docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/tests/smoke:/smoke:ro" "$img" bash /smoke/linux_install_check.sh 2>&1 | tee -a install-check.log || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      # ---- runtime smoke ------------------------------------------------------------------------------------
+      - name: Install the .deb on the runner (lean, no Recommends)
+        run: sudo apt-get install -y --no-install-recommends ./dist/SoftphonePro-*-linux-${{ matrix.arch }}.deb
+      - name: Docker available for the test PBX?
+        id: docker
+        run: |
+          if docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Docker / docker compose is not available on this ${{ matrix.arch }} runner: the PBX part of the Linux smoke test is SKIPPED"
+          fi
+      - name: Start test PBX (Asterisk)
+        if: steps.docker.outputs.ok == 'true'
+        run: tests/sipserver/scripts/up.sh
+      - name: Smoke - provision, automation API, register, call + DTMF, single instance (Xvfb + private D-Bus session)
+        shell: bash
+        env:
+          NO_PBX: ${{ steps.docker.outputs.ok != 'true' && '--no-pbx' || '' }}
+        run: |
+          mkdir -p smoke-logs/linux
+          # NO_PBX is empty or a single flag, so it is deliberately unquoted
+          # shellcheck disable=SC2086
+          xvfb-run -a -s '-screen 0 1280x1024x24' dbus-run-session -- \
+            python3 tests/smoke/linux_smoke.py --out smoke-logs/linux --version "$BUILD_NAME" $NO_PBX 2>&1 | tee smoke-logs/linux/smoke.log
+          exit "${PIPESTATUS[0]}"
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p smoke-logs
+          cp install-check.log smoke-logs/ 2>/dev/null || true
+          docker logs softphonepro-pbx > smoke-logs/pbx.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-smoke-${{ matrix.arch }}
+          path: smoke-logs/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------------------------
   ios:
     needs: meta
     runs-on: macos-15

@@ -37,7 +37,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-          pattern: '{windows-artifacts,macos-dmg,android-apks,ios-ipa,browser-extension}'
+          pattern: '{windows-artifacts,macos-dmg,linux-packages-*,android-apks,ios-ipa,browser-extension}'
       - name: List release files
         run: ls -la dist
       - name: Release notes body
