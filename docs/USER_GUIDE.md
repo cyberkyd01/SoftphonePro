@@ -71,8 +71,10 @@ you want them gone. For the archive, delete the folder (and run
 
 **Good to know on Linux**
 
-* Audio goes through ALSA. On PulseAudio and PipeWire systems pick the
-  **default** device in **Settings → Audio → Devices**.
+* Audio goes through ALSA. The device pickers in **Settings → Audio → Devices**
+  (and the mixer) list ALSA devices such as **default**, **pulse** and
+  **pipewire**; **default** follows the system sound settings, so pick it on
+  PulseAudio and PipeWire systems unless you need a specific device.
 * Passwords are kept in the Secret Service keyring (GNOME Keyring or KWallet).
   If the system has no keyring, SoftphonePro stores them in an encrypted file
   instead.
@@ -605,8 +607,10 @@ SoftphonePro follows your system language by default. To change it, open **Setti
     Windows (see above).
   * **Global shortcuts** (**Settings → Shortcuts**) work on X11 sessions
     only. They are not available on Wayland.
-  * Audio uses ALSA. Pick the **default** device to reach PulseAudio or
-    PipeWire.
+  * Audio uses ALSA. The device pickers list ALSA devices such as
+    **default**, **pulse** and **pipewire**; **default** follows the
+    system sound settings (PulseAudio or PipeWire), so pick it unless you
+    need a specific device.
 * **macOS**
   * The first time you open the app, right-click it and choose **Open**
     (the build isn't notarised yet).

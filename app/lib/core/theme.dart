@@ -80,7 +80,42 @@ TextStyle tabular(TextStyle? base) => (base ?? const TextStyle()).copyWith(
   fontFeatures: const [FontFeature.tabularFigures()],
 );
 
+/// Families tried, in order, for glyphs Inter lacks (Arabic, Devanagari, CJK).
+///
+/// Flutter on Linux does not fall back to arbitrary installed fonts: only the
+/// families named in `fontFamilyFallback` are searched for a missing glyph, and
+/// Material's default list (Ubuntu, Cantarell, DejaVu Sans, Liberation Sans,
+/// Arial) covers Arabic via DejaVu but not Devanagari or CJK. A style that sets
+/// its own `fontFamily` and lands in a `DefaultTextStyle` that replaces the
+/// ambient one (the NavigationRail labels) has no list at all, so Arabic
+/// rendered as boxes there. Names that are not installed are skipped.
+const List<String> kFontFallback = [
+  'Noto Sans',
+  'Noto Sans Arabic',
+  'Noto Sans Arabic UI',
+  'Noto Naskh Arabic',
+  'Noto Sans Devanagari',
+  'Noto Sans Devanagari UI',
+  'Noto Sans CJK SC',
+  'Noto Sans CJK JP',
+  'Noto Sans SC',
+  'Noto Sans JP',
+  'Ubuntu',
+  'Cantarell',
+  'DejaVu Sans',
+  'Liberation Sans',
+  'Arial',
+];
+
 ThemeData buildTheme(Brightness brightness, {Color accent = const Color(0xFF3F51E0), bool compact = false}) {
+  final theme = _buildTheme(brightness, accent, compact);
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(fontFamilyFallback: kFontFallback),
+    primaryTextTheme: theme.primaryTextTheme.apply(fontFamilyFallback: kFontFallback),
+  );
+}
+
+ThemeData _buildTheme(Brightness brightness, Color accent, bool compact) {
   final dark = brightness == Brightness.dark;
   final base = ColorScheme.fromSeed(seedColor: accent, brightness: brightness);
   final scheme = base.copyWith(
@@ -125,6 +160,7 @@ ThemeData buildTheme(Brightness brightness, {Color accent = const Color(0xFF3F51
       centerTitle: false,
       titleTextStyle: TextStyle(
         fontFamily: 'Inter',
+        fontFamilyFallback: kFontFallback,
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: scheme.onSurface,
@@ -164,14 +200,14 @@ ThemeData buildTheme(Brightness brightness, {Color accent = const Color(0xFF3F51
       indicatorColor: scheme.primary.withValues(alpha: dark ? 0.22 : 0.12),
       height: 68,
       labelTextStyle: WidgetStatePropertyAll(
-        TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: scheme.onSurface),
+        TextStyle(fontFamily: 'Inter', fontFamilyFallback: kFontFallback, fontSize: 12, fontWeight: FontWeight.w500, color: scheme.onSurface),
       ),
     ),
     navigationRailTheme: NavigationRailThemeData(
       backgroundColor: colors.card,
       indicatorColor: scheme.primary.withValues(alpha: dark ? 0.22 : 0.12),
-      selectedLabelTextStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, color: scheme.primary),
-      unselectedLabelTextStyle: TextStyle(fontFamily: 'Inter', color: scheme.onSurfaceVariant),
+      selectedLabelTextStyle: TextStyle(fontFamily: 'Inter', fontFamilyFallback: kFontFallback, fontWeight: FontWeight.w600, color: scheme.primary),
+      unselectedLabelTextStyle: TextStyle(fontFamily: 'Inter', fontFamilyFallback: kFontFallback, color: scheme.onSurfaceVariant),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: colors.card,

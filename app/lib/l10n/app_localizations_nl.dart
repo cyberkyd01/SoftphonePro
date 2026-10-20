@@ -6848,7 +6848,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Uw sleutelhanger is vergrendeld, waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.';
+      'Uw sleutelhanger kon niet worden geopend (vergrendeld of reageert niet), waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.';
 
   @override
   String get mixerTitle => 'Audiomixer';

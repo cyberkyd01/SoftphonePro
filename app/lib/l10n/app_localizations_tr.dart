@@ -6803,7 +6803,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Anahtarlığınız kilitli olduğu için kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
+      'Anahtarlığınız açılamadı (kilitli veya yanıt vermiyor), bu yüzden kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
 
   @override
   String get mixerTitle => 'Ses karıştırıcı';

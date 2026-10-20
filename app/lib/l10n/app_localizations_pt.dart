@@ -6857,7 +6857,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'O seu chaveiro está bloqueado, por isso não foi possível ler as palavras-passe guardadas. Desbloqueie-o e reinicie o SoftphonePro.';
+      'Não foi possível abrir o seu chaveiro (bloqueado ou sem resposta), por isso não foi possível ler as palavras-passe guardadas. Desbloqueie-o e reinicie o SoftphonePro.';
 
   @override
   String get mixerTitle => 'Mesa de áudio';
@@ -13824,7 +13824,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get secretsKeyringLocked =>
-      'Seu chaveiro está bloqueado, então não foi possível ler as senhas salvas. Desbloqueie-o e reinicie o SoftphonePro.';
+      'Não foi possível abrir seu chaveiro (bloqueado ou sem resposta), então não foi possível ler as senhas salvas. Desbloqueie-o e reinicie o SoftphonePro.';
 
   @override
   String get mixerTitle => 'Mixer de áudio';

@@ -184,13 +184,6 @@ class MusicbedGroup extends ConsumerWidget {
             format: pct,
             onChanged: (v) => _set(ref, {'musicbedMonitorVolume': v}),
           ),
-        NavTile(
-          key: const Key('musicbed-library'),
-          icon: Icons.library_music_rounded,
-          title: l.settingsAudioAudioFiles,
-          subtitle: l.settingsAudioAudioFilesSub,
-          onTap: () => openAudioFiles(context),
-        ),
       ],
     );
   }

@@ -136,7 +136,7 @@ grep -E '^dpkg-shlibdeps: (error|warning: (cannot find|could not find))' "$WORK/
 [ -n "$SHLIBS" ] || die "dpkg-shlibdeps produced no dependencies"
 # Runtime-only: the GStreamer plugins (audioplayers: ringtones, Ogg playback) and EGL/GL, which Flutter's
 # GTK embedder loads through libepoxy with dlopen() (no ELF link, so dpkg-shlibdeps cannot see them).
-EXTRA_DEPENDS="gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libegl1, libgl1"
+EXTRA_DEPENDS="gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libegl1, libgl1, xdg-user-dirs"
 RECOMMENDS="zenity | kdialog, gnome-keyring | kwalletmanager, xdg-utils, libasound2-plugins | pipewire-alsa, libgl1-mesa-dri"
 
 INSTALLED_KB="$(du -sk --apparent-size "$ROOT" | cut -f1)"

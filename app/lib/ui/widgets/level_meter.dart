@@ -70,6 +70,11 @@ class LevelMeterPainter extends CustomPainter {
 
   Color colorAt(double f) => f >= highFrom ? high : (f >= midFrom ? mid : low);
 
+  // Reused between frames: painting allocates no per-frame objects besides the
+  // four segment paths, and issues four draw calls instead of one per segment.
+  static final _paint = Paint();
+  static final _offP = Path(), _lowP = Path(), _midP = Path(), _highP = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
@@ -77,18 +82,21 @@ class LevelMeterPainter extends CustomPainter {
     final segW = (size.width - _gap * (n - 1)) / n;
     final lit = (channel.level * n).ceil().clamp(0, n);
     final peakIdx = channel.peak > 0.02 ? (channel.peak * n).ceil().clamp(1, n) - 1 : -1;
-    final paint = Paint();
+    for (final p in [_offP, _lowP, _midP, _highP]) {
+      p.reset();
+    }
+    const r = Radius.circular(1.5);
     for (var i = 0; i < n; i++) {
       final x = i * (segW + _gap);
       final left = rtl ? size.width - x - segW : x;
       final f = (i + 1) / n;
-      final on = i < lit;
-      paint.color = on || i == peakIdx ? colorAt(f) : off;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(left, 0, segW, size.height), const Radius.circular(1.5)),
-        paint,
-      );
+      final Path target = i < lit || i == peakIdx ? (f >= highFrom ? _highP : (f >= midFrom ? _midP : _lowP)) : _offP;
+      target.addRRect(RRect.fromLTRBR(left, 0, left + segW, size.height, r));
     }
+    canvas.drawPath(_offP, _paint..color = off);
+    canvas.drawPath(_lowP, _paint..color = low);
+    canvas.drawPath(_midP, _paint..color = mid);
+    canvas.drawPath(_highP, _paint..color = high);
   }
 
   @override

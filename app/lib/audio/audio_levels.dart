@@ -36,6 +36,13 @@ class MeterChannel extends ChangeNotifier {
   double peak = 0;
   double _held = 0;
 
+  /// Finest bar resolution the painter draws (its maximum segment count).
+  /// Listeners are only notified when the lit segment of the level or of the
+  /// peak (at this resolution) changes, so a flickering signal does not
+  /// repaint more often than the picture can actually change.
+  static const resolution = 64;
+  int _shownLevel = 0, _shownPeak = 0;
+
   /// Advances by [dtMs] with the raw 0-255 engine sample [raw].
   /// Returns true when [level] or [peak] changed.
   bool step(int raw, double dtMs) {
@@ -57,14 +64,21 @@ class MeterChannel extends ChangeNotifier {
       }
     }
     final changed = level != l0 || peak != p0;
-    if (changed) notifyListeners();
+    _notifyIfVisible();
     return changed;
   }
 
+  void _notifyIfVisible() {
+    final l = (level * resolution).ceil(), p = (peak * resolution).ceil();
+    if (l == _shownLevel && p == _shownPeak) return;
+    _shownLevel = l;
+    _shownPeak = p;
+    notifyListeners();
+  }
+
   void reset() {
-    final changed = level != 0 || peak != 0;
     level = peak = _held = 0;
-    if (changed) notifyListeners();
+    _notifyIfVisible();
   }
 }
 

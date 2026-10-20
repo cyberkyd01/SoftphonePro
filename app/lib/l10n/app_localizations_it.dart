@@ -6862,7 +6862,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Il portachiavi è bloccato, quindi non è stato possibile leggere le password salvate. Sbloccalo e riavvia SoftphonePro.';
+      'Impossibile aprire il portachiavi (bloccato o non risponde), quindi non è stato possibile leggere le password salvate. Sbloccalo e riavvia SoftphonePro.';
 
   @override
   String get mixerTitle => 'Mixer audio';

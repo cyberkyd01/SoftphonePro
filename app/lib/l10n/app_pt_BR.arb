@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "Sem criptografia de mídia (SRTP desativado)",
   "linkLanConnectAddress": "Endereço: {host}:{port}",
   "provisioningUpdateSummary": "Atualizar {updated} existentes, adicionar {added} novas",
-  "secretsKeyringLocked": "Seu chaveiro está bloqueado, então não foi possível ler as senhas salvas. Desbloqueie-o e reinicie o SoftphonePro.",
+  "secretsKeyringLocked": "Não foi possível abrir seu chaveiro (bloqueado ou sem resposta), então não foi possível ler as senhas salvas. Desbloqueie-o e reinicie o SoftphonePro.",
   "mixerTitle": "Mixer de áudio",
   "mixerMicrophone": "Microfone",
   "mixerSpeaker": "Fones e alto-falante",

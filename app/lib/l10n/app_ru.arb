@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "Без шифрования медиа (SRTP выключен)",
   "linkLanConnectAddress": "Адрес: {host}:{port}",
   "provisioningUpdateSummary": "Обновить существующие: {updated}, добавить новые: {added}",
-  "secretsKeyringLocked": "Связка ключей заблокирована, поэтому сохранённые пароли не удалось прочитать. Разблокируйте её и перезапустите SoftphonePro.",
+  "secretsKeyringLocked": "Не удалось открыть связку ключей (она заблокирована или не отвечает), поэтому сохранённые пароли не удалось прочитать. Разблокируйте её и перезапустите SoftphonePro.",
   "mixerTitle": "Аудиомикшер",
   "mixerMicrophone": "Микрофон",
   "mixerSpeaker": "Наушники и динамик",

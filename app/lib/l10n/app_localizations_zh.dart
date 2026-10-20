@@ -6541,7 +6541,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get secretsKeyringLocked => '密钥环已锁定,无法读取已保存的密码。请解锁后重新启动 SoftphonePro。';
+  String get secretsKeyringLocked =>
+      '无法打开密钥环(已锁定或无响应),因此无法读取已保存的密码。请解锁后重新启动 SoftphonePro。';
 
   @override
   String get mixerTitle => '音频混音器';

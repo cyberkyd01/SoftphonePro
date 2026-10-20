@@ -6769,7 +6769,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Your keyring is locked, so saved passwords couldn\'t be read. Unlock it and restart SoftphonePro.';
+      'Your keyring couldn\'t be opened (locked or not responding), so saved passwords couldn\'t be read. Unlock it and restart SoftphonePro.';
 
   @override
   String get mixerTitle => 'Audio mixer';

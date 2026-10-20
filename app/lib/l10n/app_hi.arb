@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "मीडिया एन्क्रिप्शन नहीं (SRTP बंद)",
   "linkLanConnectAddress": "पता: {host}:{port}",
   "provisioningUpdateSummary": "{updated} मौजूदा अपडेट करें, {added} नए जोड़ें",
-  "secretsKeyringLocked": "आपकी कीरिंग लॉक है, इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को फिर से शुरू करें।",
+  "secretsKeyringLocked": "आपकी कीरिंग खोली नहीं जा सकी (लॉक है या जवाब नहीं दे रही), इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को पुनः आरंभ करें।",
   "mixerTitle": "ऑडियो मिक्सर",
   "mixerMicrophone": "माइक्रोफ़ोन",
   "mixerSpeaker": "हेडफ़ोन और स्पीकर",

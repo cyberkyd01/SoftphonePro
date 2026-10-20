@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "بدون تشفير الوسائط (SRTP متوقف)",
   "linkLanConnectAddress": "العنوان: {host}:{port}",
   "provisioningUpdateSummary": "تحديث {updated} موجودة، وإضافة {added} جديدة",
-  "secretsKeyringLocked": "سلسلة المفاتيح مقفلة، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro.",
+  "secretsKeyringLocked": "تعذّر فتح سلسلة المفاتيح (مقفلة أو لا تستجيب)، لذا تعذّرت قراءة كلمات المرور المحفوظة. افتحها ثم أعد تشغيل SoftphonePro.",
   "mixerTitle": "خلاط الصوت",
   "mixerMicrophone": "الميكروفون",
   "mixerSpeaker": "سماعات الرأس والمكبر",

@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "无媒体加密（SRTP 关闭）",
   "linkLanConnectAddress": "地址：{host}:{port}",
   "provisioningUpdateSummary": "更新 {updated} 个现有账户，添加 {added} 个新账户",
-  "secretsKeyringLocked": "密钥环已锁定,无法读取已保存的密码。请解锁后重新启动 SoftphonePro。",
+  "secretsKeyringLocked": "无法打开密钥环(已锁定或无响应),因此无法读取已保存的密码。请解锁后重新启动 SoftphonePro。",
   "mixerTitle": "音频混音器",
   "mixerMicrophone": "麦克风",
   "mixerSpeaker": "耳机和扬声器",

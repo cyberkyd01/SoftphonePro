@@ -6775,7 +6775,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'आपकी कीरिंग लॉक है, इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को फिर से शुरू करें।';
+      'आपकी कीरिंग खोली नहीं जा सकी (लॉक है या जवाब नहीं दे रही), इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को पुनः आरंभ करें।';
 
   @override
   String get mixerTitle => 'ऑडियो मिक्सर';

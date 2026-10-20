@@ -6841,7 +6841,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get secretsKeyringLocked =>
-      'Su llavero está bloqueado, por lo que no se pudieron leer las contraseñas guardadas. Desbloquéelo y reinicie SoftphonePro.';
+      'No se pudo abrir su llavero (bloqueado o sin respuesta), por lo que no se pudieron leer las contraseñas guardadas. Desbloquéelo y reinicie SoftphonePro.';
 
   @override
   String get mixerTitle => 'Mezclador de audio';

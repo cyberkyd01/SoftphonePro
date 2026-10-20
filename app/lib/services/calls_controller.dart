@@ -1685,6 +1685,9 @@ class CallsController extends Notifier<CallsState> {
       _emit();
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStartRecording, details: '$e');
+    } catch (e) {
+      // e.g. no documents directory: never fail silently.
+      ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).callErrCouldNotStartRecording, details: '$e');
     } finally {
       _recStarting.remove(cid);
     }

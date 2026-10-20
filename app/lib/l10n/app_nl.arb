@@ -1877,7 +1877,7 @@
   "importAccountSrtpOff": "Geen mediaversleuteling (SRTP uit)",
   "linkLanConnectAddress": "Adres: {host}:{port}",
   "provisioningUpdateSummary": "{updated} bestaande bijwerken, {added} nieuwe toevoegen",
-  "secretsKeyringLocked": "Uw sleutelhanger is vergrendeld, waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.",
+  "secretsKeyringLocked": "Uw sleutelhanger kon niet worden geopend (vergrendeld of reageert niet), waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.",
   "mixerTitle": "Audiomixer",
   "mixerMicrophone": "Microfoon",
   "mixerSpeaker": "Koptelefoon en luidspreker",
