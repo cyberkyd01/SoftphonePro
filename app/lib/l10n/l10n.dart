@@ -61,7 +61,10 @@ Locale? localeForSetting(String code) {
 Locale resolveLocale(String setting, List<Locale> systemLocales) {
   final explicit = localeForSetting(setting);
   if (explicit != null) return explicit;
-  final supported = AppLocalizations.supportedLocales;
+  // English first: with no match (an unsupported language, or the C/POSIX
+  // locale of a minimal Linux session) the first entry is used.
+  const en = Locale('en');
+  final supported = [en, ...AppLocalizations.supportedLocales.where((l) => l != en)];
   return basicLocaleListResolution(systemLocales, supported);
 }
 
