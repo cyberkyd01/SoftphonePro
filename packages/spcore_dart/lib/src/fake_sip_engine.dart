@@ -580,7 +580,8 @@ class FakeSipEngine extends JsonSipEngine {
     final vol = _bedVol(p, 'volume', 0.3);
     final mon = _bedBool(p, 'monitor', false);
     final monVol = _bedVol(p, 'monitorVolume', 0.5);
-    final replaced = _bedOn;
+    // Like the engine: the old bed reports "replaced", then the new one "started".
+    if (_bedOn) _emit('media.musicbed', {'active': false, 'file': _bedFile, 'reason': 'replaced'});
     _bedOn = true;
     _bedFile = file;
     _bedInfo = info;
@@ -590,11 +591,7 @@ class FakeSipEngine extends JsonSipEngine {
     _bedPaused = false;
     _bedPosAcc = 0;
     _bedSince = _now();
-    _emit('media.musicbed', {
-      'active': true,
-      'file': file,
-      'reason': replaced ? 'replaced' : 'started',
-    });
+    _emit('media.musicbed', {'active': true, 'file': file, 'reason': 'started'});
     return {'file': file, 'format': info.format, 'durationMs': info.durationMs};
   }
 

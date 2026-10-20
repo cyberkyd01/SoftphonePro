@@ -76,7 +76,8 @@ class MusicbedController extends Notifier<MusicbedState> {
       _giveUp(ref.read(l10nProvider).musicbedStopped(e.message ?? ''));
     } else if (e.active) {
       _enqueue(_refresh);
-    } else {
+    } else if (e.reason != 'replaced') {
+      // ("replaced" is followed by the new bed's "started".)
       state = MusicbedState.idle;
     }
   }

@@ -149,7 +149,9 @@ void main() {
       expect(await e.musicbedStop(), isTrue);
       expect(await e.musicbedStop(), isFalse);
       await e.settle();
-      expect(evs.map((x) => x.reason), ['started', 'replaced', 'stopped']);
+      expect(evs.map((x) => x.reason), ['started', 'replaced', 'started', 'stopped']);
+      expect(evs[1].active, isFalse);
+      expect(evs[1].file, '/m/a.wav');
       expect(evs.last.active, isFalse);
     });
 
