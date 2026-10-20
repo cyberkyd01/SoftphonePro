@@ -6776,4 +6776,115 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'आपकी कीरिंग लॉक है, इसलिए सहेजे गए पासवर्ड पढ़े नहीं जा सके। इसे अनलॉक करें और SoftphonePro को फिर से शुरू करें।';
+
+  @override
+  String get mixerTitle => 'ऑडियो मिक्सर';
+
+  @override
+  String get mixerMicrophone => 'माइक्रोफ़ोन';
+
+  @override
+  String get mixerSpeaker => 'हेडफ़ोन और स्पीकर';
+
+  @override
+  String get mixerMicVolume => 'माइक्रोफ़ोन वॉल्यूम';
+
+  @override
+  String get mixerSpeakerVolume => 'स्पीकर वॉल्यूम';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return '$name स्तर';
+  }
+
+  @override
+  String get mixerInputDevice => 'इनपुट डिवाइस';
+
+  @override
+  String get mixerOutputDevice => 'आउटपुट डिवाइस';
+
+  @override
+  String get mixerOutputRoute => 'ऑडियो आउटपुट';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'माइक्रोफ़ोन चुने गए ऑडियो आउटपुट के अनुसार बदलता है।';
+
+  @override
+  String get mixerShowMore => 'डिवाइस और बैकग्राउंड म्यूज़िक दिखाएँ';
+
+  @override
+  String get mixerShowLess => 'कम नियंत्रण दिखाएँ';
+
+  @override
+  String get mixerStripShow => 'ऑडियो मिक्सर दिखाएँ';
+
+  @override
+  String get mixerStripHide => 'ऑडियो मिक्सर छिपाएँ';
+
+  @override
+  String get musicbedTitle => 'बैकग्राउंड म्यूज़िक';
+
+  @override
+  String get musicbedPlay => 'बैकग्राउंड म्यूज़िक चलाएँ';
+
+  @override
+  String get musicbedVolume => 'बैकग्राउंड म्यूज़िक वॉल्यूम';
+
+  @override
+  String get musicbedChooseFile => 'फ़ाइल चुनें';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'बैकग्राउंड म्यूज़िक फ़ाइल: $name। बदलने के लिए टैप करें।';
+  }
+
+  @override
+  String get musicbedHearIt => 'मैं भी सुनूँ';
+
+  @override
+  String get musicbedMonitorVolume => 'मॉनिटर वॉल्यूम';
+
+  @override
+  String get musicbedAddFile => 'फ़ाइल जोड़ें…';
+
+  @override
+  String get musicbedPickerTitle => 'बैकग्राउंड म्यूज़िक फ़ाइल';
+
+  @override
+  String get musicbedOn => 'बैकग्राउंड म्यूज़िक चालू';
+
+  @override
+  String get musicbedOnTooltip =>
+      'आपकी कॉल के सभी लोगों को एक म्यूज़िक फ़ाइल सुनाई जा रही है।';
+
+  @override
+  String get musicbedFileMissing =>
+      'बैकग्राउंड म्यूज़िक फ़ाइल अब उपलब्ध नहीं है, इसलिए इसे बंद कर दिया गया।';
+
+  @override
+  String get musicbedNeedsFile => 'पहले बैकग्राउंड म्यूज़िक फ़ाइल चुनें।';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'बैकग्राउंड म्यूज़िक रुक गया: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'आपकी आवाज़ के नीचे एक म्यूज़िक फ़ाइल लगातार चलती है और आपकी कॉल के सभी लोग उसे सुनते हैं, म्यूट होने पर भी। होल्ड वाली कॉल को इसके बजाय होल्ड म्यूज़िक सुनाई देता है।';
+
+  @override
+  String get musicbedSettingsFile => 'म्यूज़िक फ़ाइल';
+
+  @override
+  String get linkImportFlagMusicbed => 'आपकी कॉल में संगीत चलाता है';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'iPhone पर आप इसे कॉल के दौरान सुनते हैं';
+
+  @override
+  String get musicbedStopFailed =>
+      'संगीत बंद नहीं हो सका। हो सकता है कि कॉल पर सामने वालों को यह अब भी सुनाई दे रहा हो।';
 }

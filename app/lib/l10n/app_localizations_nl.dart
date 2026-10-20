@@ -6849,4 +6849,116 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'Uw sleutelhanger is vergrendeld, waardoor opgeslagen wachtwoorden niet gelezen konden worden. Ontgrendel hem en start SoftphonePro opnieuw.';
+
+  @override
+  String get mixerTitle => 'Audiomixer';
+
+  @override
+  String get mixerMicrophone => 'Microfoon';
+
+  @override
+  String get mixerSpeaker => 'Koptelefoon en luidspreker';
+
+  @override
+  String get mixerMicVolume => 'Microfoonvolume';
+
+  @override
+  String get mixerSpeakerVolume => 'Luidsprekervolume';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'Niveau: $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'Invoerapparaat';
+
+  @override
+  String get mixerOutputDevice => 'Uitvoerapparaat';
+
+  @override
+  String get mixerOutputRoute => 'Audio-uitvoer';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'De microfoon volgt de gekozen audio-uitvoer.';
+
+  @override
+  String get mixerShowMore => 'Apparaten en achtergrondmuziek tonen';
+
+  @override
+  String get mixerShowLess => 'Minder opties tonen';
+
+  @override
+  String get mixerStripShow => 'Audiomixer tonen';
+
+  @override
+  String get mixerStripHide => 'Audiomixer verbergen';
+
+  @override
+  String get musicbedTitle => 'Achtergrondmuziek';
+
+  @override
+  String get musicbedPlay => 'Achtergrondmuziek afspelen';
+
+  @override
+  String get musicbedVolume => 'Volume achtergrondmuziek';
+
+  @override
+  String get musicbedChooseFile => 'Bestand kiezen';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Bestand achtergrondmuziek: $name. Tik om te wijzigen.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Zelf meeluisteren';
+
+  @override
+  String get musicbedMonitorVolume => 'Meeluistervolume';
+
+  @override
+  String get musicbedAddFile => 'Bestand toevoegen…';
+
+  @override
+  String get musicbedPickerTitle => 'Bestand achtergrondmuziek';
+
+  @override
+  String get musicbedOn => 'Achtergrondmuziek aan';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Een muziekbestand wordt afgespeeld voor iedereen in je gesprekken.';
+
+  @override
+  String get musicbedFileMissing =>
+      'Het bestand voor de achtergrondmuziek is niet meer beschikbaar; de achtergrondmuziek is uitgezet.';
+
+  @override
+  String get musicbedNeedsFile =>
+      'Kies eerst een bestand voor de achtergrondmuziek.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Achtergrondmuziek gestopt: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Speelt een muziekbestand in een lus onder je stem af voor iedereen in je gesprekken, ook als je gedempt bent. Gesprekken in de wacht horen in plaats daarvan de wachtmuziek.';
+
+  @override
+  String get musicbedSettingsFile => 'Muziekbestand';
+
+  @override
+  String get linkImportFlagMusicbed => 'Speelt muziek af in je gesprekken';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'Op de iPhone hoor je het tijdens gesprekken';
+
+  @override
+  String get musicbedStopFailed =>
+      'De muziek kon niet worden gestopt. Je gesprekspartners horen haar mogelijk nog.';
 }

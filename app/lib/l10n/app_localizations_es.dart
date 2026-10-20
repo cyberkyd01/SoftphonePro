@@ -6842,4 +6842,115 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'Su llavero está bloqueado, por lo que no se pudieron leer las contraseñas guardadas. Desbloquéelo y reinicie SoftphonePro.';
+
+  @override
+  String get mixerTitle => 'Mezclador de audio';
+
+  @override
+  String get mixerMicrophone => 'Micrófono';
+
+  @override
+  String get mixerSpeaker => 'Auriculares y altavoz';
+
+  @override
+  String get mixerMicVolume => 'Volumen del micrófono';
+
+  @override
+  String get mixerSpeakerVolume => 'Volumen del altavoz';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'Nivel de $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'Dispositivo de entrada';
+
+  @override
+  String get mixerOutputDevice => 'Dispositivo de salida';
+
+  @override
+  String get mixerOutputRoute => 'Salida de audio';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'El micrófono sigue a la salida de audio seleccionada.';
+
+  @override
+  String get mixerShowMore => 'Mostrar dispositivos y música de fondo';
+
+  @override
+  String get mixerShowLess => 'Mostrar menos controles';
+
+  @override
+  String get mixerStripShow => 'Mostrar el mezclador de audio';
+
+  @override
+  String get mixerStripHide => 'Ocultar el mezclador de audio';
+
+  @override
+  String get musicbedTitle => 'Música de fondo';
+
+  @override
+  String get musicbedPlay => 'Reproducir música de fondo';
+
+  @override
+  String get musicbedVolume => 'Volumen de la música de fondo';
+
+  @override
+  String get musicbedChooseFile => 'Elegir un archivo';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Archivo de música de fondo: $name. Toca para cambiarlo.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Escucharla yo también';
+
+  @override
+  String get musicbedMonitorVolume => 'Volumen de monitorización';
+
+  @override
+  String get musicbedAddFile => 'Añadir un archivo…';
+
+  @override
+  String get musicbedPickerTitle => 'Archivo de música de fondo';
+
+  @override
+  String get musicbedOn => 'Música de fondo activa';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Se está reproduciendo un archivo de música para todos en tus llamadas.';
+
+  @override
+  String get musicbedFileMissing =>
+      'El archivo de la música de fondo ya no está disponible, así que se desactivó.';
+
+  @override
+  String get musicbedNeedsFile =>
+      'Primero elige un archivo para la música de fondo.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'La música de fondo se detuvo: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Reproduce en bucle un archivo de música bajo tu voz para todos en tus llamadas, incluso si estás en silencio. Las llamadas en espera oyen la música de espera.';
+
+  @override
+  String get musicbedSettingsFile => 'Archivo de música';
+
+  @override
+  String get linkImportFlagMusicbed => 'Reproduce música en tus llamadas';
+
+  @override
+  String get musicbedMonitorIosHint => 'En iPhone lo oyes durante las llamadas';
+
+  @override
+  String get musicbedStopFailed =>
+      'No se pudo detener la música. Puede que siga sonando para tus interlocutores.';
 }

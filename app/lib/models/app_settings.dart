@@ -225,6 +225,17 @@ class AppSettings {
   bool get announceMuteMic => _b('announceMuteMic', true);
   bool get announceMonitor => _b('announceMonitor', false);
 
+  /// Musicbed: a looping library track mixed into every call (UX2).
+  bool get musicbedEnabled => _b('musicbedEnabled', false);
+
+  /// Audio ref (`builtin:<id>` / `lib:<file>`) of the musicbed track.
+  String get musicbedFile => _s('musicbedFile', '');
+  double get musicbedVolume => _d('musicbedVolume', 0.3);
+
+  /// Also play the musicbed to the user ("hear it myself") at [musicbedMonitorVolume].
+  bool get musicbedMonitor => _b('musicbedMonitor', false);
+  double get musicbedMonitorVolume => _d('musicbedMonitorVolume', 0.5);
+
   /// Audio ref played before call recording starts (empty = none).
   String get recordingNoticeFile => _s('recordingNoticeFile', '');
 

@@ -598,3 +598,20 @@ void spc_rec_apply_global(int msrc, int dnm)
         if (r->is_mic) mic_conn(r->side[0].slot, 1, msrc, dnm);
     spc_mutex_unlock(&g_rec_mtx);
 }
+
+/* conference slot of the sink that carries the local (microphone) side of recorder `id`, or -1 */
+int spc_rec_local_sink(int id)
+{
+    spc_rec* r;
+    int slot = -1;
+    if (id <= 0) return -1;
+    rec_ensure();
+    spc_mutex_lock(&g_rec_mtx);
+    for (r = g_recs; r; r = r->next) {
+        if (r->id != id) continue;
+        if (r->fmt == SPC_REC_WAV_STEREO || r->mix == 0 || r->mix == 2) slot = r->side[0].slot;
+        break;
+    }
+    spc_mutex_unlock(&g_rec_mtx);
+    return slot;
+}

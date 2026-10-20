@@ -6770,4 +6770,114 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'Your keyring is locked, so saved passwords couldn\'t be read. Unlock it and restart SoftphonePro.';
+
+  @override
+  String get mixerTitle => 'Audio mixer';
+
+  @override
+  String get mixerMicrophone => 'Microphone';
+
+  @override
+  String get mixerSpeaker => 'Headphones & speaker';
+
+  @override
+  String get mixerMicVolume => 'Microphone volume';
+
+  @override
+  String get mixerSpeakerVolume => 'Speaker volume';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return '$name level';
+  }
+
+  @override
+  String get mixerInputDevice => 'Input device';
+
+  @override
+  String get mixerOutputDevice => 'Output device';
+
+  @override
+  String get mixerOutputRoute => 'Audio output';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'The microphone follows the selected audio output.';
+
+  @override
+  String get mixerShowMore => 'Show devices and musicbed';
+
+  @override
+  String get mixerShowLess => 'Show fewer controls';
+
+  @override
+  String get mixerStripShow => 'Show audio mixer';
+
+  @override
+  String get mixerStripHide => 'Hide audio mixer';
+
+  @override
+  String get musicbedTitle => 'Musicbed';
+
+  @override
+  String get musicbedPlay => 'Play musicbed';
+
+  @override
+  String get musicbedVolume => 'Musicbed volume';
+
+  @override
+  String get musicbedChooseFile => 'Choose a file';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Musicbed file: $name. Tap to change.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Hear it myself';
+
+  @override
+  String get musicbedMonitorVolume => 'Monitor volume';
+
+  @override
+  String get musicbedAddFile => 'Add a file…';
+
+  @override
+  String get musicbedPickerTitle => 'Musicbed file';
+
+  @override
+  String get musicbedOn => 'Musicbed on';
+
+  @override
+  String get musicbedOnTooltip =>
+      'A music file is playing to everyone on your calls.';
+
+  @override
+  String get musicbedFileMissing =>
+      'The musicbed file is no longer available, so musicbed was turned off.';
+
+  @override
+  String get musicbedNeedsFile => 'Choose a musicbed file first.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Musicbed stopped: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Loops a music file under your voice for everyone on your calls, even while you are muted. Calls on hold hear the hold music instead.';
+
+  @override
+  String get musicbedSettingsFile => 'Music file';
+
+  @override
+  String get linkImportFlagMusicbed => 'Plays music into your calls';
+
+  @override
+  String get musicbedMonitorIosHint => 'On iPhone you hear it during calls';
+
+  @override
+  String get musicbedStopFailed =>
+      'Couldn’t stop the music. It may still be playing to your callers.';
 }

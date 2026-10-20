@@ -216,6 +216,27 @@ abstract class SipEngine {
   Future<VoiceIsolationStatus> voiceIsolationStatus();
   Future<MediaFileInfo> fileInfo(String file);
 
+  // ---- musicbed (media.musicbed*): a looping WAV/MP3 mixed into every call
+  /// Starts (or replaces) the musicbed. Volumes are linear 0.0-2.0.
+  Future<MusicbedInfo> musicbedStart(
+    String file, {
+    double volume = 0.3,
+    bool monitor = false,
+    double monitorVolume = 0.5,
+  });
+
+  /// Stops the musicbed; false if none was running.
+  Future<bool> musicbedStop();
+
+  /// Adjusts the running musicbed (`NOT_FOUND` if none).
+  Future<void> musicbedSet({
+    double? volume,
+    bool? monitor,
+    double? monitorVolume,
+    bool? paused,
+  });
+  Future<MusicbedState> musicbedState();
+
   /// Records only the microphone to WAV (works without a call).
   Future<String> recordMicStart(String file);
   Future<RecordingResult> recordMicStop();

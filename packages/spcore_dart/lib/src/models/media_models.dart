@@ -519,3 +519,101 @@ class HoldMusic {
   @override
   String toString() => 'HoldMusic(${toJson()})';
 }
+
+/// Result of `media.musicbedStart`.
+class MusicbedInfo {
+  const MusicbedInfo({this.file = '', this.format = '', this.durationMs = 0});
+
+  final String file;
+  final String format;
+  final int durationMs;
+
+  factory MusicbedInfo.fromJson(Map<String, dynamic> j) => MusicbedInfo(
+    file: asString(j['file']),
+    format: asString(j['format']),
+    durationMs: asInt(j['durationMs'], 0),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'file': file,
+    'format': format,
+    'durationMs': durationMs,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MusicbedInfo && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'MusicbedInfo(${toJson()})';
+}
+
+/// Result of `media.musicbedState`. Volumes are linear 0.0-2.0.
+class MusicbedState {
+  const MusicbedState({
+    this.active = false,
+    this.file,
+    this.format,
+    this.volume = 0.3,
+    this.monitor = false,
+    this.monitorVolume = 0.5,
+    this.paused = false,
+    this.positionMs = 0,
+    this.durationMs = 0,
+    this.calls = const [],
+  });
+
+  static const idle = MusicbedState();
+
+  final bool active;
+  final String? file;
+  final String? format;
+  final double volume;
+  final bool monitor;
+  final double monitorVolume;
+  final bool paused;
+  final int positionMs;
+  final int durationMs;
+
+  /// Calls the bed is currently mixed into.
+  final List<int> calls;
+
+  factory MusicbedState.fromJson(Map<String, dynamic> j) => MusicbedState(
+    active: asBool(j['active']),
+    file: asStringN(j['file']),
+    format: asStringN(j['format']),
+    volume: asDouble(j['volume'], 0.3),
+    monitor: asBool(j['monitor']),
+    monitorVolume: asDouble(j['monitorVolume'], 0.5),
+    paused: asBool(j['paused']),
+    positionMs: asInt(j['positionMs'], 0),
+    durationMs: asInt(j['durationMs'], 0),
+    calls: [for (final c in asList(j['calls'])) asInt(c)],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'active': active,
+    if (file != null) 'file': file,
+    if (format != null) 'format': format,
+    'volume': volume,
+    'monitor': monitor,
+    'monitorVolume': monitorVolume,
+    'paused': paused,
+    'positionMs': positionMs,
+    'durationMs': durationMs,
+    'calls': calls,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MusicbedState && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'MusicbedState(${toJson()})';
+}

@@ -13,7 +13,74 @@
 9. Diagnostics and troubleshooting
 10. Platform notes
 
+Also in this guide, in this order: Recordings; Audio: devices, noise
+cancellation, hold music and announcements; Musicbed; Audio mixer; Language.
+Linux users start with **Install on Linux / Raspberry Pi** below.
+
 ---
+
+## Install on Linux / Raspberry Pi
+
+SoftphonePro for Linux is a 64-bit app. It runs on:
+
+* Ubuntu 22.04 and later;
+* Debian 12 and later;
+* Raspberry Pi OS (64-bit), Bookworm, on a Raspberry Pi 4 or 5 (a Pi 3
+  works too).
+
+32-bit Raspberry Pi OS is not supported, because Flutter has no 32-bit ARM
+Linux build. To check, run `uname -m`: you need `x86_64` (a normal PC) or
+`aarch64` (a Raspberry Pi or other ARM computer).
+
+**Choose the file**
+
+| Your computer | `.deb` package | Portable archive |
+|---|---|---|
+| PC (`x86_64`) | `SoftphonePro-<ver>-linux-amd64.deb` | `SoftphonePro-<ver>-linux-amd64.tar.gz` |
+| Raspberry Pi, ARM Ubuntu or Debian (`aarch64`) | `SoftphonePro-<ver>-linux-arm64.deb` | `SoftphonePro-<ver>-linux-arm64.tar.gz` |
+
+**Install the `.deb`**
+
+1. Open a terminal in the folder with the download.
+2. Run `sudo apt install ./SoftphonePro-<ver>-linux-<arch>.deb`, with the
+   version and architecture of your file. `apt` installs the libraries the
+   app needs. (You can also double-click the file to open it in the software
+   centre.)
+3. Start **SoftphonePro** from the application menu, or run `softphonepro`.
+
+**Use the portable archive**
+
+1. Extract it: `tar -xzf SoftphonePro-<ver>-linux-<arch>.tar.gz`.
+2. Run `./softphonepro` in the extracted folder.
+3. Optional: run `./install-desktop-entry.sh` for a menu entry and `sip:`,
+   `sips:`, `tel:`, `callto:` and `softphonepro:` link handling (for the
+   current user only). Run it again if you move the folder. To undo it, run
+   `./uninstall-desktop-entry.sh`.
+
+The archive needs these packages (the `.deb` installs them for you): the GTK 3,
+ALSA, libsecret, AppIndicator, libnotify, keybinder, OpenGL and GStreamer
+libraries. The full list is in `README-linux.txt` in the archive.
+
+**Update.** Install the new `.deb` the same way. Your accounts and settings
+are kept.
+
+**Uninstall.** Run `sudo apt remove softphonepro`. Your accounts, history and
+settings stay in your home folder; delete the SoftphonePro folders there too if
+you want them gone. For the archive, delete the folder (and run
+`./uninstall-desktop-entry.sh` first if you installed the menu entry).
+
+**Good to know on Linux**
+
+* Audio goes through ALSA. On PulseAudio and PipeWire systems pick the
+  **default** device in **Settings → Audio → Devices**.
+* Passwords are kept in the Secret Service keyring (GNOME Keyring or KWallet).
+  If the system has no keyring, SoftphonePro stores them in an encrypted file
+  instead.
+* Not available on Linux: QR camera scanning (paste the code's text instead),
+  biometric app unlock (use the PIN), mDNS discovery for LAN Link (LAN Link
+  finds other devices by multicast, which still works with the other
+  platforms) and import of system contacts.
+* More in [Platform notes](#10-platform-notes).
 
 ## 1. Adding accounts
 
@@ -183,9 +250,10 @@ Account*), with or without passwords (*Include passwords*).
 * **Links:** `sip:`, `tel:` and `callto:` links open the keypad with the
   number filled in. Turn on **Settings → Calls → Call links immediately**
   to call straight away instead.
-* To make SoftphonePro the default app for these links on macOS or Windows,
-  use **Settings → Calls → System** ("Make SoftphonePro the default app for
-  sip:, tel: and callto: links"). Windows opens its Default apps page.
+* To make SoftphonePro the default app for these links on macOS, Windows or
+  Linux, use **Settings → Calls → System** ("Make SoftphonePro the default
+  app for sip:, tel: and callto: links"). Windows opens its Default apps
+  page. On Linux the setting uses `xdg-mime`.
 * **Dial plan** (**Settings → Calls → Dial plan**) rewrites numbers before
   dialling, using regex rules, prefix stripping, `+` replacement and a
   country prefix. The **Live test** box shows how a number will be rewritten.
@@ -320,14 +388,17 @@ laptops and phones. No server or account is involved.
 * **SRTP / DTLS-SRTP:** choose *optional* or *mandatory* per account.
 * **App lock:** go to **Settings → Privacy and security** and turn on
   *Require PIN to open the app* to set a PIN (4 to 8 digits).
-  * You can also turn on *Unlock with biometrics* where the device has it.
+  * You can also turn on *Unlock with biometrics* where the device has it
+    (not on Linux, where the PIN is the only way to unlock).
   * Choose *Lock after*, the time the app can stay in the background before
     it locks, or use *Lock now*.
   * Incoming calls still show and can be answered while the app is
     locked.
   * App lock gates the screen only: calls, hotkeys, links and the
     automation API keep working while the app is locked.
-* **Passwords** are stored in the operating system's keystore. They're
+* **Passwords** are stored in the operating system's keystore (on Linux, the
+  Secret Service keyring, with an encrypted-file fallback when there is none).
+  They're
   never included in exports unless you choose to include them.
 * **Encrypted local data (optional):** in **Settings → Privacy and security**
   turn on *Encrypt call history, contacts and messages on this device*.
@@ -432,6 +503,71 @@ it automatically. A red **REC** marker shows while recording.
 
 **Announcements.** *Settings → Calls → Announcements*: play a file when a call connects (incoming, outgoing or both, optionally muting your microphone and letting you hear it; a *Skip* button appears in the call), a notice before recording starts, and a notice before a caller is transferred (blind, attended or LAN hand-off; it is played to the caller, then the transfer happens, after at most 15 seconds).
 
+## Musicbed
+
+A musicbed is a music file that loops under your voice, so the people you are
+talking to hear both. Use it for background music during a presentation or a
+long call.
+
+**Set it up**
+
+1. Open **Settings → Audio → Musicbed**, or open the mixer (see *Audio mixer*
+   below) and choose **Show devices and musicbed**.
+2. Choose a file under **Music file**. The list is your audio library;
+   **Add a file…** imports an MP3 or WAV (a file can be up to 30 minutes
+   long).
+3. Turn on **Play musicbed**. The file plays in a loop, with no gap at the
+   end.
+4. Set **Musicbed volume**. It goes from 0% to 200% and you can change it
+   live, during a call. The default is low (30%) so your voice stays on top.
+
+**Hear it yourself.** Turn on **Hear it myself** to monitor the musicbed in
+your own speaker or headphones. It has its own **Monitor volume**, separate
+from the volume your callers hear. Use it with headphones, or the microphone
+will pick the music up again.
+
+**How it behaves in calls**
+
+* It goes to everyone on your active calls. In a local conference it goes to
+  every member.
+* It keeps playing while you **mute** your microphone.
+* A call on **hold** does not get the musicbed. The held party hears your hold
+  music instead, and gets the musicbed back when you resume.
+* Recordings you make with **Record** include the musicbed on your side.
+* Between calls it pauses, and it continues from where it stopped when the
+  next call connects. With **Hear it myself** on, it plays on your side even
+  with no call, which lets you preview it (on iPhone you hear it during calls only).
+* If the file is deleted, SoftphonePro turns the musicbed off and tells you.
+
+The local automation API can switch the musicbed on and off, pause it and set its volumes (`GET` / `POST /v1/audio`, see `docs/AUTOMATION_API.md`), but the music file can only be chosen in the app.
+Developers can read the engine calls in [ENGINE_API.md](ENGINE_API.md), section 10.
+
+## Audio mixer
+
+The mixer shows how loud things are and lets you change them, while a call is
+running.
+
+* **Microphone:** a level bar and an input volume (gain) slider.
+* **Headphones & speaker:** a level bar and an output volume slider.
+* **Musicbed:** a level bar and the musicbed volume (see *Musicbed*).
+* **Devices:** pickers for the input and output device. On a phone, the
+  output picker is the audio route (earpiece, speaker, Bluetooth or wired
+  headset), and the microphone follows the selected route.
+
+**Where it is**
+
+* **Keypad screen:** a card on desktop and tablets, and a collapsible strip
+  on phones (**Show audio mixer** / **Hide audio mixer**).
+* **During a call:** in the calls panel on desktop, and on the in-call page
+  on a phone.
+* **Settings → Audio:** the microphone and speaker bars and sliders sit in the
+  levels and test group, and the musicbed settings are in their own group.
+
+The bars show the signal live. The level bar of the musicbed stays empty when
+nothing is playing it, for example while it is paused between calls. Choose
+**Show devices and musicbed** to open the device pickers and the musicbed
+controls, and **Show fewer controls** to close them.
+
 ## Language
 
 SoftphonePro follows your system language by default. To change it, open **Settings > Appearance > Language** and pick a language; each language is listed by its own name (English, Español, Français, Deutsch, Português (Brasil), Italiano, Nederlands, Русский, Türkçe, हिन्दी, العربية, 简体中文, 日本語). The change applies immediately, without restarting. Arabic switches the whole layout to right-to-left. Phone numbers, SIP addresses, log and trace contents, and codec names always stay in their original form.
@@ -449,6 +585,28 @@ SoftphonePro follows your system language by default. To change it, open **Setti
     ends (or mutes) the active call. Choose which in **Settings → Shortcuts →
     Headset and media keys**. SoftphonePro takes the button only while a call
     is ringing or active, so music players keep it otherwise.
+* **Linux**
+  * Install and uninstall steps are in
+    [Install on Linux / Raspberry Pi](#install-on-linux--raspberry-pi).
+  * The **tray icon** appears on desktops with a StatusNotifierItem host:
+    Ubuntu, KDE and the Raspberry Pi panel have one. Stock GNOME on Debian
+    needs the AppIndicator extension. **Without a tray, closing the window
+    quits SoftphonePro**, so incoming calls no longer ring. With a tray,
+    **Close to tray** (**Settings → Advanced → Desktop**) keeps it running.
+  * Notifications for incoming calls have **Answer** and **Decline**.
+  * **Links:** `sip:`, `sips:`, `tel:`, `callto:` and `softphonepro:` links
+    open SoftphonePro. Turn on the default-app setting in
+    **Settings → Calls → System**. The portable archive needs
+    `./install-desktop-entry.sh` for this.
+  * Only one copy runs at a time. Starting it again, or opening a link, hands
+    over to the running one.
+  * **Start at login** is in **Settings → Advanced → Desktop**.
+  * The headset or keyboard play/pause button works through MPRIS, as on
+    Windows (see above).
+  * **Global shortcuts** (**Settings → Shortcuts**) work on X11 sessions
+    only. They are not available on Wayland.
+  * Audio uses ALSA. Pick the **default** device to reach PulseAudio or
+    PipeWire.
 * **macOS**
   * The first time you open the app, right-click it and choose **Open**
     (the build isn't notarised yet).

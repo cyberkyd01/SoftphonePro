@@ -27,10 +27,12 @@ import '../../services/messages_controller.dart';
 import '../../services/providers.dart';
 import '../../services/settings_controller.dart';
 import '../../storage/repositories.dart';
+import '../widgets/audio_mixer.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/call_widgets.dart';
 import '../pages/recordings/recording_settings.dart';
 import '../../services/ringtones.dart';
+import '../../audio/audio_levels.dart' show MeterBoostHolder;
 import '../../audio/device_labels.dart';
 import '../../audio/voice_isolation.dart' show strengthLabel;
 import 'audio_call_settings.dart';
@@ -151,9 +153,8 @@ class AudioSection extends ConsumerStatefulWidget {
   ConsumerState<AudioSection> createState() => _AudioSectionState();
 }
 
-class _AudioSectionState extends ConsumerState<AudioSection> {
-  Timer? _t;
-  MediaLevels _levels = const MediaLevels();
+/// Mounted Audio settings keep the meters at the fast rate (they are the page).
+class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHolder<AudioSection> {
   bool _loop = false;
   late final EngineController _engCtl;
 
@@ -164,19 +165,10 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
     Future.microtask(() {
       if (mounted) ref.read(engineProvider.notifier).startDevicePolling();
     });
-    _t = Timer.periodic(const Duration(milliseconds: 200), (_) async {
-      final ctl = ref.read(engineProvider.notifier);
-      if (!ctl.hasEngine || !mounted) return;
-      try {
-        final l = await ctl.engine.levels();
-        if (mounted) setState(() => _levels = l);
-      } catch (_) {}
-    });
   }
 
   @override
   void dispose() {
-    _t?.cancel();
     _engCtl.stopDevicePolling();
     if (_loop && _engCtl.hasEngine) _engCtl.engine.loopback(false);
     super.dispose();
@@ -198,13 +190,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
     final s = ref.watch(settingsProvider);
     final dev = ref.watch(audioDevicesProvider).value;
     final desktop = !isMobilePlatform;
-    Map<String, String> opts(List<AudioDevice>? l) {
-      return {
-        'default': systemDefaultLabel(context.l10n, l),
-        for (final d in l ?? <AudioDevice>[])
-          if (d.devId != 'default') d.devId: d.name,
-      };
-    }
+    Map<String, String> opts(List<AudioDevice>? l) => audioDeviceOptions(context.l10n, l);
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
@@ -226,13 +212,15 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
             ),
           ],
         ),
+        const MusicbedGroup(),
         SettingsGroup(
           title: context.l10n.settingsAudioLevelsAndTest,
           children: [
-            SliderTile(icon: Icons.mic_none_rounded, title: context.l10n.settingsAudioMicVolume, value: s.micLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'micLevel': v})),
-            _Vu(label: context.l10n.settingsAudioMicLevel, value: _levels.mic / 255),
-            SliderTile(icon: Icons.volume_up_rounded, title: context.l10n.settingsAudioSpeakerVolume, value: s.speakerLevel, max: 2, divisions: 20, format: (v) => '${(v * 100).round()}%', onChanged: (v) => _s(ref).update({'speakerLevel': v})),
-            _Vu(label: context.l10n.settingsAudioSpeakerLevel, value: _levels.speaker / 255),
+            // Meters next to the mic / speaker sliders (musicbed has its own group).
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: AudioMixer(showDevices: false, showMusicbed: false),
+            ),
             ListTile(
               key: const Key('test-speaker'),
               leading: const Icon(Icons.volume_up_rounded),
@@ -299,33 +287,6 @@ class _AudioSectionState extends ConsumerState<AudioSection> {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _Vu extends StatelessWidget {
-  const _Vu({required this.label, required this.value});
-  final String label;
-  final double value;
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final v = value.clamp(0.0, 1.0);
-    return Semantics(
-      label: label,
-      value: context.l10n.settingsAudioPercentValue((v * 100).round()),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(72, 0, 16, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: v,
-            minHeight: 6,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-            color: v > 0.85 ? c.regFail : (v > 0.6 ? c.regWarn : c.regOk),
-          ),
-        ),
-      ),
     );
   }
 }

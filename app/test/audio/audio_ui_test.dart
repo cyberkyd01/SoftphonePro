@@ -2,10 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:softphonepro/audio/audio_levels.dart';
 import 'package:softphonepro/audio/audio_library.dart';
+import 'package:softphonepro/audio/audio_platform.dart';
 import 'package:softphonepro/audio/mic_recorder.dart';
 import 'package:softphonepro/core/theme.dart';
+import 'package:spcore_dart/spcore_dart.dart' show MediaLevels;
 import 'package:softphonepro/services/calls_controller.dart';
 import 'package:softphonepro/services/settings_controller.dart';
 import 'package:softphonepro/ui/pages/audio/audio_files_page.dart';
@@ -16,8 +20,17 @@ import 'package:softphonepro/ui/widgets/call_widgets.dart';
 import 'audio_harness.dart';
 import 'package:softphonepro/l10n/app_localizations.dart';
 
-Future<AudioEnv> mk(WidgetTester tester, {Map<String, dynamic> settings = const {}, LogEngine? engine}) async =>
-    (await tester.runAsync(() => AudioEnv.create(settings: settings, engine: engine)))!;
+class _LvEngine extends LogEngine {
+  int levelCalls = 0;
+  @override
+  Future<MediaLevels> levels() {
+    levelCalls++;
+    return super.levels();
+  }
+}
+
+Future<AudioEnv> mk(WidgetTester tester, {Map<String, dynamic> settings = const {}, LogEngine? engine, List<Override> overrides = const []}) async =>
+    (await tester.runAsync(() => AudioEnv.create(settings: settings, engine: engine, overrides: overrides)))!;
 
 Future<void> pumpIn(WidgetTester tester, AudioEnv a, Widget page, {Size size = const Size(412, 915), Brightness brightness = Brightness.light}) async {
   tester.view.physicalSize = size * 2;
@@ -179,6 +192,50 @@ void main() {
   });
 
   group('Audio settings', () {
+    testWidgets('the meters run at the fast rate while the page is mounted, and relax after', (tester) async {
+      final e = _LvEngine();
+      final a = await mk(tester, engine: e);
+      final holder = a.container.read(meterBoostProvider.notifier)..hold();
+      holder.release(); // touch the provider: count is back to 0
+      expect(a.container.read(meterBoostProvider), 0);
+      await pumpIn(tester, a, const AudioSection(), size: const Size(1000, 1400));
+      expect(a.container.read(meterBoostProvider), 1, reason: 'Audio settings hold the boost');
+      var n = e.levelCalls;
+      await tester.pump(const Duration(seconds: 1));
+      expect(e.levelCalls - n, greaterThan(10), reason: '~15 Hz, not 1 Hz');
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(a.container.read(meterBoostProvider), 0, reason: 'released on leaving');
+      n = e.levelCalls;
+      await tester.pump(const Duration(seconds: 3));
+      expect(e.levelCalls - n, lessThanOrEqualTo(1));
+      a.dispose();
+    });
+
+    testWidgets('another holder survives the page coming and going', (tester) async {
+      final a = await mk(tester);
+      a.container.read(meterBoostProvider.notifier).hold();
+      await pumpIn(tester, a, const AudioSection(), size: const Size(1000, 1400));
+      expect(a.container.read(meterBoostProvider), 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(a.container.read(meterBoostProvider), 1);
+      a.dispose();
+    });
+
+    testWidgets('iOS: a hint says the monitor is heard during calls; other platforms have none', (tester) async {
+      final ios = await mk(tester, overrides: [isIosProvider.overrideWithValue(true)]);
+      await pumpIn(tester, ios, const AudioSection(), size: const Size(1000, 2400));
+      expect(find.text('On iPhone you hear it during calls'), findsOneWidget);
+      await end(tester, ios);
+
+      final other = await mk(tester);
+      await pumpIn(tester, other, const AudioSection(), size: const Size(1000, 2400));
+      expect(find.text('On iPhone you hear it during calls'), findsNothing);
+      await end(tester, other);
+    });
+
     testWidgets('shows device names, the OS default and a speaker test', (tester) async {
       final a = await mk(tester);
       await pumpIn(tester, a, const AudioSection(), size: const Size(1000, 1400));

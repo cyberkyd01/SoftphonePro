@@ -26,7 +26,7 @@ void    spc_rs_flush(spc_rs* r, spc_rs_sink sink, void* ctx);
 void    spc_rs_free(spc_rs* r);
 
 /* ---- players ---- */
-/* Starts a player on call `cid`. 0 ok (play id in *id) or -1 with err filled; *kind_err = 1 for bad file/params. */
+/* Starts a player on call `cid`. 0 ok (play id in *id) or -1 with err filled. */
 int  spc_player_start(uint64_t cid, const char* file, int loop, float volume, int local_monitor, int mute_mic,
                       int moh, int* id, char* err, size_t en);
 /* Stops plays of a call. id 0 = every non-MOH play. Emits call.playDone(reason). Returns the number stopped. */
@@ -45,5 +45,34 @@ int  spc_moh_arm(uint64_t cid, const char* file, int loop, float volume);   /* v
 void spc_moh_disarm(uint64_t cid);                                         /* disarm + stop a running MOH */
 void spc_moh_start_now(uint64_t cid);                                      /* IAX2: no media-state callback */
 void spc_moh_on_media(uint64_t cid, int media_status);                     /* pjsua_call_media_status */
+
+/* ---- musicbed (looping file mixed into the microphone path of every call; docs/ENGINE_API.md 10) ---- */
+#define SPC_BED_MAX_CALLS 64
+typedef struct {
+    int active, monitor, paused, positionMs, durationMs, ncalls;
+    double vol, monvol;
+    char file[600], format[8];
+    uint64_t calls[SPC_BED_MAX_CALLS];
+} spc_bed_state;
+/* Validates like call.playFile and replaces a running bed. 0 ok; else an SPC_E_* code (INVALID_PARAM only for a bad
+ * file, NOT_STARTED / INTERNAL / PJ_ERROR with *pst for engine-side failures) + err, and a running bed is untouched. */
+int  spc_musicbed_start(const char* file, double volume, int monitor, double monvol, spc_fileinfo* fi,
+                        int* pst, char* err, size_t en);
+int  spc_musicbed_stop(const char* reason, const char* msg);     /* 1 if one was running; emits media.musicbed */
+int  spc_musicbed_set(double volume, double monvol, int monitor, int paused);   /* <0 = unchanged; -1 if no bed */
+int  spc_musicbed_state(spc_bed_state* st);
+int  spc_musicbed_level(void);
+/* Topology hooks (spc_call_apply_topology): begin, once per call, end. All per-pass state lives in the caller's
+ * spc_bed_pass, so concurrent passes cannot corrupt each other; each pass is authoritative for every call it sees. */
+typedef struct {
+    int bed_id;                                 /* g_bed->id at begin (0: none); the call list is committed only for it */
+    int ncid;
+    uint64_t cid[SPC_BED_MAX_CALLS];            /* calls this pass connected the bed to */
+} spc_bed_pass;
+void spc_musicbed_apply_begin(spc_bed_pass* bp);
+/* cslot: the call's conference slot (-1: no media); local_ok: the call takes the local microphone path (active
+ * media, not locally held, not detached); rec_sink1/2: recorder sinks that carry the call's local side (or -1). */
+void spc_musicbed_apply_call(spc_bed_pass* bp, uint64_t cid, int cslot, int local_ok, int rec_sink1, int rec_sink2);
+void spc_musicbed_apply_end(spc_bed_pass* bp);
 
 #endif

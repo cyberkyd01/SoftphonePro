@@ -16,6 +16,7 @@ import '../../services/contacts_controller.dart';
 import '../../services/history_controller.dart';
 import '../../services/providers.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/audio_mixer.dart';
 import '../widgets/basic_widgets.dart';
 import '../widgets/dial_pad.dart';
 import '../settings/speed_dial_page.dart';
@@ -201,6 +202,8 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
       _ctl.selection = TextSelection.collapsed(offset: s.number.length);
     }
 
+    // Desktop: the call panel carries the mixer while calls are live.
+    final showCard = ref.watch(callsProvider.select((c) => c.live.isEmpty));
     if (expanded) {
       return LayoutBuilder(
         builder: (context, box) {
@@ -210,7 +213,10 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                child: Card(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                Card(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -248,6 +254,12 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                     ),
                   ),
                 ),
+                if (!wide && showCard) ...[
+                  const SizedBox(height: 16),
+                  const MixerCard(),
+                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -260,7 +272,17 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                 width: 340,
                 child: Padding(
                   padding: const EdgeInsetsDirectional.fromSTEB(0, 24, 24, 24),
-                  child: _SuggestionsPanel(suggestions: suggestions, query: text, onPick: pick, onCall: (s) => ref.read(callsProvider.notifier).dial(s.number)),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: _SuggestionsPanel(suggestions: suggestions, query: text, onPick: pick, onCall: (s) => ref.read(callsProvider.notifier).dial(s.number)),
+                      ),
+                      if (showCard) ...[
+                        const SizedBox(height: 12),
+                        MixerCard(maxHeight: box.maxHeight * 0.62),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -271,7 +293,64 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
 
     return LayoutBuilder(
       builder: (context, c) {
-        final tight = c.maxHeight < 560;
+        // Compact pad below this height (the mixer strip needs ~56 px; larger text grows the field).
+        final tight = c.maxHeight < 620 + 160 * (MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0) - 1);
+        final stripOpen = ref.watch(mixerStripOpenProvider);
+        if (c.maxWidth > c.maxHeight) {
+          // Phone in landscape: number and mixer on the left, the pad on the
+          // right (it scrolls when the screen is very short).
+          return Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 4, 8, 0), child: field),
+                    AccountSelector(dense: true),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (suggestions.isNotEmpty)
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  for (final s in suggestions.take(3))
+                                    ActionChip(
+                                      avatar: Avatar(name: s.name.isEmpty ? s.number : s.name, size: 22),
+                                      label: Text(bidiSafe(s.name.isEmpty ? s.number : s.name)),
+                                      onPressed: () => pick(s),
+                                    ),
+                                ],
+                              ),
+                            const MixerStrip(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 300,
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: true),
+                        const SizedBox(height: 4),
+                        callBtn,
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
         return Column(
           children: [
             Padding(
@@ -280,7 +359,15 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
             ),
             const SizedBox(height: 4),
             AccountSelector(dense: tight),
-            if (!tight)
+            if (stripOpen)
+              // Opened mixer takes the quick list's place (and scrolls).
+              const Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: MixerStrip(),
+                ),
+              )
+            else if (!tight)
               // Tall phones: use the gap above the keypad for the top T9
               // suggestions (or recent calls while nothing is typed).
               Expanded(
@@ -315,11 +402,16 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                       ),
                     ),
             ),
-            if (tight) const Spacer(),
+            if (tight && !stripOpen) const Spacer(),
+            if (!stripOpen)
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, tight ? 0 : 4, 16, tight ? 4 : 8),
+                child: const MixerStrip(),
+              ),
             DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: tight),
-            const SizedBox(height: 8),
+            SizedBox(height: tight ? 4 : 8),
             callBtn,
-            const SizedBox(height: 12),
+            SizedBox(height: tight ? 8 : 12),
           ],
         );
       },

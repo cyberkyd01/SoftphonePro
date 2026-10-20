@@ -4,6 +4,34 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-20
+
+Adds a Linux app, a musicbed and a live audio mixer. See [docs/RELEASE_NOTES_v1.1.0.md](docs/RELEASE_NOTES_v1.1.0.md) for downloads, install notes and known limitations. Installs over 1.0.0 and keeps your accounts and settings.
+
+### Added
+
+**Linux**
+* Linux desktop app (GTK runner and engine plugin) for 64-bit systems: Ubuntu 22.04+, Debian 12+ and Raspberry Pi OS (64-bit) Bookworm. Built on Ubuntu 22.04 (glibc 2.35). 32-bit Raspberry Pi OS is not supported, because Flutter has no 32-bit ARM Linux build.
+* Packages: `.deb` and portable `.tar.gz` for amd64 and arm64 (`SoftphonePro-<ver>-linux-<arch>.deb` / `.tar.gz`). The tarball includes `install-desktop-entry.sh` and `uninstall-desktop-entry.sh` for the menu entry and link handling.
+* Desktop integration: tray icon where the desktop has a StatusNotifierItem host (without one, closing the window quits), notifications with Answer/Decline, `sip:`/`sips:`/`tel:`/`callto:`/`softphonepro:` links with a default-handler setting (`xdg-mime`), single instance, start at login, headset and media play-pause through MPRIS, and global shortcuts on X11 sessions (not Wayland).
+* Passwords in the Secret Service keyring (GNOME Keyring or KWallet), with an encrypted-file fallback when there is none. Audio through ALSA, which reaches PulseAudio and PipeWire through the `default` device.
+* Not on Linux: QR camera scanning, biometric app unlock (PIN only), mDNS discovery (LAN Link uses its multicast discovery, which works with the other platforms) and system contacts.
+* Linux builds in CI for amd64 and arm64.
+
+**Musicbed and audio mixer**
+* Musicbed: pick an MP3 or WAV file from the audio library and it loops under your voice to the people on your calls. Own volume from 0 to 200%, adjustable live; optional "Hear it myself" monitor with its own volume. It keeps playing while you mute your microphone, is not sent to held calls (they get hold music), reaches every member of a local conference, is included in your side of call recordings, and pauses between calls. Settings > Audio > Musicbed, or from the mixer.
+* Engine: `media.musicbedStart`, `media.musicbedStop`, `media.musicbedSet`, `media.musicbedState` and the `media.musicbed` event, and `media.levels` for per-channel levels (contract v1.2, [docs/ENGINE_API.md](docs/ENGINE_API.md) section 10).
+* Live audio mixer: level bars and sliders for the microphone (input gain), speaker or headphones (output volume) and the musicbed, with input and output device pickers (the audio route on phones). It is on the keypad screen (a card on desktop and tablets, a collapsible strip on phones), in calls (calls panel on desktop, in-call page on phones) and in Settings > Audio.
+
+### Changed
+* [docs/FEATURES.md](docs/FEATURES.md): rows added for the musicbed, the mixer and Linux, and the "Linux desktop app" entry (Z7) removed from the not-implemented list. It now has 114 rows.
+* The app version is 1.1.0 (build 2), so Android installs it over 1.0.0.
+
+### Fixed
+* The app chose Arabic when the system language was not one of the 13 supported ones (for example Swedish). It now falls back to English.
+* Text overflows at large text sizes, and in Arabic, on the keypad and in-call screens.
+* A flaky FFI plumbing test in `spcore_dart` was hardened against slow CI runners.
+
 ## [1.0.0] - 2026-10-19
 
 First public release. Windows, macOS, Android and iOS builds, plus a browser extension. See [docs/RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md) for downloads, install notes and known limitations, and [docs/FEATURES.md](docs/FEATURES.md) for the status of every feature and the test behind it.
@@ -100,5 +128,6 @@ Found by the independent reviews and the device runs before release:
 * Builds are not code-signed or notarised.
 * Hold music through Asterisk is the PBX's own; Ogg Opus recordings play in the app on Android and Linux only.
 
-[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/cyberkyd01/SoftphonePro/releases/tag/v1.0.0

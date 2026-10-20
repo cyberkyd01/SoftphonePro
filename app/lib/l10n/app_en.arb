@@ -9257,12 +9257,163 @@
   "@provisioningUpdateSummary": {
     "description": "Import confirmation: how many imported accounts update existing ones and how many are new.",
     "placeholders": {
-      "updated": {"type": "int"},
-      "added": {"type": "int"}
+      "updated": {
+        "type": "int"
+      },
+      "added": {
+        "type": "int"
+      }
     }
   },
   "secretsKeyringLocked": "Your keyring is locked, so saved passwords couldn''t be read. Unlock it and restart SoftphonePro.",
   "@secretsKeyringLocked": {
     "description": "Notice at start-up (Linux): the secret keyring was locked and could not be unlocked, so saved account passwords could not be read this session."
+  },
+  "mixerTitle": "Audio mixer",
+  "@mixerTitle": {
+    "description": "Title of the audio mixer (microphone, speaker and musicbed meters and sliders)."
+  },
+  "mixerMicrophone": "Microphone",
+  "@mixerMicrophone": {
+    "description": "Mixer row label: the microphone (audio input)."
+  },
+  "mixerSpeaker": "Headphones & speaker",
+  "@mixerSpeaker": {
+    "description": "Mixer row label: headphones or speaker (audio output)."
+  },
+  "mixerMicVolume": "Microphone volume",
+  "@mixerMicVolume": {
+    "description": "Accessibility label of the microphone gain slider."
+  },
+  "mixerSpeakerVolume": "Speaker volume",
+  "@mixerSpeakerVolume": {
+    "description": "Accessibility label of the speaker volume slider."
+  },
+  "mixerMeterLabel": "{name} level",
+  "@mixerMeterLabel": {
+    "description": "Accessibility label of a level meter, e.g. \"Microphone level\".",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mixerInputDevice": "Input device",
+  "@mixerInputDevice": {
+    "description": "Mixer: label of the input (microphone) device picker."
+  },
+  "mixerOutputDevice": "Output device",
+  "@mixerOutputDevice": {
+    "description": "Mixer: label of the output (speaker) device picker."
+  },
+  "mixerOutputRoute": "Audio output",
+  "@mixerOutputRoute": {
+    "description": "Mobile mixer: label of the audio output route selector (phone, speaker, Bluetooth, headset)."
+  },
+  "mixerInputFollowsOutput": "The microphone follows the selected audio output.",
+  "@mixerInputFollowsOutput": {
+    "description": "Mobile mixer: hint under the microphone row; the phone picks the microphone from the audio output."
+  },
+  "mixerShowMore": "Show devices and musicbed",
+  "@mixerShowMore": {
+    "description": "Mixer: expand control that reveals device pickers and musicbed options."
+  },
+  "mixerShowLess": "Show fewer controls",
+  "@mixerShowLess": {
+    "description": "Mixer: collapse control that hides device pickers and musicbed options."
+  },
+  "mixerStripShow": "Show audio mixer",
+  "@mixerStripShow": {
+    "description": "Tooltip of the collapsed mixer strip on the keypad and call screens."
+  },
+  "mixerStripHide": "Hide audio mixer",
+  "@mixerStripHide": {
+    "description": "Tooltip of the expanded mixer strip on the keypad and call screens."
+  },
+  "musicbedTitle": "Musicbed",
+  "@musicbedTitle": {
+    "description": "Name of the musicbed feature: a music file that loops under the user's voice for the people on the call."
+  },
+  "musicbedPlay": "Play musicbed",
+  "@musicbedPlay": {
+    "description": "Switch: play the musicbed into calls."
+  },
+  "musicbedVolume": "Musicbed volume",
+  "@musicbedVolume": {
+    "description": "Accessibility label of the musicbed volume slider."
+  },
+  "musicbedChooseFile": "Choose a file",
+  "@musicbedChooseFile": {
+    "description": "Musicbed file chip when no file is chosen yet."
+  },
+  "musicbedChangeFile": "Musicbed file: {name}. Tap to change.",
+  "@musicbedChangeFile": {
+    "description": "Accessibility label of the musicbed file chip; tapping changes the file.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "musicbedHearIt": "Hear it myself",
+  "@musicbedHearIt": {
+    "description": "Switch: also play the musicbed to the user locally."
+  },
+  "musicbedMonitorVolume": "Monitor volume",
+  "@musicbedMonitorVolume": {
+    "description": "Accessibility label of the slider for how loud the user hears the musicbed."
+  },
+  "musicbedAddFile": "Add a file…",
+  "@musicbedAddFile": {
+    "description": "Musicbed file sheet: import a new audio file from the device."
+  },
+  "musicbedPickerTitle": "Musicbed file",
+  "@musicbedPickerTitle": {
+    "description": "Title of the sheet that lists the audio library for the musicbed."
+  },
+  "musicbedOn": "Musicbed on",
+  "@musicbedOn": {
+    "description": "Small in-call indicator that the musicbed is playing."
+  },
+  "musicbedOnTooltip": "A music file is playing to everyone on your calls.",
+  "@musicbedOnTooltip": {
+    "description": "Tooltip of the in-call musicbed indicator."
+  },
+  "musicbedFileMissing": "The musicbed file is no longer available, so musicbed was turned off.",
+  "@musicbedFileMissing": {
+    "description": "Notice: the musicbed audio file no longer exists, so the feature was switched off."
+  },
+  "musicbedNeedsFile": "Choose a musicbed file first.",
+  "@musicbedNeedsFile": {
+    "description": "Notice: the user turned the musicbed on without choosing a file."
+  },
+  "musicbedStopped": "Musicbed stopped: {message}",
+  "@musicbedStopped": {
+    "description": "Notice: the engine stopped the musicbed because of an error.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "musicbedSettingsFooter": "Loops a music file under your voice for everyone on your calls, even while you are muted. Calls on hold hear the hold music instead.",
+  "@musicbedSettingsFooter": {
+    "description": "Footer of the Musicbed settings group."
+  },
+  "musicbedSettingsFile": "Music file",
+  "@musicbedSettingsFile": {
+    "description": "Settings > Audio > Musicbed: the music file selector."
+  },
+  "linkImportFlagMusicbed": "Plays music into your calls",
+  "@linkImportFlagMusicbed": {
+    "description": "Import confirmation: the profile switches music into every call."
+  },
+  "musicbedMonitorIosHint": "On iPhone you hear it during calls",
+  "@musicbedMonitorIosHint": {
+    "description": "Hint under the hear-it-myself toggle on iOS, where there is no audio device without a call."
+  },
+  "musicbedStopFailed": "Couldn’t stop the music. It may still be playing to your callers.",
+  "@musicbedStopFailed": {
+    "description": "Error notice: switching the musicbed off failed and it may still be playing to the other party."
   }
 }

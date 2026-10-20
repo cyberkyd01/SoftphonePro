@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'events.dart';
 import 'json_sip_engine.dart';
@@ -250,6 +251,24 @@ class FakeSipEngine extends JsonSipEngine {
   bool loopbackEnabled = false;
   bool ringerActive = false;
   String? activeTone;
+
+  /// Musicbed state (`media.musicbed*`); read-only for assertions.
+  MusicbedState get musicbed => _musicbedState();
+  bool _bedOn = false;
+  String _bedFile = '';
+  MediaFileInfo _bedInfo = const MediaFileInfo();
+  double _bedVolume = 0.3;
+  bool _bedMonitor = false;
+  double _bedMonitorVolume = 0.5;
+  bool _bedPaused = false;
+  int _bedPosAcc = 0;
+  DateTime? _bedSince;
+
+  /// When true, `media.levels` wobbles over time so meters visibly move.
+  bool animateLevels = false;
+
+  /// Replaces the simulated `media.levels` result when set.
+  MediaLevels? levelsOverride;
   String userAgent = 'SoftphonePro/1.0';
   List<TlsPin> tlsPins = const [];
   List<String> nameservers = const [];
@@ -523,6 +542,145 @@ class FakeSipEngine extends JsonSipEngine {
       );
     }
     throw _invalid('unreadable or unsupported media file "$file"');
+  }
+
+  // ---- musicbed
+
+  double _bedVol(Map<String, dynamic> p, String k, double def) {
+    final v = p[k];
+    if (v == null) return def;
+    if (v is! num || v < 0 || v > 2) throw _invalid('$k 0.0-2.0');
+    return v.toDouble();
+  }
+
+  bool _bedBool(Map<String, dynamic> p, String k, bool def) {
+    final v = p[k];
+    if (v == null) return def;
+    if (v is! bool) throw _invalid('$k must be boolean');
+    return v;
+  }
+
+  int _bedPos() {
+    final ms =
+        _bedPosAcc +
+        (_bedSince == null
+            ? 0
+            : _now().difference(_bedSince!).inMilliseconds);
+    return _bedInfo.durationMs > 0 ? ms % _bedInfo.durationMs : 0;
+  }
+
+  void _bedFreeze() {
+    _bedPosAcc = _bedPos();
+    _bedSince = null;
+  }
+
+  Map<String, dynamic> _bedStart(Map<String, dynamic> p) {
+    final file = _str(p, 'file');
+    final info = _fileInfo(file);
+    final vol = _bedVol(p, 'volume', 0.3);
+    final mon = _bedBool(p, 'monitor', false);
+    final monVol = _bedVol(p, 'monitorVolume', 0.5);
+    // Like the engine: the old bed reports "replaced", then the new one "started".
+    if (_bedOn) _emit('media.musicbed', {'active': false, 'file': _bedFile, 'reason': 'replaced'});
+    _bedOn = true;
+    _bedFile = file;
+    _bedInfo = info;
+    _bedVolume = vol;
+    _bedMonitor = mon;
+    _bedMonitorVolume = monVol;
+    _bedPaused = false;
+    _bedPosAcc = 0;
+    _bedSince = _now();
+    _emit('media.musicbed', {'active': true, 'file': file, 'reason': 'started'});
+    return {'file': file, 'format': info.format, 'durationMs': info.durationMs};
+  }
+
+  Map<String, dynamic> _bedSet(Map<String, dynamic> p) {
+    if (!_bedOn) throw _err(ErrorCode.notFound, 'no musicbed running');
+    final vol = _bedVol(p, 'volume', _bedVolume);
+    final mon = _bedBool(p, 'monitor', _bedMonitor);
+    final monVol = _bedVol(p, 'monitorVolume', _bedMonitorVolume);
+    final paused = _bedBool(p, 'paused', _bedPaused);
+    if (paused != _bedPaused) {
+      if (paused) {
+        _bedFreeze();
+      } else {
+        _bedSince = _now();
+      }
+    }
+    _bedVolume = vol;
+    _bedMonitor = mon;
+    _bedMonitorVolume = monVol;
+    _bedPaused = paused;
+    return {};
+  }
+
+  void _bedEnd(String reason, {String? message}) {
+    if (!_bedOn) return;
+    final file = _bedFile;
+    _bedOn = false;
+    _bedSince = null;
+    _bedPosAcc = 0;
+    _emit('media.musicbed', {
+      'active': false,
+      'file': file,
+      'reason': reason,
+      if (message != null) 'message': message,
+    });
+  }
+
+  /// Simulates an engine-side musicbed failure (`reason: error`).
+  void failMusicbed([String message = 'decoder error']) =>
+      _bedEnd('error', message: message);
+
+  List<int> _bedCalls() => _bedOn
+      ? [
+          for (final c in _calls.values)
+            if (c.state == CallState.confirmed && !c.localHold) c.cid,
+        ]
+      : const [];
+
+  MusicbedState _musicbedState() => !_bedOn
+      ? MusicbedState(volume: _bedVolume, monitor: _bedMonitor)
+      : MusicbedState(
+          active: true,
+          file: _bedFile,
+          format: _bedInfo.format,
+          volume: _bedVolume,
+          monitor: _bedMonitor,
+          monitorVolume: _bedMonitorVolume,
+          paused: _bedPaused,
+          positionMs: _bedPos(),
+          durationMs: _bedInfo.durationMs,
+          calls: _bedCalls(),
+        );
+
+  MediaLevels _levels() {
+    final o = levelsOverride;
+    if (o != null) return o;
+    final live = _calls.values.where((c) => c.state == CallState.confirmed);
+    final active = live.isNotEmpty;
+    // Gentle deterministic wobble (~0-40) when animating.
+    int w(int phase) => animateLevels
+        ? (20 +
+                  20 *
+                      math.sin(
+                        _now().millisecondsSinceEpoch / 180.0 + phase,
+                      ))
+              .round()
+        : 0;
+    final bed = _bedOn && !_bedPaused
+        ? (math.min(_bedVolume, 1.0) * (100 + w(3))).round().clamp(0, 255)
+        : 0;
+    return MediaLevels(
+      mic: active ? 40 + w(0) : 0,
+      speaker: active ? 30 + w(1) : 0,
+      musicbed: bed,
+      calls: [
+        for (final c in live)
+          CallLevel(cid: c.cid, rx: 30 + w(1), tx: 40 + w(0) + bed ~/ 2),
+      ],
+    );
   }
 
   void _trackActive(_Call c) {
@@ -1036,8 +1194,17 @@ class FakeSipEngine extends JsonSipEngine {
         ec = EcConfig.fromJson(p);
         return {};
       case 'media.levels':
-        final active = _calls.values.any((c) => c.state == CallState.confirmed);
-        return {'mic': active ? 40 : 0, 'speaker': active ? 30 : 0};
+        return _levels().toJson();
+      case 'media.musicbedStart':
+        return _bedStart(p);
+      case 'media.musicbedStop':
+        final was = _bedOn;
+        if (was) _bedEnd('stopped');
+        return {'stopped': was};
+      case 'media.musicbedSet':
+        return _bedSet(p);
+      case 'media.musicbedState':
+        return _musicbedState().toJson();
       case 'media.setMicLevel':
         micLevel = _level(p);
         return {};
@@ -1298,6 +1465,7 @@ class FakeSipEngine extends JsonSipEngine {
         _emit('account.reg', a.toJson());
       }
     }
+    _bedEnd('shutdown');
     _cancelAll();
     _statsTimer?.cancel();
     _statsTimer = null;

@@ -6804,4 +6804,114 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'Anahtarlığınız kilitli olduğu için kayıtlı parolalar okunamadı. Kilidini açıp SoftphonePro\'yu yeniden başlatın.';
+
+  @override
+  String get mixerTitle => 'Ses karıştırıcı';
+
+  @override
+  String get mixerMicrophone => 'Mikrofon';
+
+  @override
+  String get mixerSpeaker => 'Kulaklık ve hoparlör';
+
+  @override
+  String get mixerMicVolume => 'Mikrofon ses düzeyi';
+
+  @override
+  String get mixerSpeakerVolume => 'Hoparlör ses düzeyi';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return '$name düzeyi';
+  }
+
+  @override
+  String get mixerInputDevice => 'Giriş aygıtı';
+
+  @override
+  String get mixerOutputDevice => 'Çıkış aygıtı';
+
+  @override
+  String get mixerOutputRoute => 'Ses çıkışı';
+
+  @override
+  String get mixerInputFollowsOutput => 'Mikrofon, seçilen ses çıkışını izler.';
+
+  @override
+  String get mixerShowMore => 'Aygıtları ve fon müziğini göster';
+
+  @override
+  String get mixerShowLess => 'Daha az denetim göster';
+
+  @override
+  String get mixerStripShow => 'Ses karıştırıcıyı göster';
+
+  @override
+  String get mixerStripHide => 'Ses karıştırıcıyı gizle';
+
+  @override
+  String get musicbedTitle => 'Fon müziği';
+
+  @override
+  String get musicbedPlay => 'Fon müziğini çal';
+
+  @override
+  String get musicbedVolume => 'Fon müziği ses düzeyi';
+
+  @override
+  String get musicbedChooseFile => 'Dosya seç';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Fon müziği dosyası: $name. Değiştirmek için dokunun.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Ben de duyayım';
+
+  @override
+  String get musicbedMonitorVolume => 'İzleme ses düzeyi';
+
+  @override
+  String get musicbedAddFile => 'Dosya ekle…';
+
+  @override
+  String get musicbedPickerTitle => 'Fon müziği dosyası';
+
+  @override
+  String get musicbedOn => 'Fon müziği açık';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Aramalarınızdaki herkese bir müzik dosyası çalınıyor.';
+
+  @override
+  String get musicbedFileMissing =>
+      'Fon müziği dosyası artık yok, bu yüzden fon müziği kapatıldı.';
+
+  @override
+  String get musicbedNeedsFile => 'Önce bir fon müziği dosyası seçin.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Fon müziği durduruldu: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Aramalarınızdaki herkes için sesinizin altında bir müzik dosyasını döngüyle çalar; sessizdeyken bile. Beklemedeki aramalar bunun yerine bekletme müziğini duyar.';
+
+  @override
+  String get musicbedSettingsFile => 'Müzik dosyası';
+
+  @override
+  String get linkImportFlagMusicbed => 'Aramalarınızda müzik çalar';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'iPhone’da bunu aramalar sırasında duyarsınız';
+
+  @override
+  String get musicbedStopFailed =>
+      'Müzik durdurulamadı. Karşınızdakiler hâlâ duyuyor olabilir.';
 }

@@ -154,10 +154,15 @@ class DialKey extends StatelessWidget {
                 },
           customBorder: const CircleBorder(),
           radius: size / 2 + 6,
-          child: SizedBox(
+          // Keys are already large: bigger system text must not overflow them.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.15,
+            child: SizedBox(
             width: size,
             height: size,
-            child: Column(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
@@ -182,6 +187,8 @@ class DialKey extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            ),
             ),
           ),
         ),

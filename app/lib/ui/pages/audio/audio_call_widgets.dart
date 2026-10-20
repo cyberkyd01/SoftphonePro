@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../audio/announcement_service.dart';
+import '../../../audio/musicbed.dart';
 import '../../../audio/voice_isolation.dart';
 import '../../../l10n/l10n.dart';
 import '../../../services/settings_controller.dart';
@@ -83,6 +84,38 @@ class NoiseCancellationChip extends ConsumerWidget {
             Icon(Icons.noise_control_off_rounded, size: 13, color: t.colorScheme.primary),
             const SizedBox(width: 4),
             Text(context.l10n.callNoiseOn, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small "Musicbed on" indicator for the call screen, shown while the engine
+/// plays the musicbed into the calls.
+class MusicbedChip extends ConsumerWidget {
+  const MusicbedChip({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(musicbedProvider.select((m) => m.active))) return const SizedBox.shrink();
+    final t = Theme.of(context);
+    return Tooltip(
+      message: context.l10n.musicbedOnTooltip,
+      child: Container(
+        key: const Key('musicbed-chip'),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: t.colorScheme.primary.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.music_note_rounded, size: 13, color: t.colorScheme.primary),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(context.l10n.musicbedOn, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       ),

@@ -15,6 +15,7 @@ int  spc_rec_stop(int id, spc_rec_result* out);                  /* 0 ok; blocks
 /* msrc/dnm: the mic-source arguments the topology passes to conn_mic() (see spc_call.c). */
 void spc_rec_apply_call(int id, int cslot, int active, int muted, int detached, int msrc, int dnm);
 void spc_rec_apply_global(int msrc, int dnm);                              /* microphone recorder */
+int  spc_rec_local_sink(int id);                                  /* slot carrying the local side, -1 if none */
 int  spc_rec_mic_id(void);                                       /* active microphone recorder id or 0 */
 void spc_rec_shutdown(void);
 int  spc_rec_opus_available(void);

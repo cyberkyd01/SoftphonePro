@@ -6861,4 +6861,116 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get secretsKeyringLocked =>
       'Ihr Schlüsselbund ist gesperrt, daher konnten gespeicherte Passwörter nicht gelesen werden. Entsperren Sie ihn und starten Sie SoftphonePro neu.';
+
+  @override
+  String get mixerTitle => 'Audio-Mixer';
+
+  @override
+  String get mixerMicrophone => 'Mikrofon';
+
+  @override
+  String get mixerSpeaker => 'Kopfhörer & Lautsprecher';
+
+  @override
+  String get mixerMicVolume => 'Mikrofonlautstärke';
+
+  @override
+  String get mixerSpeakerVolume => 'Lautsprecherlautstärke';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'Pegel: $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'Eingabegerät';
+
+  @override
+  String get mixerOutputDevice => 'Ausgabegerät';
+
+  @override
+  String get mixerOutputRoute => 'Audioausgabe';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'Das Mikrofon folgt der gewählten Audioausgabe.';
+
+  @override
+  String get mixerShowMore => 'Geräte und Hintergrundmusik anzeigen';
+
+  @override
+  String get mixerShowLess => 'Weniger Steuerelemente anzeigen';
+
+  @override
+  String get mixerStripShow => 'Audio-Mixer anzeigen';
+
+  @override
+  String get mixerStripHide => 'Audio-Mixer ausblenden';
+
+  @override
+  String get musicbedTitle => 'Hintergrundmusik';
+
+  @override
+  String get musicbedPlay => 'Hintergrundmusik abspielen';
+
+  @override
+  String get musicbedVolume => 'Lautstärke der Hintergrundmusik';
+
+  @override
+  String get musicbedChooseFile => 'Datei auswählen';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Datei der Hintergrundmusik: $name. Zum Ändern tippen.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Selbst mithören';
+
+  @override
+  String get musicbedMonitorVolume => 'Mithörlautstärke';
+
+  @override
+  String get musicbedAddFile => 'Datei hinzufügen …';
+
+  @override
+  String get musicbedPickerTitle => 'Datei der Hintergrundmusik';
+
+  @override
+  String get musicbedOn => 'Hintergrundmusik an';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Eine Musikdatei wird allen Teilnehmern deiner Anrufe vorgespielt.';
+
+  @override
+  String get musicbedFileMissing =>
+      'Die Datei der Hintergrundmusik ist nicht mehr verfügbar. Die Hintergrundmusik wurde ausgeschaltet.';
+
+  @override
+  String get musicbedNeedsFile =>
+      'Wähle zuerst eine Datei für die Hintergrundmusik.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Hintergrundmusik gestoppt: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Spielt eine Musikdatei in Endlosschleife unter deiner Stimme für alle in deinen Anrufen, auch wenn du stummgeschaltet bist. Gehaltene Anrufe hören stattdessen die Wartemusik.';
+
+  @override
+  String get musicbedSettingsFile => 'Musikdatei';
+
+  @override
+  String get linkImportFlagMusicbed => 'Spielt Musik in deine Anrufe ein';
+
+  @override
+  String get musicbedMonitorIosHint =>
+      'Auf dem iPhone hörst du sie während Anrufen';
+
+  @override
+  String get musicbedStopFailed =>
+      'Die Musik konnte nicht gestoppt werden. Sie läuft möglicherweise noch für deine Gesprächspartner.';
 }
