@@ -183,6 +183,7 @@ class Provisioning {
     'callLinksImmediately', 'syncFeatureCodes',
     'jbInitMs', 'jbMinPreMs', 'jbMaxPreMs', 'jbMaxMs', 'ptime', 'progressTones',
     'holdMusic', 'holdMusicVolume', 'viMicOn', 'viMicStrength', 'viInOn', 'viInStrength',
+    'musicbedEnabled', 'musicbedVolume', 'musicbedMonitor', 'musicbedMonitorVolume',
     'lanAllowIntercom', 'lanIntercomPrompt', 'lanAllowPull',
     'logLevel',
   };

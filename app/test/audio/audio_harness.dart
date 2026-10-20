@@ -11,6 +11,8 @@ import 'package:softphonepro/services/accounts_controller.dart';
 import 'package:softphonepro/services/app_services.dart';
 import 'package:softphonepro/services/calls_controller.dart';
 import 'package:softphonepro/services/engine_controller.dart';
+import 'package:softphonepro/platform/platform_services.dart' show PlatformServices;
+import 'package:softphonepro/services/providers.dart' show EngineFactory, platformServicesProvider;
 import 'package:softphonepro/services/settings_controller.dart';
 import 'package:flutter/foundation.dart';
 import 'package:spcore_dart/spcore_dart.dart';
@@ -122,12 +124,15 @@ class AudioEnv {
     List<AccountProfile>? profiles,
     LogEngine? engine,
     bool start = true,
+    EngineFactory? factory,
+    PlatformServices? platform,
   }) async {
     final e = engine ?? LogEngine();
     final env = await TestEnv.create(
       engine: e,
       profiles: profiles ?? [testProfile()],
       settings: AppSettings({'onboardingDone': true, ...settings}),
+      factory: factory,
     );
     final dir = Directory('${env.tempDir.path}/audio')..createSync(recursive: true);
     final picked = <String?>[];
@@ -145,6 +150,7 @@ class AudioEnv {
       }),
       audioFilePickerProvider.overrideWithValue(() async => picked.isEmpty ? null : picked.removeAt(0)),
       audioPreviewProvider.overrideWithValue(preview),
+      if (platform != null) platformServicesProvider.overrideWithValue(platform),
     ];
     final c = ProviderContainer(overrides: overrides);
     final a = AudioEnv._(env, e, c, dir, picked, preview);

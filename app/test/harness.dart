@@ -23,18 +23,22 @@ AccountProfile testProfile({String id = 'acc1', String user = '1001', String dom
 );
 
 class TestEnv {
-  TestEnv._(this.engine, this.db, this.secrets, this.boot, this.tempDir);
+  TestEnv._(this.engine, this.db, this.secrets, this.boot, this.tempDir, this.factory);
   final FakeSipEngine engine;
   final AppDatabase db;
   final MemorySecretsStore secrets;
   BootData boot;
   final Directory tempDir;
 
+  /// Replaces the factory that hands out [engine] (engine restart tests).
+  final EngineFactory? factory;
+
   static Future<TestEnv> create({
     List<AccountProfile> profiles = const [],
     AppSettings settings = const AppSettings({'onboardingDone': true}),
     List<Contact> contacts = const [],
     FakeSipEngine? engine,
+    EngineFactory? factory,
   }) async {
     final db = await AppDatabase.memory();
     final secrets = MemorySecretsStore();
@@ -45,6 +49,7 @@ class TestEnv {
       secrets,
       BootData(settings: settings, profiles: profiles, contacts: contacts),
       tmp,
+      factory,
     );
   }
 
@@ -54,7 +59,7 @@ class TestEnv {
     appDatabaseProvider.overrideWithValue(db),
     secretsStoreProvider.overrideWithValue(secrets),
     bootDataProvider.overrideWithValue(boot),
-    engineFactoryProvider.overrideWithValue(({required bool simulator}) async => EngineHandle(engine, demo: false)),
+    engineFactoryProvider.overrideWithValue(factory ?? ({required bool simulator}) async => EngineHandle(engine, demo: false)),
     connectivityStreamProvider.overrideWithValue(const Stream.empty()),
     recordingsDirProvider.overrideWithValue(() async => tempDir.path),
     // Widget tests report Android as the platform; the API itself is desktop-only.

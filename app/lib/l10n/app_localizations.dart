@@ -11411,6 +11411,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update {updated} existing, add {added} new'**
   String provisioningUpdateSummary(int updated, int added);
+
+  /// Title of the audio mixer (microphone, speaker and musicbed meters and sliders).
+  ///
+  /// In en, this message translates to:
+  /// **'Audio mixer'**
+  String get mixerTitle;
+
+  /// Mixer row label: the microphone (audio input).
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get mixerMicrophone;
+
+  /// Mixer row label: headphones or speaker (audio output).
+  ///
+  /// In en, this message translates to:
+  /// **'Headphones & speaker'**
+  String get mixerSpeaker;
+
+  /// Accessibility label of the microphone gain slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone volume'**
+  String get mixerMicVolume;
+
+  /// Accessibility label of the speaker volume slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaker volume'**
+  String get mixerSpeakerVolume;
+
+  /// Accessibility label of a level meter, e.g. "Microphone level".
+  ///
+  /// In en, this message translates to:
+  /// **'{name} level'**
+  String mixerMeterLabel(String name);
+
+  /// Mixer: label of the input (microphone) device picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Input device'**
+  String get mixerInputDevice;
+
+  /// Mixer: label of the output (speaker) device picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Output device'**
+  String get mixerOutputDevice;
+
+  /// Mobile mixer: label of the audio output route selector (phone, speaker, Bluetooth, headset).
+  ///
+  /// In en, this message translates to:
+  /// **'Audio output'**
+  String get mixerOutputRoute;
+
+  /// Mobile mixer: hint under the microphone row; the phone picks the microphone from the audio output.
+  ///
+  /// In en, this message translates to:
+  /// **'The microphone follows the selected audio output.'**
+  String get mixerInputFollowsOutput;
+
+  /// Mixer: expand control that reveals device pickers and musicbed options.
+  ///
+  /// In en, this message translates to:
+  /// **'Show devices and musicbed'**
+  String get mixerShowMore;
+
+  /// Mixer: collapse control that hides device pickers and musicbed options.
+  ///
+  /// In en, this message translates to:
+  /// **'Show fewer controls'**
+  String get mixerShowLess;
+
+  /// Tooltip of the collapsed mixer strip on the keypad and call screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Show audio mixer'**
+  String get mixerStripShow;
+
+  /// Tooltip of the expanded mixer strip on the keypad and call screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide audio mixer'**
+  String get mixerStripHide;
+
+  /// Name of the musicbed feature: a music file that loops under the user's voice for the people on the call.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed'**
+  String get musicbedTitle;
+
+  /// Switch: play the musicbed into calls.
+  ///
+  /// In en, this message translates to:
+  /// **'Play musicbed'**
+  String get musicbedPlay;
+
+  /// Accessibility label of the musicbed volume slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed volume'**
+  String get musicbedVolume;
+
+  /// Musicbed file chip when no file is chosen yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file'**
+  String get musicbedChooseFile;
+
+  /// Accessibility label of the musicbed file chip; tapping changes the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed file: {name}. Tap to change.'**
+  String musicbedChangeFile(String name);
+
+  /// Switch: also play the musicbed to the user locally.
+  ///
+  /// In en, this message translates to:
+  /// **'Hear it myself'**
+  String get musicbedHearIt;
+
+  /// Accessibility label of the slider for how loud the user hears the musicbed.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor volume'**
+  String get musicbedMonitorVolume;
+
+  /// Musicbed file sheet: import a new audio file from the device.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a file…'**
+  String get musicbedAddFile;
+
+  /// Title of the sheet that lists the audio library for the musicbed.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed file'**
+  String get musicbedPickerTitle;
+
+  /// Small in-call indicator that the musicbed is playing.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed on'**
+  String get musicbedOn;
+
+  /// Tooltip of the in-call musicbed indicator.
+  ///
+  /// In en, this message translates to:
+  /// **'A music file is playing to everyone on your calls.'**
+  String get musicbedOnTooltip;
+
+  /// Notice: the musicbed audio file no longer exists, so the feature was switched off.
+  ///
+  /// In en, this message translates to:
+  /// **'The musicbed file is no longer available, so musicbed was turned off.'**
+  String get musicbedFileMissing;
+
+  /// Notice: the user turned the musicbed on without choosing a file.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a musicbed file first.'**
+  String get musicbedNeedsFile;
+
+  /// Notice: the engine stopped the musicbed because of an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed stopped: {message}'**
+  String musicbedStopped(String message);
+
+  /// Footer of the Musicbed settings group.
+  ///
+  /// In en, this message translates to:
+  /// **'Loops a music file under your voice for everyone on your calls, even while you are muted. Calls on hold hear the hold music instead.'**
+  String get musicbedSettingsFooter;
+
+  /// Settings > Audio > Musicbed: the music file selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Music file'**
+  String get musicbedSettingsFile;
 }
 
 class _AppLocalizationsDelegate

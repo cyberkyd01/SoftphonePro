@@ -1,13 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
-import '../../../core/theme.dart';
+import '../../../audio/audio_levels.dart';
 import '../../../l10n/l10n.dart';
 import '../../../services/engine_controller.dart';
+import '../../widgets/level_meter.dart';
 import '../../widgets/settings_tiles.dart';
 
 /// Mic meter, echo test, speaker tone.
@@ -18,12 +17,9 @@ class AudioTestView extends ConsumerStatefulWidget {
 }
 
 class _AudioTestViewState extends ConsumerState<AudioTestView> {
-  Timer? _poll;
   bool _meter = false;
   bool _echo = false;
   String? _tone;
-  int _mic = 0;
-  int _spk = 0;
   String? _error;
   EngineController? _ctl;
 
@@ -35,7 +31,6 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
 
   @override
   void dispose() {
-    _poll?.cancel();
     final c = _ctl;
     if (c != null && c.hasEngine) {
       if (_echo) c.engine.loopback(false).catchError((_) {});
@@ -62,32 +57,6 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
     }
   }
 
-  void _startMeter() {
-    _poll?.cancel();
-    _poll = Timer.periodic(const Duration(milliseconds: 120), (_) async {
-      final e = _engine;
-      if (e == null) return;
-      try {
-        final l = await e.levels();
-        if (mounted) {
-          setState(() {
-            _mic = l.mic;
-            _spk = l.speaker;
-          });
-        }
-      } catch (_) {}
-    });
-  }
-
-  void _stopMeter() {
-    _poll?.cancel();
-    _poll = null;
-    setState(() {
-      _mic = 0;
-      _spk = 0;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -110,21 +79,10 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
               title: l.diagAudioLevelMeter,
               subtitle: l.diagAudioLevelMeterSub,
               value: _meter,
-              onChanged: (v) {
-                setState(() => _meter = v);
-                v ? _startMeter() : _stopMeter();
-              },
+              onChanged: (v) => setState(() => _meter = v),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-              child: Column(
-                children: [
-                  _LevelBar(key: const Key('mic-bar'), label: l.diagAudioMic, value: _mic / 255),
-                  const SizedBox(height: 8),
-                  _LevelBar(key: const Key('spk-bar'), label: l.diagAudioSpeaker, value: _spk / 255),
-                ],
-              ),
-            ),
+            // Polls `media.levels` only while the switch is on.
+            if (_meter) const _MeterBars(),
           ],
         ),
         SettingsGroup(
@@ -202,33 +160,50 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
   }
 }
 
-class _LevelBar extends StatelessWidget {
-  const _LevelBar({super.key, required this.label, required this.value});
-  final String label;
-  final double value;
+class _MeterBars extends ConsumerStatefulWidget {
+  const _MeterBars();
+  @override
+  ConsumerState<_MeterBars> createState() => _MeterBarsState();
+}
+
+/// A running mic test keeps the meters at the fast rate.
+class _MeterBarsState extends ConsumerState<_MeterBars> {
+  late final MeterBoost _boost;
+
+  @override
+  void initState() {
+    super.initState();
+    _boost = ref.read(meterBoostProvider.notifier);
+    Future.microtask(() {
+      if (mounted) _boost.hold();
+    });
+  }
+
+  @override
+  void dispose() {
+    _boost.release();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context);
+    final meters = ref.watch(audioLevelsProvider);
     final l = context.l10n;
-    final v = value.clamp(0.0, 1.0);
-    final color = v > 0.9 ? c.regFail : (v > 0.7 ? c.regWarn : c.regOk);
-    return Semantics(
-      label: l.diagAudioLevelSemantics(label, (v * 100).round()),
-      child: Row(
+    Widget bar(Key key, String label, MeterChannel c) => Row(
+      children: [
+        SizedBox(width: 64, child: Text(label, style: Theme.of(context).textTheme.labelMedium)),
+        Expanded(
+          child: LevelMeter(key: key, channel: c, label: l.mixerMeterLabel(label), height: 12),
+        ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      child: Column(
         children: [
-          SizedBox(width: 64, child: Text(label, style: t.textTheme.labelMedium)),
-          Expanded(
-            // Level bars always fill left to right, like a meter.
-            child: Directionality(
-              textDirection: TextDirection.ltr,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(value: v, minHeight: 12, color: color, backgroundColor: t.colorScheme.surfaceContainerHighest),
-              ),
-            ),
-          ),
+          bar(const Key('mic-bar'), l.diagAudioMic, meters.mic),
+          const SizedBox(height: 8),
+          bar(const Key('spk-bar'), l.diagAudioSpeaker, meters.speaker),
         ],
       ),
     );

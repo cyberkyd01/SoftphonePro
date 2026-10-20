@@ -38,6 +38,7 @@ void main() {
       'im.typing': ImTypingEvent,
       'media.devicesChanged': MediaDevicesChangedEvent,
       'media.error': MediaErrorEvent,
+      'media.musicbed': MusicbedEvent,
       'diag.natType': DiagNatTypeEvent,
       'diag.options': DiagOptionsEvent,
       'future.thing': UnknownEvent,

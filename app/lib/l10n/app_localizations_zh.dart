@@ -6539,4 +6539,101 @@ class AppLocalizationsZh extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '更新 $updated 个现有账户，添加 $added 个新账户';
   }
+
+  @override
+  String get mixerTitle => '音频混音器';
+
+  @override
+  String get mixerMicrophone => '麦克风';
+
+  @override
+  String get mixerSpeaker => '耳机和扬声器';
+
+  @override
+  String get mixerMicVolume => '麦克风音量';
+
+  @override
+  String get mixerSpeakerVolume => '扬声器音量';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return '$name电平';
+  }
+
+  @override
+  String get mixerInputDevice => '输入设备';
+
+  @override
+  String get mixerOutputDevice => '输出设备';
+
+  @override
+  String get mixerOutputRoute => '音频输出';
+
+  @override
+  String get mixerInputFollowsOutput => '麦克风跟随所选的音频输出。';
+
+  @override
+  String get mixerShowMore => '显示设备和背景音乐';
+
+  @override
+  String get mixerShowLess => '显示更少选项';
+
+  @override
+  String get mixerStripShow => '显示音频混音器';
+
+  @override
+  String get mixerStripHide => '隐藏音频混音器';
+
+  @override
+  String get musicbedTitle => '背景音乐';
+
+  @override
+  String get musicbedPlay => '播放背景音乐';
+
+  @override
+  String get musicbedVolume => '背景音乐音量';
+
+  @override
+  String get musicbedChooseFile => '选择文件';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return '背景音乐文件：$name。点按可更改。';
+  }
+
+  @override
+  String get musicbedHearIt => '我也收听';
+
+  @override
+  String get musicbedMonitorVolume => '监听音量';
+
+  @override
+  String get musicbedAddFile => '添加文件…';
+
+  @override
+  String get musicbedPickerTitle => '背景音乐文件';
+
+  @override
+  String get musicbedOn => '背景音乐已开启';
+
+  @override
+  String get musicbedOnTooltip => '正在向通话中的所有人播放音乐文件。';
+
+  @override
+  String get musicbedFileMissing => '背景音乐文件已不可用，已关闭背景音乐。';
+
+  @override
+  String get musicbedNeedsFile => '请先选择背景音乐文件。';
+
+  @override
+  String musicbedStopped(String message) {
+    return '背景音乐已停止：$message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      '在您的声音下方循环播放音乐文件，通话中的所有人都能听到，静音时也一样。保持中的通话将听到等待音乐。';
+
+  @override
+  String get musicbedSettingsFile => '音乐文件';
 }

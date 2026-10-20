@@ -6882,4 +6882,106 @@ class AppLocalizationsFr extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Mettre à jour $updated existants, ajouter $added nouveaux';
   }
+
+  @override
+  String get mixerTitle => 'Mixeur audio';
+
+  @override
+  String get mixerMicrophone => 'Microphone';
+
+  @override
+  String get mixerSpeaker => 'Casque et haut-parleur';
+
+  @override
+  String get mixerMicVolume => 'Volume du microphone';
+
+  @override
+  String get mixerSpeakerVolume => 'Volume du haut-parleur';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'Niveau : $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'Périphérique d\'entrée';
+
+  @override
+  String get mixerOutputDevice => 'Périphérique de sortie';
+
+  @override
+  String get mixerOutputRoute => 'Sortie audio';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'Le microphone suit la sortie audio sélectionnée.';
+
+  @override
+  String get mixerShowMore =>
+      'Afficher les périphériques et la musique de fond';
+
+  @override
+  String get mixerShowLess => 'Afficher moins de commandes';
+
+  @override
+  String get mixerStripShow => 'Afficher le mixeur audio';
+
+  @override
+  String get mixerStripHide => 'Masquer le mixeur audio';
+
+  @override
+  String get musicbedTitle => 'Musique de fond';
+
+  @override
+  String get musicbedPlay => 'Lire la musique de fond';
+
+  @override
+  String get musicbedVolume => 'Volume de la musique de fond';
+
+  @override
+  String get musicbedChooseFile => 'Choisir un fichier';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Fichier de musique de fond : $name. Touchez pour changer.';
+  }
+
+  @override
+  String get musicbedHearIt => 'L\'écouter moi-même';
+
+  @override
+  String get musicbedMonitorVolume => 'Volume d\'écoute';
+
+  @override
+  String get musicbedAddFile => 'Ajouter un fichier…';
+
+  @override
+  String get musicbedPickerTitle => 'Fichier de musique de fond';
+
+  @override
+  String get musicbedOn => 'Musique de fond active';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Un fichier musical est diffusé à tous les participants de vos appels.';
+
+  @override
+  String get musicbedFileMissing =>
+      'Le fichier de musique de fond n\'est plus disponible ; la musique de fond a été désactivée.';
+
+  @override
+  String get musicbedNeedsFile =>
+      'Choisissez d\'abord un fichier de musique de fond.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Musique de fond arrêtée : $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Diffuse en boucle un fichier musical sous votre voix pour tous les participants de vos appels, même lorsque vous êtes en sourdine. Les appels en attente entendent la musique d\'attente.';
+
+  @override
+  String get musicbedSettingsFile => 'Fichier musical';
 }

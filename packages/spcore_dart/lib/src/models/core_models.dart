@@ -877,16 +877,64 @@ class RecordingResult {
   String toString() => 'RecordingResult(${toJson()})';
 }
 
+/// Per-call meter values (0-255) from `media.levels`.
+class CallLevel {
+  const CallLevel({required this.cid, this.rx = 0, this.tx = 0});
+
+  final int cid;
+  final int rx;
+  final int tx;
+
+  factory CallLevel.fromJson(Map<String, dynamic> j) => CallLevel(
+    cid: asInt(j['cid']),
+    rx: asInt(j['rx'], 0),
+    tx: asInt(j['tx'], 0),
+  );
+
+  Map<String, dynamic> toJson() => {'cid': cid, 'rx': rx, 'tx': tx};
+
+  @override
+  bool operator ==(Object other) =>
+      other is CallLevel && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'CallLevel(${toJson()})';
+}
+
+/// Meter values (0-255, perceptual) from `media.levels`. Engines that predate
+/// the musicbed omit [musicbed] and [calls]; they default to 0 / empty.
 class MediaLevels {
-  const MediaLevels({this.mic = 0, this.speaker = 0});
+  const MediaLevels({
+    this.mic = 0,
+    this.speaker = 0,
+    this.musicbed = 0,
+    this.calls = const [],
+  });
 
   final int mic;
   final int speaker;
+  final int musicbed;
+  final List<CallLevel> calls;
 
-  factory MediaLevels.fromJson(Map<String, dynamic> j) =>
-      MediaLevels(mic: asInt(j['mic'], 0), speaker: asInt(j['speaker'], 0));
+  factory MediaLevels.fromJson(Map<String, dynamic> j) => MediaLevels(
+    mic: asInt(j['mic'], 0),
+    speaker: asInt(j['speaker'], 0),
+    musicbed: asInt(j['musicbed'], 0),
+    calls: [
+      for (final c in asList(j['calls']))
+        if (c is Map) CallLevel.fromJson(asMap(c)),
+    ],
+  );
 
-  Map<String, dynamic> toJson() => {'mic': mic, 'speaker': speaker};
+  Map<String, dynamic> toJson() => {
+    'mic': mic,
+    'speaker': speaker,
+    'musicbed': musicbed,
+    'calls': [for (final c in calls) c.toJson()],
+  };
 
   @override
   bool operator ==(Object other) =>

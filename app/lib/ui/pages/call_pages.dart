@@ -16,6 +16,7 @@ import '../helpers.dart';
 import 'lan/lan_call_widgets.dart';
 import 'audio/audio_call_widgets.dart';
 import '../widgets/basic_widgets.dart';
+import '../widgets/audio_mixer.dart';
 import '../widgets/call_widgets.dart';
 import '../widgets/caller_identity_block.dart';
 import '../widgets/transfer_stalled_banner.dart';
@@ -125,6 +126,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                     ),
                     SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
                     const NoiseCancellationChip(),
+                    const MusicbedChip(),
                     if (c.recording)
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -265,6 +267,9 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                 ),
               if (c.isConference) const ConferenceLevels(),
               const SizedBox(height: 16),
+              // Meters and sliders stay one tap away; End stays pinned below.
+              const MixerStrip(),
+              const SizedBox(height: 16),
             ];
             return Column(
               children: [
@@ -389,15 +394,16 @@ class _ActionGrid extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(1);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 340),
-      child: GridView.count(
-        crossAxisCount: 3,
+      child: GridView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 8,
-        childAspectRatio: 1.08,
+        // Larger text needs taller cells than the fixed aspect ratio gives.
+        gridDelegate: scale > 1.05
+            ? SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 14, crossAxisSpacing: 8, mainAxisExtent: 98 + 22 * (scale - 1))
+            : const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 14, crossAxisSpacing: 8, childAspectRatio: 1.08),
         children: children,
       ),
     );

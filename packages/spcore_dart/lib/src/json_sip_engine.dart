@@ -353,6 +353,42 @@ abstract class JsonSipEngine implements SipEngine {
   Future<void> setEc(EcConfig ec) => _v('media.setEc', ec.toJson());
 
   @override
+  Future<MusicbedInfo> musicbedStart(
+    String file, {
+    double volume = 0.3,
+    bool monitor = false,
+    double monitorVolume = 0.5,
+  }) async => MusicbedInfo.fromJson(
+    await _r('media.musicbedStart', {
+      'file': file,
+      'volume': volume,
+      'monitor': monitor,
+      'monitorVolume': monitorVolume,
+    }),
+  );
+
+  @override
+  Future<bool> musicbedStop() async =>
+      asBool((await _r('media.musicbedStop'))['stopped']);
+
+  @override
+  Future<void> musicbedSet({
+    double? volume,
+    bool? monitor,
+    double? monitorVolume,
+    bool? paused,
+  }) => _v('media.musicbedSet', {
+    if (volume != null) 'volume': volume,
+    if (monitor != null) 'monitor': monitor,
+    if (monitorVolume != null) 'monitorVolume': monitorVolume,
+    if (paused != null) 'paused': paused,
+  });
+
+  @override
+  Future<MusicbedState> musicbedState() async =>
+      MusicbedState.fromJson(await _r('media.musicbedState'));
+
+  @override
   Future<MediaLevels> levels() async =>
       MediaLevels.fromJson(await _r('media.levels'));
 

@@ -91,6 +91,8 @@ sealed class EngineEvent {
         return MediaDevicesChangedEvent(j);
       case 'media.error':
         return MediaErrorEvent(j);
+      case 'media.musicbed':
+        return MusicbedEvent(j);
       case 'diag.natType':
         return DiagNatTypeEvent(j);
       case 'diag.options':
@@ -325,6 +327,22 @@ final class ImTypingEvent extends EngineEvent {
 
 final class MediaDevicesChangedEvent extends EngineEvent {
   MediaDevicesChangedEvent(super.raw);
+}
+
+/// The musicbed started, stopped or failed (`reason`: started, stopped,
+/// replaced, error, shutdown).
+final class MusicbedEvent extends EngineEvent {
+  MusicbedEvent(super.raw)
+    : active = asBool(raw['active']),
+      file = asStringN(raw['file']),
+      reason = asString(raw['reason']),
+      message = asStringN(raw['message']);
+  final bool active;
+  final String? file;
+  final String reason;
+  final String? message;
+
+  bool get isError => reason == 'error';
 }
 
 final class MediaErrorEvent extends EngineEvent {

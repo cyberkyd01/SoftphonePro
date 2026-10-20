@@ -331,6 +331,9 @@ const Map<String, ImportClass> kSettingImportPolicy = {
   'announceMuteMic': _a,
   'announceMonitor': _a,
   'recordingNoticeFile': _x, 'transferNoticeFile': _x,
+  // musicbed (the file is a path into the local library: not importable)
+  'musicbedEnabled': _a, 'musicbedFile': _x, 'musicbedVolume': _a,
+  'musicbedMonitor': _a, 'musicbedMonitorVolume': _a,
   'speedDial': _f,
   // updates / media keys
   'updateCheck': _x,
@@ -420,6 +423,8 @@ bool _validImportValue(String k, Object? v) {
         'viMicStrength' ||
         'viInStrength':
       return v is num && v >= 0 && v <= 4;
+    case 'musicbedVolume' || 'musicbedMonitorVolume':
+      return v is num && v >= 0 && v <= 2; // the engine rejects more
     case 'accent':
       return v is int;
   }

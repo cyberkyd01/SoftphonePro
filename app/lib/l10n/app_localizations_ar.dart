@@ -6826,4 +6826,103 @@ class AppLocalizationsAr extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'تحديث $updated موجودة، وإضافة $added جديدة';
   }
+
+  @override
+  String get mixerTitle => 'خلاط الصوت';
+
+  @override
+  String get mixerMicrophone => 'الميكروفون';
+
+  @override
+  String get mixerSpeaker => 'سماعات الرأس والمكبر';
+
+  @override
+  String get mixerMicVolume => 'مستوى الميكروفون';
+
+  @override
+  String get mixerSpeakerVolume => 'مستوى السماعة';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'مستوى $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'جهاز الإدخال';
+
+  @override
+  String get mixerOutputDevice => 'جهاز الإخراج';
+
+  @override
+  String get mixerOutputRoute => 'مخرج الصوت';
+
+  @override
+  String get mixerInputFollowsOutput => 'يتبع الميكروفون مخرج الصوت المحدد.';
+
+  @override
+  String get mixerShowMore => 'عرض الأجهزة والموسيقى الخلفية';
+
+  @override
+  String get mixerShowLess => 'عرض عناصر تحكم أقل';
+
+  @override
+  String get mixerStripShow => 'عرض خلاط الصوت';
+
+  @override
+  String get mixerStripHide => 'إخفاء خلاط الصوت';
+
+  @override
+  String get musicbedTitle => 'الموسيقى الخلفية';
+
+  @override
+  String get musicbedPlay => 'تشغيل الموسيقى الخلفية';
+
+  @override
+  String get musicbedVolume => 'مستوى الموسيقى الخلفية';
+
+  @override
+  String get musicbedChooseFile => 'اختر ملفًا';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'ملف الموسيقى الخلفية: $name. اضغط للتغيير.';
+  }
+
+  @override
+  String get musicbedHearIt => 'الاستماع إليها بنفسي';
+
+  @override
+  String get musicbedMonitorVolume => 'مستوى المراقبة';
+
+  @override
+  String get musicbedAddFile => 'إضافة ملف…';
+
+  @override
+  String get musicbedPickerTitle => 'ملف الموسيقى الخلفية';
+
+  @override
+  String get musicbedOn => 'الموسيقى الخلفية قيد التشغيل';
+
+  @override
+  String get musicbedOnTooltip =>
+      'يتم تشغيل ملف موسيقي لجميع المشاركين في مكالماتك.';
+
+  @override
+  String get musicbedFileMissing =>
+      'ملف الموسيقى الخلفية لم يعد متاحًا، لذلك تم إيقاف الميزة.';
+
+  @override
+  String get musicbedNeedsFile => 'اختر ملف الموسيقى الخلفية أولًا.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'توقفت الموسيقى الخلفية: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'يكرر ملفًا موسيقيًا خلف صوتك لجميع المشاركين في مكالماتك، حتى أثناء كتم الميكروفون. المكالمات قيد الانتظار تسمع موسيقى الانتظار بدلًا منه.';
+
+  @override
+  String get musicbedSettingsFile => 'ملف الموسيقى';
 }

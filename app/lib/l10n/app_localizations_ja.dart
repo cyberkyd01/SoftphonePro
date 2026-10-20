@@ -6594,4 +6594,101 @@ class AppLocalizationsJa extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return '既存の $updated 件を更新し、新しい $added 件を追加';
   }
+
+  @override
+  String get mixerTitle => 'オーディオミキサー';
+
+  @override
+  String get mixerMicrophone => 'マイク';
+
+  @override
+  String get mixerSpeaker => 'ヘッドフォンとスピーカー';
+
+  @override
+  String get mixerMicVolume => 'マイクの音量';
+
+  @override
+  String get mixerSpeakerVolume => 'スピーカーの音量';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return '$nameのレベル';
+  }
+
+  @override
+  String get mixerInputDevice => '入力デバイス';
+
+  @override
+  String get mixerOutputDevice => '出力デバイス';
+
+  @override
+  String get mixerOutputRoute => '音声出力';
+
+  @override
+  String get mixerInputFollowsOutput => 'マイクは選択した音声出力に連動します。';
+
+  @override
+  String get mixerShowMore => 'デバイスとBGMを表示';
+
+  @override
+  String get mixerShowLess => '表示を減らす';
+
+  @override
+  String get mixerStripShow => 'オーディオミキサーを表示';
+
+  @override
+  String get mixerStripHide => 'オーディオミキサーを隠す';
+
+  @override
+  String get musicbedTitle => 'BGM';
+
+  @override
+  String get musicbedPlay => 'BGMを再生';
+
+  @override
+  String get musicbedVolume => 'BGMの音量';
+
+  @override
+  String get musicbedChooseFile => 'ファイルを選択';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'BGMファイル: $name。タップして変更します。';
+  }
+
+  @override
+  String get musicbedHearIt => '自分にも聞こえるようにする';
+
+  @override
+  String get musicbedMonitorVolume => 'モニター音量';
+
+  @override
+  String get musicbedAddFile => 'ファイルを追加…';
+
+  @override
+  String get musicbedPickerTitle => 'BGMファイル';
+
+  @override
+  String get musicbedOn => 'BGMオン';
+
+  @override
+  String get musicbedOnTooltip => '通話中の全員に音楽ファイルが再生されています。';
+
+  @override
+  String get musicbedFileMissing => 'BGMファイルが見つからないため、BGMをオフにしました。';
+
+  @override
+  String get musicbedNeedsFile => '先にBGMファイルを選択してください。';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'BGMが停止しました: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'あなたの声の下で音楽ファイルをループ再生し、通話中の全員に聞こえます。ミュート中でも再生されます。保留中の通話には保留音が流れます。';
+
+  @override
+  String get musicbedSettingsFile => '音楽ファイル';
 }

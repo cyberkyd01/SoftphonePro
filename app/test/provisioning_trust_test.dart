@@ -53,6 +53,7 @@ const _dropped = <String, Object?>{
   'lanEnabled': true,
   'lanShareAors': ['*'],
   'announceOpeningFile': '/etc/passwd',
+  'musicbedFile': '/etc/passwd',
   'recordingNoticeFile': '/etc/passwd',
   'transferNoticeFile': '/etc/passwd',
   'captureDev': 'evil',
@@ -163,7 +164,7 @@ void main() {
       const never = [
         'tlsVerify', 'customCaFile', 'tlsPins', 'dnsServers', 'automationEnabled', 'automationPort', 'automationToken',
         'automationOrigins', 'appLock', 'appLockMinutes', 'appLockBiometrics', 'recordingFolder', 'lanDownloadsDir',
-        'lanAutoAcceptFiles', 'lanEnabled', 'announceOpeningFile', 'recordingNoticeFile', 'transferNoticeFile',
+        'lanAutoAcceptFiles', 'lanEnabled', 'announceOpeningFile', 'recordingNoticeFile', 'transferNoticeFile', 'musicbedFile',
         'captureDev', 'playbackDev', 'ringerDev', 'hotkeys', 'startAtLogin', 'globalStatus', 'useSimulator',
         'instanceMac', 'updateCheck', 'stunServers', 'onboardingDone',
       ];

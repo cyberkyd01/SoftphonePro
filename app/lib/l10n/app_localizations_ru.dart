@@ -6882,4 +6882,104 @@ class AppLocalizationsRu extends AppLocalizations {
   String provisioningUpdateSummary(int updated, int added) {
     return 'Обновить существующие: $updated, добавить новые: $added';
   }
+
+  @override
+  String get mixerTitle => 'Аудиомикшер';
+
+  @override
+  String get mixerMicrophone => 'Микрофон';
+
+  @override
+  String get mixerSpeaker => 'Наушники и динамик';
+
+  @override
+  String get mixerMicVolume => 'Громкость микрофона';
+
+  @override
+  String get mixerSpeakerVolume => 'Громкость динамика';
+
+  @override
+  String mixerMeterLabel(String name) {
+    return 'Уровень: $name';
+  }
+
+  @override
+  String get mixerInputDevice => 'Устройство ввода';
+
+  @override
+  String get mixerOutputDevice => 'Устройство вывода';
+
+  @override
+  String get mixerOutputRoute => 'Вывод звука';
+
+  @override
+  String get mixerInputFollowsOutput =>
+      'Микрофон выбирается по выбранному устройству вывода звука.';
+
+  @override
+  String get mixerShowMore => 'Показать устройства и фоновую музыку';
+
+  @override
+  String get mixerShowLess => 'Показать меньше элементов';
+
+  @override
+  String get mixerStripShow => 'Показать аудиомикшер';
+
+  @override
+  String get mixerStripHide => 'Скрыть аудиомикшер';
+
+  @override
+  String get musicbedTitle => 'Фоновая музыка';
+
+  @override
+  String get musicbedPlay => 'Воспроизводить фоновую музыку';
+
+  @override
+  String get musicbedVolume => 'Громкость фоновой музыки';
+
+  @override
+  String get musicbedChooseFile => 'Выбрать файл';
+
+  @override
+  String musicbedChangeFile(String name) {
+    return 'Файл фоновой музыки: $name. Нажмите, чтобы изменить.';
+  }
+
+  @override
+  String get musicbedHearIt => 'Слышать самому';
+
+  @override
+  String get musicbedMonitorVolume => 'Громкость прослушивания';
+
+  @override
+  String get musicbedAddFile => 'Добавить файл…';
+
+  @override
+  String get musicbedPickerTitle => 'Файл фоновой музыки';
+
+  @override
+  String get musicbedOn => 'Фоновая музыка включена';
+
+  @override
+  String get musicbedOnTooltip =>
+      'Музыкальный файл воспроизводится всем участникам ваших звонков.';
+
+  @override
+  String get musicbedFileMissing =>
+      'Файл фоновой музыки недоступен, поэтому она отключена.';
+
+  @override
+  String get musicbedNeedsFile => 'Сначала выберите файл фоновой музыки.';
+
+  @override
+  String musicbedStopped(String message) {
+    return 'Фоновая музыка остановлена: $message';
+  }
+
+  @override
+  String get musicbedSettingsFooter =>
+      'Зацикленный музыкальный файл звучит под вашим голосом для всех участников звонков, даже когда вы отключили микрофон. Удерживаемые звонки слышат музыку ожидания.';
+
+  @override
+  String get musicbedSettingsFile => 'Музыкальный файл';
 }

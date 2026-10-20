@@ -23,6 +23,7 @@ import '../helpers.dart';
 import '../../audio/device_labels.dart';
 import '../pages/audio/audio_call_widgets.dart';
 import '../pages/lan/lan_call_widgets.dart';
+import 'audio_mixer.dart';
 import 'basic_widgets.dart';
 import 'caller_identity_block.dart';
 import 'transfer_stalled_banner.dart';
@@ -788,6 +789,7 @@ String _routeLabel(AppLocalizations l, AudioRoute r) => switch (r) {
 };
 
 IconData audioRouteIcon(AudioRoute r) => _routeIcon(r);
+String audioRouteLabel(AppLocalizations l, AudioRoute r) => _routeLabel(l, r);
 
 // ---------------------------------------------------------------------------
 // Call card (desktop panel and stacked cards)
@@ -960,6 +962,7 @@ class _CallCardState extends ConsumerState<CallCard> {
                 children: [
                   SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
                   const NoiseCancellationChip(),
+                  const MusicbedChip(),
                   if (c.recording)
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1182,13 +1185,16 @@ class CallsPanel extends ConsumerWidget {
                   color: context.colors.callGreen,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  context.l10n.callActiveCalls,
-                  style: t.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    context.l10n.callActiveCalls,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Text('${calls.length}', style: t.textTheme.labelLarge),
               ],
             ),
@@ -1204,6 +1210,11 @@ class CallsPanel extends ConsumerWidget {
                 focused: calls.length > 1 && s.focused?.cid == calls[i].cid,
               ),
             ),
+          ),
+          // Meters, sliders and devices stay adjustable during the call.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: MixerCard(maxHeight: MediaQuery.sizeOf(context).height * 0.55),
           ),
         ],
       ),

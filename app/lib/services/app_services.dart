@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../audio/musicbed.dart';
 import '../automation/automation_service.dart';
 import '../diagnostics/diagnostics_hub.dart';
 import '../diagnostics/sip_trace_controller.dart';
@@ -72,6 +73,8 @@ final appServicesProvider = Provider<void>((ref) {
   Future.microtask(() => recoverInterruptedCalls(ref));
   // Recordings library: loads the store and applies auto-delete.
   ref.read(recordingsProvider);
+  // Musicbed follows its settings and the engine lifecycle.
+  ref.read(musicbedProvider);
 
   Future.microtask(() => ref.read(engineProvider.notifier).start());
 
