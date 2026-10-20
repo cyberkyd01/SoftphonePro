@@ -379,7 +379,7 @@ Special ids:
 | `media.setCodecPriorities` | `{order:[s], disableOthers?:b=false}` | `{}` |
 | `media.setCodecParam` | `{id:s, ptime?:i, vad?:b, fmtp?:{}, opus?:{bitrate:i, fec:b, dtx:b, cbr:b, complexity:i, maxPlaybackRate:i}}` | `{}` |
 | `media.setEc` | `{algo:s, tailMs:i, ns:b, agc:b}` | `{}` |
-| `media.levels` | `{}` | `{mic:i, speaker:i}` (0–255) |
+| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, calls:[{cid:i, rx:i, tx:i}]}` (all 0–255); see section 10 |
 | `media.setMicLevel` | `{level:f}` | `{}` (0.0–2.0) |
 | `media.setSpeakerLevel` | `{level:f}` | `{}` |
 | `media.tone` | `{kind:"ringback\|busy\|congestion\|dial\|waiting\|dtmf", digits?:s, loop?:b}` | `{}`; local tone to the speaker. `waiting` is the call-waiting beep. |
@@ -388,6 +388,10 @@ Special ids:
 | `media.ringStop` | `{}` | `{}` |
 | `media.loopback` | `{enabled:b}` | `{}`; mic → speaker echo test |
 | `media.fileInfo`, `media.recordMicStart`, `media.recordMicStop` | | see section 9.2 |
+| `media.musicbedStart` | `{file:s, volume?:f=0.3, monitor?:b=false, monitorVolume?:f=0.5}` | `{file:s, format:"wav\|mp3", durationMs:i}`; see section 10 |
+| `media.musicbedStop` | `{}` | `{stopped:b}` |
+| `media.musicbedSet` | `{volume?:f, monitor?:b, monitorVolume?:f, paused?:b}` | `{}`; `NOT_FOUND` without a musicbed |
+| `media.musicbedState` | `{}` | `{active:b, file?:s, format?:s, volume:f, monitor:b, monitorVolume:f, paused:b, positionMs:i, durationMs:i, calls:[cid]}` |
 
 ### buddy.* (presence and BLF)
 | method | params | result |
@@ -456,6 +460,7 @@ BuddyInfo:
 | `im.typing` | `{acc, uid, from, typing:b}` |
 | `media.devicesChanged` | `{}` |
 | `media.error` | `{op, status, message, fallback:"null"\|null}` |
+| `media.musicbed` | `{active:b, file?:s, reason:"started"\|"stopped"\|"replaced"\|"error"\|"shutdown", message?:s}`; see section 10 |
 | `diag.natType` | `{natType:"unknown\|open\|blocked\|symmetricUdp\|fullCone\|symmetric\|restricted\|portRestricted", description, stun}` |
 | `diag.options` | `{acc, uid, code, reason, rttMs}` |
 
@@ -898,3 +903,69 @@ error. Tests: `native/tests/test_n3.py` (`TestSips`).
 * `native/tests/dns_stub.py` is a stdlib UDP DNS responder (A, SRV) used by the
   `auto` tests. Start the core with `nameservers:["127.0.0.1:<port>"]`.
 
+## 10. Musicbed (contract v1.2)
+
+A musicbed is an MP3 or WAV file that loops forever and is mixed into what the
+remote parties hear, under the user's voice. Its volume is adjustable live.
+There is at most one musicbed per engine.
+
+### Methods
+| method | params | result |
+|---|---|---|
+| `media.musicbedStart` | `{file:s, volume?:f=0.3, monitor?:b=false, monitorVolume?:f=0.5}` | `{file:s, format:"wav\|mp3", durationMs:i}` |
+| `media.musicbedStop` | `{}` | `{stopped:b}`; `false` when none was running (not an error) |
+| `media.musicbedSet` | `{volume?:f, monitor?:b, monitorVolume?:f, paused?:b}` | `{}`; `NOT_FOUND` when no musicbed runs; no field at all is `INVALID_PARAM` |
+| `media.musicbedState` | `{}` | `{active:b, file?:s, format?:s, volume:f, monitor:b, monitorVolume:f, paused:b, positionMs:i, durationMs:i, calls:[cid]}` |
+| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, calls:[{cid:i, rx:i, tx:i}]}`, all 0–255 |
+
+* **Validation:** `file` is validated exactly like `call.playFile` (WAV/MP3,
+  same limits; `INVALID_PARAM` when unreadable, unsupported, empty or longer than
+  30 minutes). Volumes are linear gains 0.0–2.0 (`INVALID_PARAM` outside; `monitor`
+  and `paused` must be booleans). Everything is validated before the running
+  musicbed is touched, so a bad `musicbedStart` leaves the current one playing.
+  `musicbedState` reports volumes as sent (they are stored as doubles).
+* **Looping and replacing:** the bed always loops seamlessly (the file is decoded
+  once into memory by the `call.playFile` decoder, resampler included).
+  `musicbedStart` while one runs replaces it: `media.musicbed` with
+  `reason:"replaced"` for the old one, then `reason:"started"` for the new one.
+* **Routing:** the bed goes to exactly the conference slots the microphone is (or
+  would be) connected to, **regardless of `call.mute` and of the announcement
+  mute** (`muteMic`). That is every call with active media that is not locally
+  held (SIP and IAX2, including calls created by transfer once their media is
+  active) and all members of a local conference. A locally held call gets its
+  music on hold instead; the bed comes back on unhold. It is part of
+  `spc_call_apply_topology()` (`spc_musicbed_apply_*`), so it is recomputed
+  wherever the microphone topology is. `musicbedState.calls` lists the calls it is
+  connected to.
+* **Volume:** `volume` is a per-connection gain (`pjmedia_conf_adjust_conn_level`),
+  so the monitor level is independent of it. Changes apply live and glitch-free.
+* **Monitor:** `monitor:true` also connects the bed to the speaker (slot 0) at
+  `monitorVolume`. With no call that is a preview, and it opens the sound device
+  like other slot-0 connections.
+* **Pause:** `paused:true` outputs silence and keeps the position; unpausing
+  resumes from there.
+* **Clock and idle:** the bed advances only while something pulls audio from it,
+  i.e. a call is connected to it or the monitor is on. With no call and the
+  monitor off it stands still and resumes where it was when the next call
+  connects. Starting a bed does not open the sound device by itself.
+* **Recording:** `call.recordStart` recordings include the bed on the local side,
+  at the call volume: mixed in for mono `wav` (`mix` both or local), the left
+  channel for `wavStereo`, mono `opus` like `wav`. (Not in `media.recordMicStart`.)
+* **Levels:**
+  * `musicbed` is the bed's signal after its volume (the louder of the call
+    volume and, with the monitor on, the monitor volume). It is 0 when there is
+    no bed, it is paused, or nothing pulls audio from it.
+  * `mic` is the microphone as the calls get it: the voice-isolation output while
+    that processor is in the path (voice isolation on and at least one call),
+    else slot 0 rx.
+  * `speaker` is slot 0 tx.
+  * `calls` has one entry per call with active media: its conference slot's `rx`
+    (remote voice) and `tx` (what is sent to it, the bed included).
+* **Event `media.musicbed`:** emitted on every start, stop, replace, decoder error
+  (`reason:"error"`, with `message`, and the bed is stopped) and `core.stop`
+  (`reason:"shutdown"`). `active` says whether a bed is running after the event.
+* **Threading:** like every request it runs on the engine worker. The bed port
+  follows the `call.playFile` lifetime rules (removed from the bridge, destroyed
+  through the port's `on_destroy`); the clock thread only copies decoded samples.
+
+Tests: `native/tests/test_musicbed.py`.

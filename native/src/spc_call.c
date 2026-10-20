@@ -875,6 +875,7 @@ void spc_call_apply_topology(void)
         int msrc = (n > 0 && spc_denoise_mic_wanted()) ? spc_denoise_mic_slot() : -1;
         int dnm = spc_denoise_mic_slot_peek();
         if (dnm >= 0) conn(0, dnm, msrc >= 0);       /* processor input: only while it is the active mic source */
+        spc_musicbed_apply_begin();
         for (i = 0; i < n; i++) {
         topo_ent* t = &e[i];
         int local_ok;
@@ -892,6 +893,12 @@ void spc_call_apply_topology(void)
         }
         spc_rec_apply_call(t->rec2_id, t->cslot, t->active, t->muted, t->detached, msrc, dnm);
         spc_player_apply_call(t->cid, t->cslot, t->active, t->lhold, t->held);     /* media files + music on hold (spc_player.c) */
+        {   /* musicbed: wherever the microphone would go, regardless of call.mute / announcement mute */
+            int rs1 = -1, rs2 = -1;
+            if (t->rec_id >= 0 && (t->rec_mix == 0 || t->rec_mix == 2)) rs1 = pjsua_recorder_get_conf_port(t->rec_id);
+            rs2 = spc_rec_local_sink(t->rec2_id);
+            spc_musicbed_apply_call(t->cid, t->cslot, local_ok, rs1, rs2);
+        }
         if (t->tg_slot >= 0) conn(t->tg_slot, t->cslot, t->active);
         for (k = 0; k < t->nconf + t->nbr; k++) {
             uint64_t peer = k < t->nconf ? t->conf[k] : t->bridged[k - t->nconf];
@@ -900,8 +907,42 @@ void spc_call_apply_topology(void)
             conn(t->cslot, e[j].cslot, t->active && e[j].active && !t->held && !e[j].held);
         }
         }
+        spc_musicbed_apply_end();
         spc_rec_apply_global(msrc, dnm);        /* microphone recorder (media.recordMicStart), independent of calls */
     }
+}
+
+/* media.levels "calls": conference slot levels of every call with active media */
+cJSON* spc_call_levels_json(void)
+{
+    uint64_t cid[PJSUA_MAX_CALLS];
+    int slot[PJSUA_MAX_CALLS];
+    int n = 0, i;
+    spc_call* c;
+    cJSON* arr = cJSON_CreateArray();
+    spc_registry_lock();
+    for (c = g_calls; c && n < PJSUA_MAX_CALLS; c = c->next) { cid[n] = c->cid; slot[n] = c->slot; n++; }
+    spc_registry_unlock();
+    for (i = 0; i < n; i++) {
+        int cs = -1, act = 0;
+        unsigned tx = 0, rx = 0;
+        cJSON* o;
+        if (slot[i] >= SPC_ID_IAX_BASE) {
+            if (spc_iax2_call_conf(cid[i], &cs, &act) != 0 || !act) continue;
+        } else {
+            pjsua_call_info ci;
+            if (pjsua_call_get_info(slot[i], &ci) != PJ_SUCCESS) continue;
+            if (!(ci.media_status == PJSUA_CALL_MEDIA_ACTIVE || ci.media_status == PJSUA_CALL_MEDIA_REMOTE_HOLD)) continue;
+            cs = ci.conf_slot;
+        }
+        if (cs < 0 || pjsua_conf_get_signal_level(cs, &tx, &rx) != PJ_SUCCESS) continue;
+        o = cJSON_CreateObject();
+        cJSON_AddNumberToObject(o, "cid", (double)cid[i]);
+        cJSON_AddNumberToObject(o, "rx", rx);
+        cJSON_AddNumberToObject(o, "tx", tx);
+        cJSON_AddItemToArray(arr, o);
+    }
+    return arr;
 }
 
 void spc_call_apply_media_all(void) { spc_call_apply_topology(); }

@@ -551,12 +551,17 @@ static int h_set_ec(cJSON* p, cJSON** res)
 
 static int h_levels(cJSON* p, cJSON** res)
 {
-    unsigned tx = 0, rx = 0;
+    unsigned tx = 0, rx = 0, dtx = 0, drx = 0;
+    int dn = spc_call_mic_source();
     (void)p;
     pjsua_conf_get_signal_level(0, &tx, &rx);
+    /* the microphone as the calls get it: the voice-isolation output while that processor is in the path */
+    if (dn > 0 && spc_calls_active() > 0 && pjsua_conf_get_signal_level(dn, &dtx, &drx) == PJ_SUCCESS) rx = drx;
     *res = cJSON_CreateObject();
     cJSON_AddNumberToObject(*res, "mic", rx);
     cJSON_AddNumberToObject(*res, "speaker", tx);
+    cJSON_AddNumberToObject(*res, "musicbed", spc_musicbed_level());
+    cJSON_AddItemToObject(*res, "calls", spc_call_levels_json());
     return SPC_OK;
 }
 
@@ -749,6 +754,84 @@ static int h_record_mic_stop(cJSON* p, cJSON** res)
     return SPC_OK;
 }
 
+/* ---- musicbed ---- */
+static int vol_param(cJSON* p, const char* k, double def, double* out)
+{
+    const cJSON* v;
+    *out = def;
+    if (!spc_jhas(p, k)) return 1;
+    v = cJSON_GetObjectItemCaseSensitive(p, k);
+    if (!cJSON_IsNumber(v) || !(v->valuedouble >= 0.0 && v->valuedouble <= 2.0)) return 0;
+    *out = v->valuedouble;
+    return 1;
+}
+
+static int h_musicbed_start(cJSON* p, cJSON** res)
+{
+    const char* file = spc_jstr(p, "file");
+    double vol, mvol;
+    int mon = 0;
+    spc_fileinfo fi;
+    char err[200];
+    if (!file || !file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
+    if (!vol_param(p, "volume", 0.3, &vol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'volume' must be 0.0..2.0");
+    if (!vol_param(p, "monitorVolume", 0.5, &mvol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitorVolume' must be 0.0..2.0");
+    if (spc_jhas(p, "monitor") && !spc_jbool_strict(p, "monitor", &mon)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitor' must be a bool");
+    if (spc_musicbed_start(file, vol, mon, mvol, &fi, err, sizeof(err)) != 0) return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(*res, "file", file);
+    cJSON_AddStringToObject(*res, "format", fi.format);
+    cJSON_AddNumberToObject(*res, "durationMs", fi.durationMs);
+    return SPC_OK;
+}
+
+static int h_musicbed_stop(cJSON* p, cJSON** res)
+{
+    (void)p;
+    *res = cJSON_CreateObject();
+    cJSON_AddBoolToObject(*res, "stopped", spc_musicbed_stop("stopped", NULL));
+    return SPC_OK;
+}
+
+static int h_musicbed_set(cJSON* p, cJSON** res)
+{
+    double vol, mvol;
+    int mon = -1, paused = -1, b;
+    (void)res;
+    if (!spc_jhas(p, "volume") && !spc_jhas(p, "monitor") && !spc_jhas(p, "monitorVolume") && !spc_jhas(p, "paused"))
+        return spc_err(SPC_E_INVALID_PARAM, 0, "at least one of volume, monitor, monitorVolume, paused required");
+    if (!vol_param(p, "volume", -1.0, &vol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'volume' must be 0.0..2.0");
+    if (!vol_param(p, "monitorVolume", -1.0, &mvol)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitorVolume' must be 0.0..2.0");
+    if (spc_jhas(p, "monitor")) { if (!spc_jbool_strict(p, "monitor", &b)) return spc_err(SPC_E_INVALID_PARAM, 0, "'monitor' must be a bool"); mon = b; }
+    if (spc_jhas(p, "paused")) { if (!spc_jbool_strict(p, "paused", &b)) return spc_err(SPC_E_INVALID_PARAM, 0, "'paused' must be a bool"); paused = b; }
+    if (spc_musicbed_set(vol, mvol, mon, paused) != 0) return spc_err(SPC_E_NOT_FOUND, 0, "no musicbed running");
+    return SPC_OK;
+}
+
+static int h_musicbed_state(cJSON* p, cJSON** res)
+{
+    spc_bed_state st;
+    cJSON* arr = cJSON_CreateArray();
+    int i;
+    (void)p;
+    spc_musicbed_state(&st);
+    *res = cJSON_CreateObject();
+    cJSON_AddBoolToObject(*res, "active", st.active);
+    if (st.active) {
+        cJSON_AddStringToObject(*res, "file", st.file);
+        cJSON_AddStringToObject(*res, "format", st.format);
+    }
+    cJSON_AddNumberToObject(*res, "volume", st.vol);
+    cJSON_AddBoolToObject(*res, "monitor", st.monitor);
+    cJSON_AddNumberToObject(*res, "monitorVolume", st.monvol);
+    cJSON_AddBoolToObject(*res, "paused", st.paused);
+    cJSON_AddNumberToObject(*res, "positionMs", st.positionMs);
+    cJSON_AddNumberToObject(*res, "durationMs", st.durationMs);
+    for (i = 0; i < st.ncalls; i++) cJSON_AddItemToArray(arr, cJSON_CreateNumber((double)st.calls[i]));
+    cJSON_AddItemToObject(*res, "calls", arr);
+    return SPC_OK;
+}
+
 const spc_method spc_methods_media[] = {
     { "media.devices", h_devices, 0 }, { "media.setDevices", h_set_devices, 0 },
     { "media.refreshDevices", h_refresh_devices, 0 }, { "media.codecs", h_codecs, 0 },
@@ -760,5 +843,7 @@ const spc_method spc_methods_media[] = {
     { "media.loopback", h_loopback, 0 },
     { "media.fileInfo", h_file_info, SPC_M_PRESTART },
     { "media.recordMicStart", h_record_mic_start, 0 }, { "media.recordMicStop", h_record_mic_stop, 0 },
+    { "media.musicbedStart", h_musicbed_start, 0 }, { "media.musicbedStop", h_musicbed_stop, 0 },
+    { "media.musicbedSet", h_musicbed_set, 0 }, { "media.musicbedState", h_musicbed_state, 0 },
     { NULL, NULL, 0 }
 };

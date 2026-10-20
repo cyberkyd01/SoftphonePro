@@ -46,4 +46,22 @@ void spc_moh_disarm(uint64_t cid);                                         /* di
 void spc_moh_start_now(uint64_t cid);                                      /* IAX2: no media-state callback */
 void spc_moh_on_media(uint64_t cid, int media_status);                     /* pjsua_call_media_status */
 
+/* ---- musicbed (looping file mixed into the microphone path of every call; docs/ENGINE_API.md 10) ---- */
+typedef struct {
+    int active, monitor, paused, positionMs, durationMs, ncalls;
+    double vol, monvol;
+    char file[600], format[8];
+    uint64_t calls[64];
+} spc_bed_state;
+/* Validates like call.playFile; on failure -1 + err and a running bed is left untouched. Replaces a running bed. */
+int  spc_musicbed_start(const char* file, double volume, int monitor, double monvol, spc_fileinfo* fi, char* err, size_t en);
+int  spc_musicbed_stop(const char* reason, const char* msg);     /* 1 if one was running; emits media.musicbed */
+int  spc_musicbed_set(double volume, double monvol, int monitor, int paused);   /* <0 = unchanged; -1 if no bed */
+int  spc_musicbed_state(spc_bed_state* st);
+int  spc_musicbed_level(void);
+/* Topology hooks (spc_call_apply_topology): begin, once per call, end. */
+void spc_musicbed_apply_begin(void);
+void spc_musicbed_apply_call(uint64_t cid, int cslot, int local_ok, int rec_sink1, int rec_sink2);
+void spc_musicbed_apply_end(void);
+
 #endif
