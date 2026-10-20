@@ -21,7 +21,8 @@ Adds a Linux app, a musicbed and a live audio mixer. See [docs/RELEASE_NOTES_v1.
 **Musicbed and audio mixer**
 * Musicbed: pick an MP3 or WAV file from the audio library and it loops under your voice to the people on your calls. Own volume from 0 to 200%, adjustable live; optional "Hear it myself" monitor with its own volume. It keeps playing while you mute your microphone, is not sent to held calls (they get hold music), reaches every member of a local conference, is included in your side of call recordings, and pauses between calls. Settings > Audio > Musicbed, or from the mixer.
 * Engine: `media.musicbedStart`, `media.musicbedStop`, `media.musicbedSet`, `media.musicbedState` and the `media.musicbed` event, and `media.levels` for per-channel levels (contract v1.2, [docs/ENGINE_API.md](docs/ENGINE_API.md) section 10).
-* Live audio mixer: level bars and sliders for the microphone (input gain), speaker or headphones (output volume) and the musicbed, with input and output device pickers (the audio route on phones). It is on the keypad screen (a card on desktop and tablets, a collapsible strip on phones), in calls (calls panel on desktop, in-call page on phones) and in Settings > Audio.
+* Live audio mixer: level bars and sliders for the microphone (input gain), speaker or headphones (output volume) and the musicbed, with input and output device pickers (the audio route on phones). It is on the keypad screen (a card on desktop and tablets, a collapsible strip on phones), in calls (calls panel on desktop, meters right under the call timer on phones) and in Settings > Audio. The meters update about 15 times a second while audio flows, once a second at idle, and drop to about 5 a second when the screen is drawn without a GPU.
+* Automation API: `GET /v1/audio` and `POST /v1/audio` read and set the microphone and speaker levels and the musicbed (on/off, volume, monitor, pause; the file is chosen in the app only), and the SSE stream has an `audio` event.
 
 ### Changed
 * [docs/FEATURES.md](docs/FEATURES.md): rows added for the musicbed, the mixer and Linux, and the "Linux desktop app" entry (Z7) removed from the not-implemented list. It now has 114 rows.
@@ -30,7 +31,15 @@ Adds a Linux app, a musicbed and a live audio mixer. See [docs/RELEASE_NOTES_v1.
 ### Fixed
 * The app chose Arabic when the system language was not one of the 13 supported ones (for example Swedish). It now falls back to English.
 * Text overflows at large text sizes, and in Arabic, on the keypad and in-call screens.
-* A flaky FFI plumbing test in `spcore_dart` was hardened against slow CI runners.
+* A flaky FFI plumbing test in `spcore_dart` and a flaky WebSocket close-frame test were made deterministic.
+* Calls failed to start on computers with no sound card (servers, VMs); the engine now falls back to its null audio device.
+* The status dot of an account that is still registering animated at 60 frames a second; it now steps at 4.
+* Found by the 1.1.0 test passes on Linux and Android before release:
+  * on Linux without `xdg-user-dirs`, recording did nothing and LAN Link failed to start; Retry after a LAN start failure did not bring back LAN calling;
+  * on Linux, Arabic navigation labels and Hindi, Chinese and Japanese text could show empty boxes (no font fallback);
+  * a keyring that was locked or not answering froze the Linux app for 25 seconds per request; the app now asks the desktop to unlock it, and keeps passwords in its encrypted file for that session if it stays locked;
+  * the missed-call notification's Show action did not open Recents; the tray tooltip raised errors on Linux;
+  * on desktop, a call card with a banner could be hidden behind the mixer; on phones the expanded mixer could be cut off; Settings > Audio broke words while a call was active; the musicbed chip claimed the bed was playing to a held call.
 
 ## [1.0.0] - 2026-10-19
 

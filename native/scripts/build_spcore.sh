@@ -18,7 +18,7 @@
 #      SPC_TEST_HOOKS=ON  (linux target only) compiles the hidden __* test methods; used by the CI test build. Shipped
 #      builds (macos/ios/android/windows) never enable it, whatever the environment says.
 # Env: SPC_NDK / ANDROID_HOME, SPC_ANDROID_API (24), SPC_IOS_MIN (13.0), MACOSX_DEPLOYMENT_TARGET (11.0),
-#      SPC_VERSION (framework version string, default 1.0.0), SPC_BUILD_TYPE (Release).
+#      SPC_VERSION (framework version string, default 1.1.0), SPC_BUILD_TYPE (Release).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +30,7 @@ PKG="$HERE/package"
 log()  { printf '\033[1;34m[spcore]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[spcore] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
-: "${SPC_VERSION:=1.0.0}"
+: "${SPC_VERSION:=1.1.0}"
 : "${SPC_BUILD_TYPE:=Release}"
 : "${SPC_JOBS:=$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4) | head -1)}"
 MACOS_MIN="${MACOSX_DEPLOYMENT_TARGET:-11.0}"

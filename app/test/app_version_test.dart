@@ -10,5 +10,8 @@ void main() {
     expect(m, isNotNull);
     expect(kAppVersion, m!.group(1));
     expect(kUserAgent, 'SoftphonePro/${m.group(1)}');
+    // The engine reports the same release version.
+    final engine = File('../native/src/spc_internal.h').readAsStringSync();
+    expect(RegExp(r'#define SPC_VERSION "([^"]+)"').firstMatch(engine)?.group(1), m.group(1));
   });
 }

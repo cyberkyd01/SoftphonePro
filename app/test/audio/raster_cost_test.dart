@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:softphonepro/audio/audio_levels.dart';
 
-List<Duration> ms(int value, int n) => List.filled(n, Duration(milliseconds: value));
+List<Duration> ms(int value, int n) =>
+    List.filled(n, Duration(milliseconds: value));
 
 void main() {
   test('cheap frames keep the fast meter rate', () {
@@ -10,16 +13,19 @@ void main() {
     expect(m.slow, isFalse);
   });
 
-  test('expensive frames (software rendering) switch to low power, cheap ones switch back', () {
-    final m = RasterCostMonitor();
-    expect(m.add(ms(25, 30)), isTrue);
-    expect(m.slow, isTrue);
-    // Between half the threshold and the threshold: stays slow (hysteresis).
-    expect(m.add(ms(8, 30)), isFalse);
-    expect(m.slow, isTrue);
-    expect(m.add(ms(3, 30)), isTrue);
-    expect(m.slow, isFalse);
-  });
+  test(
+    'expensive frames (software rendering) switch to low power, cheap ones switch back',
+    () {
+      final m = RasterCostMonitor();
+      expect(m.add(ms(25, 30)), isTrue);
+      expect(m.slow, isTrue);
+      // Between half the threshold and the threshold: stays slow (hysteresis).
+      expect(m.add(ms(8, 30)), isFalse);
+      expect(m.slow, isTrue);
+      expect(m.add(ms(3, 30)), isTrue);
+      expect(m.slow, isFalse);
+    },
+  );
 
   test('a few slow frames among cheap ones do not switch (median)', () {
     final m = RasterCostMonitor();
@@ -32,5 +38,21 @@ void main() {
     final m = RasterCostMonitor();
     expect(m.add(ms(30, 5)), isFalse);
     expect(m.slow, isFalse);
+  });
+
+  test('Linux software GL is detected from llvmpipe worker thread names', () {
+    final dir = Directory.systemTemp.createTempSync('tasks');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    void task(String id, String name) {
+      Directory('${dir.path}/$id').createSync();
+      File('${dir.path}/$id/comm').writeAsStringSync('$name\n');
+    }
+
+    task('1', 'softphonepro');
+    task('2', 'io.flutter.raster');
+    expect(linuxSoftwareGl(tasks: dir.path), isFalse);
+    task('3', 'llvmpipe-0');
+    expect(linuxSoftwareGl(tasks: dir.path), isTrue);
+    expect(linuxSoftwareGl(tasks: '${dir.path}/missing'), isFalse);
   });
 }

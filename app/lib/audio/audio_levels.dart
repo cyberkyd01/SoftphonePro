@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show FrameTiming;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -163,6 +165,20 @@ const kMeterIdleEvery = Duration(seconds: 1);
 /// (software rendering: a VM, a remote desktop, no GPU driver): ~5 Hz.
 const kMeterLowPowerEvery = Duration(milliseconds: 200);
 
+/// Linux: whether Mesa draws in software (llvmpipe / softpipe worker threads
+/// in this process; their GPU work never shows in Flutter's raster times).
+bool linuxSoftwareGl({String tasks = '/proc/self/task'}) {
+  try {
+    for (final t in Directory(tasks).listSync()) {
+      final name = File('${t.path}/comm').readAsStringSync().trim();
+      if (name.startsWith('llvmpipe') || name.startsWith('softpipe')) {
+        return true;
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
 /// Tells from recent frame raster times whether drawing is expensive. Slow
 /// when the median of the last [window] frames exceeds [threshold]; fast again
 /// below half of it (hysteresis, so the rate doesn't flap).
@@ -229,6 +245,8 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   // Animated meters cost a full-window redraw per update: slow down when
   // frames are expensive (software rendering).
   final raster = RasterCostMonitor();
+  // Checked once the GL context exists (the meters are built after the first frame).
+  final softwareGl = !kIsWeb && Platform.isLinux && linuxSoftwareGl();
 
   Future<void> poll() async {
     if (busy) return;
@@ -262,7 +280,7 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
     }
     final want = !flowing()
         ? kMeterIdleEvery
-        : raster.slow
+        : raster.slow || softwareGl
         ? kMeterLowPowerEvery
         : kMeterPollEvery;
     if (timer != null && want == period) return;
