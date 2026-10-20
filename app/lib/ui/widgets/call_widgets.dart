@@ -921,16 +921,16 @@ class _CallCardState extends ConsumerState<CallCard> {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                                callStateText(c, l),
-                                style: t.textTheme.bodySmall?.copyWith(
-                                  color: c.isHeld
-                                      ? colors.holdAmber
-                                      : (c.isConfirmed
-                                            ? colors.callGreen
-                                            : t.colorScheme.onSurfaceVariant),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              callStateText(c, l),
+                              style: t.textTheme.bodySmall?.copyWith(
+                                color: c.isHeld
+                                    ? colors.holdAmber
+                                    : (c.isConfirmed
+                                          ? colors.callGreen
+                                          : t.colorScheme.onSurfaceVariant),
+                                fontWeight: FontWeight.w600,
                               ),
+                            ),
                             if (c.isConfirmed) ...[
                               const Text('  ·  '),
                               CallTimer(
@@ -962,7 +962,7 @@ class _CallCardState extends ConsumerState<CallCard> {
                 children: [
                   SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
                   const NoiseCancellationChip(),
-                  const MusicbedChip(),
+                  MusicbedChip(held: c.isHeld),
                   if (c.recording)
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1199,22 +1199,27 @@ class CallsPanel extends ConsumerWidget {
               ],
             ),
           ),
+          // One scrolling column: call cards first (their actions are never
+          // clipped), then the audio mixer (meters, sliders, devices).
           Expanded(
-            child: ListView.separated(
+            child: SingleChildScrollView(
+              key: const Key('calls-panel-scroll'),
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-              itemCount: calls.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) => CallCard(
-                key: ValueKey(calls[i].cid),
-                call: calls[i],
-                focused: calls.length > 1 && s.focused?.cid == calls[i].cid,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final c in calls) ...[
+                    CallCard(
+                      key: ValueKey(c.cid),
+                      call: c,
+                      focused: calls.length > 1 && s.focused?.cid == c.cid,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  const MixerCard(),
+                ],
               ),
             ),
-          ),
-          // Meters, sliders and devices stay adjustable during the call.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: MixerCard(maxHeight: MediaQuery.sizeOf(context).height * 0.55),
           ),
         ],
       ),
@@ -1288,7 +1293,8 @@ class IncomingBanners extends ConsumerWidget {
                                 ),
                                 Text(
                                   [
-                                    if (callTitle(c, contacts, context.l10n) != c.number)
+                                    if (callTitle(c, contacts, context.l10n) !=
+                                        c.number)
                                       c.number,
                                     acc.byId(c.accountId)?.name ?? '',
                                   ].where((e) => e.isNotEmpty).join('  ·  '),

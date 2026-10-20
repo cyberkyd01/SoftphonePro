@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "Aggiungi un file…",
   "musicbedPickerTitle": "File della musica di sottofondo",
   "musicbedOn": "Musica di sottofondo attiva",
+  "musicbedPausedOnHold": "Musica di sottofondo in pausa (in attesa)",
   "musicbedOnTooltip": "Un file musicale viene riprodotto per tutti nelle tue chiamate.",
   "musicbedFileMissing": "Il file della musica di sottofondo non è più disponibile, quindi è stata disattivata.",
   "musicbedNeedsFile": "Scegli prima un file per la musica di sottofondo.",

@@ -6966,6 +6966,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get musicbedOn => 'Musique de fond active';
 
   @override
+  String get musicbedPausedOnHold => 'Musique de fond en pause (en attente)';
+
+  @override
   String get musicbedOnTooltip =>
       'Un fichier musical est diffusé à tous les participants de vos appels.';
 

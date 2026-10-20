@@ -6940,6 +6940,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get musicbedOn => 'Hintergrundmusik an';
 
   @override
+  String get musicbedPausedOnHold => 'Hintergrundmusik pausiert (gehalten)';
+
+  @override
   String get musicbedOnTooltip =>
       'Eine Musikdatei wird allen Teilnehmern deiner Anrufe vorgespielt.';
 

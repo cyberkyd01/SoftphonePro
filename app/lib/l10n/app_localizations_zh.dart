@@ -6621,6 +6621,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicbedOn => '背景音乐已开启';
 
   @override
+  String get musicbedPausedOnHold => '背景音乐已暂停（通话保持中）';
+
+  @override
   String get musicbedOnTooltip => '正在向通话中的所有人播放音乐文件。';
 
   @override

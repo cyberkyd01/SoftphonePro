@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "Datei hinzufügen …",
   "musicbedPickerTitle": "Datei der Hintergrundmusik",
   "musicbedOn": "Hintergrundmusik an",
+  "musicbedPausedOnHold": "Hintergrundmusik pausiert (gehalten)",
   "musicbedOnTooltip": "Eine Musikdatei wird allen Teilnehmern deiner Anrufe vorgespielt.",
   "musicbedFileMissing": "Die Datei der Hintergrundmusik ist nicht mehr verfügbar. Die Hintergrundmusik wurde ausgeschaltet.",
   "musicbedNeedsFile": "Wähle zuerst eine Datei für die Hintergrundmusik.",

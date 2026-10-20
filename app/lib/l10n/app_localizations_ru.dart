@@ -6965,6 +6965,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get musicbedOn => 'Фоновая музыка включена';
 
   @override
+  String get musicbedPausedOnHold =>
+      'Фоновая музыка на паузе (вызов на удержании)';
+
+  @override
   String get musicbedOnTooltip =>
       'Музыкальный файл воспроизводится всем участникам ваших звонков.';
 

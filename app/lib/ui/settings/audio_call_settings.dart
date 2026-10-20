@@ -153,6 +153,7 @@ class MusicbedGroup extends ConsumerWidget {
           title: l.musicbedSettingsFile,
           value: s.musicbedFile,
           leading: {'': l.musicbedChooseFile},
+          allowImport: true,
           onChanged: (v) => _set(ref, {'musicbedFile': v}),
         ),
         Padding(

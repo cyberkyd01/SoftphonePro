@@ -6855,6 +6855,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get musicbedOn => 'बैकग्राउंड म्यूज़िक चालू';
 
   @override
+  String get musicbedPausedOnHold => 'बैकग्राउंड म्यूज़िक रुका है (होल्ड पर)';
+
+  @override
   String get musicbedOnTooltip =>
       'आपकी कॉल के सभी लोगों को एक म्यूज़िक फ़ाइल सुनाई जा रही है।';
 

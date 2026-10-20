@@ -6676,6 +6676,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get musicbedOn => 'BGMオン';
 
   @override
+  String get musicbedPausedOnHold => 'BGM一時停止中（保留中）';
+
+  @override
   String get musicbedOnTooltip => '通話中の全員に音楽ファイルが再生されています。';
 
   @override

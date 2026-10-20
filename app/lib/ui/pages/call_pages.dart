@@ -126,7 +126,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                     ),
                     SecureBadge(srtp: c.info.srtp, tls: c.info.secureSignaling),
                     const NoiseCancellationChip(),
-                    const MusicbedChip(),
+                    MusicbedChip(held: c.isHeld),
                     if (c.recording)
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -267,10 +267,14 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                 ),
               if (c.isConference) const ConferenceLevels(),
               const SizedBox(height: 16),
-              // Meters and sliders stay one tap away; End stays pinned below.
-              const MixerStrip(),
-              const SizedBox(height: 16),
             ];
+            // Meters and sliders sit right under the caller header, above the
+            // actions, so they are on screen without scrolling; End stays
+            // pinned below the scrolling column.
+            const strip = Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: MixerStrip(),
+            );
             return Column(
               children: [
                 Padding(
@@ -335,7 +339,13 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                                 ),
                                 child: Center(
                                   child: Column(
-                                    children: controlWidgets(landscape: true),
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.only(top: 8),
+                                        child: MixerStrip(),
+                                      ),
+                                      ...controlWidgets(landscape: true),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -348,6 +358,7 @@ class _InCallPageState extends ConsumerState<InCallPage> {
                             child: Column(
                               children: [
                                 ...infoWidgets(),
+                                strip,
                                 ...controlWidgets(landscape: false),
                               ],
                             ),

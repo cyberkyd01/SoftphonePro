@@ -11562,6 +11562,12 @@ abstract class AppLocalizations {
   /// **'Musicbed on'**
   String get musicbedOn;
 
+  /// In-call indicator while the call is on hold: the musicbed is not sent to held calls.
+  ///
+  /// In en, this message translates to:
+  /// **'Musicbed paused (on hold)'**
+  String get musicbedPausedOnHold;
+
   /// Tooltip of the in-call musicbed indicator.
   ///
   /// In en, this message translates to:

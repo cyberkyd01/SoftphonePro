@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "Bestand toevoegen…",
   "musicbedPickerTitle": "Bestand achtergrondmuziek",
   "musicbedOn": "Achtergrondmuziek aan",
+  "musicbedPausedOnHold": "Achtergrondmuziek gepauzeerd (in de wacht)",
   "musicbedOnTooltip": "Een muziekbestand wordt afgespeeld voor iedereen in je gesprekken.",
   "musicbedFileMissing": "Het bestand voor de achtergrondmuziek is niet meer beschikbaar; de achtergrondmuziek is uitgezet.",
   "musicbedNeedsFile": "Kies eerst een bestand voor de achtergrondmuziek.",

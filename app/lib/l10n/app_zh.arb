@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "添加文件…",
   "musicbedPickerTitle": "背景音乐文件",
   "musicbedOn": "背景音乐已开启",
+  "musicbedPausedOnHold": "背景音乐已暂停（通话保持中）",
   "musicbedOnTooltip": "正在向通话中的所有人播放音乐文件。",
   "musicbedFileMissing": "背景音乐文件已不可用，已关闭背景音乐。",
   "musicbedNeedsFile": "请先选择背景音乐文件。",

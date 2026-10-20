@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "إضافة ملف…",
   "musicbedPickerTitle": "ملف الموسيقى الخلفية",
   "musicbedOn": "الموسيقى الخلفية قيد التشغيل",
+  "musicbedPausedOnHold": "الموسيقى الخلفية متوقفة (المكالمة معلّقة)",
   "musicbedOnTooltip": "يتم تشغيل ملف موسيقي لجميع المشاركين في مكالماتك.",
   "musicbedFileMissing": "ملف الموسيقى الخلفية لم يعد متاحًا، لذلك تم إيقاف الميزة.",
   "musicbedNeedsFile": "اختر ملف الموسيقى الخلفية أولًا.",

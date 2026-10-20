@@ -85,7 +85,7 @@ class AudioMixer extends ConsumerWidget {
     );
     final micDevice = showDevices && (!compact || details)
         ? (mobile
-              ? Text(l.mixerInputFollowsOutput, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
+              ? null
               : _DevicePicker(
                   key: const Key('mixer-input-device'),
                   icon: Icons.mic_none_rounded,
@@ -97,7 +97,19 @@ class AudioMixer extends ConsumerWidget {
         : null;
     final speakerDevice = showDevices && (!compact || details)
         ? (mobile
-              ? _RouteSelector(label: l.mixerOutputRoute)
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _RouteSelector(label: l.mixerOutputRoute),
+                    const SizedBox(height: 6),
+                    Text(
+                      l.mixerInputFollowsOutput,
+                      key: const Key('mixer-route-hint'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                )
               : _DevicePicker(
                   key: const Key('mixer-output-device'),
                   icon: Icons.speaker_rounded,
@@ -230,6 +242,8 @@ class _MixSlider extends StatelessWidget {
       child: Semantics(
         label: label,
         child: Slider(
+          // No horizontal inset: the track ends line up with the meter above.
+          padding: const EdgeInsets.symmetric(vertical: 4),
           value: value.clamp(0.0, max).toDouble(),
           max: max,
           onChanged: onChanged,
@@ -523,7 +537,7 @@ class _FileSheet extends ConsumerWidget {
                     title: Text(l.musicbedAddFile),
                     onTap: () async {
                       final nav = Navigator.of(context);
-                      final item = await _importFile(ref);
+                      final item = await importAudioFile(ref);
                       if (item != null) nav.pop(item.ref);
                     },
                   ),
@@ -537,7 +551,9 @@ class _FileSheet extends ConsumerWidget {
   }
 }
 
-Future<AudioItem?> _importFile(WidgetRef ref) async {
+/// Asks for a file, imports it into the audio library and returns the item
+/// (null: cancelled or refused, with a notice).
+Future<AudioItem?> importAudioFile(WidgetRef ref) async {
   final notice = ref.read(noticeProvider.notifier);
   try {
     final path = await ref.read(audioFilePickerProvider)();
@@ -573,6 +589,30 @@ class MixerStrip extends ConsumerWidget {
     final meters = ref.watch(audioLevelsProvider);
     final l = context.l10n;
     final t = Theme.of(context);
+    // Opening the strip or its details inside a scrolling page brings the
+    // whole strip on screen (the End button is pinned outside the scroll
+    // view, so the viewport already stops above it).
+    void reveal() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        final scrollable = Scrollable.maybeOf(context);
+        final box = context.findRenderObject();
+        final viewport = scrollable?.context.findRenderObject();
+        if (box is! RenderBox || !box.hasSize || viewport is! RenderBox || !viewport.hasSize) return;
+        final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+        if (top >= 0 && top + box.size.height <= viewport.size.height) return;
+        // Partly out of view: put its top at the top of the viewport (the
+        // controls come first; a strip taller than the viewport scrolls on).
+        Scrollable.ensureVisible(context, alignment: 0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      });
+    }
+
+    ref.listen<bool>(mixerStripOpenProvider, (prev, now) {
+      if (now && prev != true) reveal();
+    });
+    ref.listen<bool>(mixerDetailsOpenProvider, (prev, now) {
+      if (now && prev != true && ref.read(mixerStripOpenProvider)) reveal();
+    });
     Widget meter(IconData icon, String name, MeterChannel c) => Expanded(
       child: Row(
         children: [

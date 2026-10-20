@@ -92,29 +92,32 @@ class NoiseCancellationChip extends ConsumerWidget {
 }
 
 /// Small "Musicbed on" indicator for the call screen, shown while the engine
-/// plays the musicbed into the calls.
+/// plays the musicbed into the calls. A held call gets no musicbed, so while
+/// [held] the chip turns muted and says it is paused.
 class MusicbedChip extends ConsumerWidget {
-  const MusicbedChip({super.key});
+  const MusicbedChip({super.key, this.held = false});
+  final bool held;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(musicbedProvider.select((m) => m.active))) return const SizedBox.shrink();
     final t = Theme.of(context);
+    final fg = held ? t.colorScheme.onSurfaceVariant : t.colorScheme.primary;
     return Tooltip(
-      message: context.l10n.musicbedOnTooltip,
+      message: held ? context.l10n.musicbedPausedOnHold : context.l10n.musicbedOnTooltip,
       child: Container(
-        key: const Key('musicbed-chip'),
+        key: Key(held ? 'musicbed-chip-paused' : 'musicbed-chip'),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: t.colorScheme.primary.withValues(alpha: 0.10),
+          color: held ? t.colorScheme.onSurface.withValues(alpha: 0.08) : t.colorScheme.primary.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.music_note_rounded, size: 13, color: t.colorScheme.primary),
+            Icon(held ? Icons.music_off_rounded : Icons.music_note_rounded, size: 13, color: fg),
             const SizedBox(width: 4),
             Flexible(
-              child: Text(context.l10n.musicbedOn, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.w600)),
+              child: Text(held ? context.l10n.musicbedPausedOnHold : context.l10n.musicbedOn, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.labelSmall?.copyWith(color: fg, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

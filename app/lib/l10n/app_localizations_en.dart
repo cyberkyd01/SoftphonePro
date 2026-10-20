@@ -6849,6 +6849,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicbedOn => 'Musicbed on';
 
   @override
+  String get musicbedPausedOnHold => 'Musicbed paused (on hold)';
+
+  @override
   String get musicbedOnTooltip =>
       'A music file is playing to everyone on your calls.';
 

@@ -6908,6 +6908,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get musicbedOn => 'الموسيقى الخلفية قيد التشغيل';
 
   @override
+  String get musicbedPausedOnHold =>
+      'الموسيقى الخلفية متوقفة (المكالمة معلّقة)';
+
+  @override
   String get musicbedOnTooltip =>
       'يتم تشغيل ملف موسيقي لجميع المشاركين في مكالماتك.';
 

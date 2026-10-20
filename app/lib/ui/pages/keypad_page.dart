@@ -360,11 +360,22 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
             const SizedBox(height: 4),
             AccountSelector(dense: tight),
             if (stripOpen)
-              // Opened mixer takes the quick list's place (and scrolls).
-              const Expanded(
+              // Opened mixer, dial pad and Call button form one scrolling
+              // area: the strip is as tall as its content (nothing is cut
+              // mid-row) and the pad stays reachable by scrolling.
+              Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: MixerStrip(),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Column(
+                    children: [
+                      const MixerStrip(),
+                      const SizedBox(height: 8),
+                      DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: true),
+                      const SizedBox(height: 4),
+                      callBtn,
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               )
             else if (!tight)
@@ -402,16 +413,17 @@ class _KeypadPageState extends ConsumerState<KeypadPage> {
                       ),
                     ),
             ),
-            if (tight && !stripOpen) const Spacer(),
-            if (!stripOpen)
+            if (!stripOpen) ...[
+              if (tight) const Spacer(),
               Padding(
                 padding: EdgeInsets.fromLTRB(16, tight ? 0 : 4, 16, tight ? 4 : 8),
                 child: const MixerStrip(),
               ),
-            DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: tight),
-            SizedBox(height: tight ? 4 : 8),
-            callBtn,
-            SizedBox(height: tight ? 8 : 12),
+              DialPad(onDigit: _digit, onVoicemail: _voicemail, onLongPressDigit: _speedDial, compact: tight),
+              SizedBox(height: tight ? 4 : 8),
+              callBtn,
+              SizedBox(height: tight ? 8 : 12),
+            ],
           ],
         );
       },

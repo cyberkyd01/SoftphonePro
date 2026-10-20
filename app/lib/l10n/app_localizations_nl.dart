@@ -6928,6 +6928,10 @@ class AppLocalizationsNl extends AppLocalizations {
   String get musicbedOn => 'Achtergrondmuziek aan';
 
   @override
+  String get musicbedPausedOnHold =>
+      'Achtergrondmuziek gepauzeerd (in de wacht)';
+
+  @override
   String get musicbedOnTooltip =>
       'Een muziekbestand wordt afgespeeld voor iedereen in je gesprekken.';
 

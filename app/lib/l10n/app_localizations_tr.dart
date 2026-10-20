@@ -6882,6 +6882,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get musicbedOn => 'Fon müziği açık';
 
   @override
+  String get musicbedPausedOnHold => 'Fon müziği duraklatıldı (beklemede)';
+
+  @override
   String get musicbedOnTooltip =>
       'Aramalarınızdaki herkese bir müzik dosyası çalınıyor.';
 

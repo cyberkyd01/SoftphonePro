@@ -1902,6 +1902,7 @@
   "musicbedAddFile": "ファイルを追加…",
   "musicbedPickerTitle": "BGMファイル",
   "musicbedOn": "BGMオン",
+  "musicbedPausedOnHold": "BGM一時停止中（保留中）",
   "musicbedOnTooltip": "通話中の全員に音楽ファイルが再生されています。",
   "musicbedFileMissing": "BGMファイルが見つからないため、BGMをオフにしました。",
   "musicbedNeedsFile": "先にBGMファイルを選択してください。",

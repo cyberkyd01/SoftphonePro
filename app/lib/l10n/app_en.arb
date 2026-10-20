@@ -9375,6 +9375,10 @@
   "@musicbedOn": {
     "description": "Small in-call indicator that the musicbed is playing."
   },
+  "musicbedPausedOnHold": "Musicbed paused (on hold)",
+  "@musicbedPausedOnHold": {
+    "description": "In-call indicator while the call is on hold: the musicbed is not sent to held calls."
+  },
   "musicbedOnTooltip": "A music file is playing to everyone on your calls.",
   "@musicbedOnTooltip": {
     "description": "Tooltip of the in-call musicbed indicator."
