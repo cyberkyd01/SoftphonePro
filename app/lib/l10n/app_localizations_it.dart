@@ -6978,4 +6978,182 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'Impossibile fermare la musica. Potrebbe essere ancora udibile dai tuoi interlocutori.';
+
+  @override
+  String get audioTestTitle => 'Test audio';
+
+  @override
+  String get audioTestEntry => 'Prova microfono e altoparlanti';
+
+  @override
+  String get audioTestEntrySub =>
+      'Controlla i dispositivi, ascoltati e bilancia la musica di sottofondo';
+
+  @override
+  String get audioTestInCall =>
+      'Termina la chiamata per eseguire il test audio';
+
+  @override
+  String get audioTestIosNote =>
+      'Su iPhone il microfono e l’altoparlante sono attivi solo durante una chiamata';
+
+  @override
+  String get audioTestStepDevices => 'Dispositivi';
+
+  @override
+  String get audioTestStepMic => 'Microfono';
+
+  @override
+  String get audioTestStepSpeaker => 'Altoparlante o auricolari';
+
+  @override
+  String get audioTestStepRecord => 'Registra e riascolta';
+
+  @override
+  String get audioTestStepEcho => 'Ascoltati';
+
+  @override
+  String get audioTestStepMusic => 'Musica di sottofondo';
+
+  @override
+  String get audioTestStepSummary => 'Riepilogo';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'In uso: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'Impossibile aprire alcun dispositivo audio';
+
+  @override
+  String get audioTestMicOk => 'Ti sentiamo';
+
+  @override
+  String get audioTestMicWaiting => 'Di’ qualcosa…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Molto basso: avvicinati o aumenta il guadagno del microfono';
+
+  @override
+  String get audioTestMicClipping =>
+      'Troppo alto: riduci il guadagno del microfono';
+
+  @override
+  String get audioTestMicSilent =>
+      'Non arriva nulla. Controlla che: sia selezionato il microfono giusto, non sia disattivato nel sistema, l’app possa usare il microfono (impostazioni privacy) e nessun’altra app lo stia usando.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Apri le impostazioni audio';
+
+  @override
+  String get audioTestOpenPrivacySettings =>
+      'Apri le impostazioni privacy del microfono';
+
+  @override
+  String get audioTestPlaySound => 'Riproduci suono di prova';
+
+  @override
+  String get audioTestDidYouHear => 'L’hai sentito?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'Hai sentito la tua voce?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'L’app ha inviato audio ma l’indicatore di uscita non si è mosso';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Controlla il volume, il dispositivo di uscita selezionato e l’uscita di sistema (Bluetooth, HDMI)';
+
+  @override
+  String get audioTestRecord5s => 'Registra 5 secondi';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Registrazione… $seconds s';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Riproduzione…';
+
+  @override
+  String get audioTestPlayAgain => 'Riproduci di nuovo';
+
+  @override
+  String get audioTestRecEmpty => 'La registrazione è vuota';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Usa le cuffie: con gli altoparlanti sentirai un fischio di ritorno.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'Si ferma tra $seconds s';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Test eco terminato ($reason)';
+  }
+
+  @override
+  String get audioTestPreview =>
+      'Anteprima di ciò che sentono gli interlocutori';
+
+  @override
+  String get audioTestPreviewSub =>
+      'La tua voce e la musica di sottofondo, mixate come vengono inviate';
+
+  @override
+  String get audioTestSendLevel => 'Inviato agli interlocutori';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'La cancellazione dell’eco non viene applicata in questa anteprima';
+
+  @override
+  String get audioTestPass => 'OK';
+
+  @override
+  String get audioTestFail => 'Problema';
+
+  @override
+  String get audioTestNotRun => 'Non testato';
+
+  @override
+  String get audioTestSkipped => 'Saltato';
+
+  @override
+  String get audioTestRunning => 'Test in corso…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Copia diagnostica';
+
+  @override
+  String get audioTestCopied => 'Diagnostica copiata';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Problema con il dispositivo audio: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Microfono non disponibile: viene usato un dispositivo silenzioso';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'La musica viene inviata agli interlocutori; attiva «Ascolta anche tu» o l’anteprima per sentirla';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'fermato dopo 60 s';
+
+  @override
+  String get audioTestEchoEndedCall => 'è iniziata una chiamata';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'il motore è stato riavviato';
 }

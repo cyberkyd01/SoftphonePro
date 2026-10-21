@@ -93,6 +93,12 @@ sealed class EngineEvent {
         return MediaErrorEvent(j);
       case 'media.musicbed':
         return MusicbedEvent(j);
+      case 'media.monitor':
+        return MediaMonitorEvent(j);
+      case 'media.loopback':
+        return MediaLoopbackEvent(j);
+      case 'media.playDone':
+        return MediaPlayDoneEvent(j);
       case 'diag.natType':
         return DiagNatTypeEvent(j);
       case 'diag.options':
@@ -355,6 +361,33 @@ final class MediaErrorEvent extends EngineEvent {
   final int status;
   final String message;
   final String? fallback;
+}
+
+/// The live monitor (`media.monitor`) changed state or audio source.
+final class MediaMonitorEvent extends EngineEvent {
+  MediaMonitorEvent(super.raw) : state = MonitorState.fromJson(raw);
+  final MonitorState state;
+}
+
+/// The echo test (`media.loopback`) was switched on or off; [reason] is
+/// `stopped`, `timeout`, `call` or `shutdown` when it ended.
+final class MediaLoopbackEvent extends EngineEvent {
+  MediaLoopbackEvent(super.raw)
+    : enabled = asBool(raw['enabled']),
+      reason = asStringN(raw['reason']);
+  final bool enabled;
+  final String? reason;
+}
+
+/// A local playback (`media.playLocal`) ended. No call id.
+final class MediaPlayDoneEvent extends EngineEvent {
+  MediaPlayDoneEvent(super.raw)
+    : playId = asInt(raw['playId']),
+      file = asString(raw['file']),
+      reason = PlayDoneReason.parse(raw['reason']);
+  final int playId;
+  final String file;
+  final PlayDoneReason reason;
 }
 
 final class DiagNatTypeEvent extends EngineEvent {

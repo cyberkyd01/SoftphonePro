@@ -11621,6 +11621,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t stop the music. It may still be playing to your callers.'**
   String get musicbedStopFailed;
+
+  /// Title of the Audio test page (app bar) and tooltip of the mixer shortcut.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio test'**
+  String get audioTestTitle;
+
+  /// Settings > Audio and Diagnostics: row that opens the Audio test page.
+  ///
+  /// In en, this message translates to:
+  /// **'Test microphone and speakers'**
+  String get audioTestEntry;
+
+  /// Subtitle of the Audio test row in Settings > Audio.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your devices, hear yourself and balance background music'**
+  String get audioTestEntrySub;
+
+  /// Banner on the Audio test page while a call is active.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish your call to run the audio test'**
+  String get audioTestInCall;
+
+  /// Note on the Audio test page for iPhone, where the audio device is only open during a call.
+  ///
+  /// In en, this message translates to:
+  /// **'On iPhone the microphone and speaker are only open during a call'**
+  String get audioTestIosNote;
+
+  /// Audio test step 1 title: choose the audio devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get audioTestStepDevices;
+
+  /// Audio test step 2 title: microphone level check.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get audioTestStepMic;
+
+  /// Audio test step 3 title: play a sound on the speaker or earphones.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaker or earphones'**
+  String get audioTestStepSpeaker;
+
+  /// Audio test step 4 title: record the microphone and play it back.
+  ///
+  /// In en, this message translates to:
+  /// **'Record and play back'**
+  String get audioTestStepRecord;
+
+  /// Audio test step 5 title: echo test where you hear your own voice live.
+  ///
+  /// In en, this message translates to:
+  /// **'Hear yourself'**
+  String get audioTestStepEcho;
+
+  /// Audio test step 6 title: background music (musicbed) balance.
+  ///
+  /// In en, this message translates to:
+  /// **'Background music'**
+  String get audioTestStepMusic;
+
+  /// Audio test step 7 title: summary of all steps.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get audioTestStepSummary;
+
+  /// Audio test: the microphone device the engine actually opened.
+  ///
+  /// In en, this message translates to:
+  /// **'In use: {name}'**
+  String audioTestOpened(String name);
+
+  /// Audio test: no audio device could be opened by the engine.
+  ///
+  /// In en, this message translates to:
+  /// **'No audio device could be opened'**
+  String get audioTestNoDevice;
+
+  /// Audio test: the microphone picks up the voice.
+  ///
+  /// In en, this message translates to:
+  /// **'We hear you'**
+  String get audioTestMicOk;
+
+  /// Audio test: prompt to speak into the microphone.
+  ///
+  /// In en, this message translates to:
+  /// **'Say something…'**
+  String get audioTestMicWaiting;
+
+  /// Audio test: the microphone signal is very weak.
+  ///
+  /// In en, this message translates to:
+  /// **'Very quiet: move closer or raise the microphone gain'**
+  String get audioTestMicQuiet;
+
+  /// Audio test: the microphone signal is too loud and distorts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too loud: lower the microphone gain'**
+  String get audioTestMicClipping;
+
+  /// Audio test: the microphone delivers no signal at all; lists the usual causes.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is coming in. Check: the right microphone is selected, it is not muted in the system, the app may use the microphone (privacy settings), no other app is using it.'**
+  String get audioTestMicSilent;
+
+  /// Audio test: button that opens the operating system sound settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open sound settings'**
+  String get audioTestOpenSoundSettings;
+
+  /// Audio test: button that opens the operating system microphone privacy settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open microphone privacy settings'**
+  String get audioTestOpenPrivacySettings;
+
+  /// Audio test: button that plays a short test sound.
+  ///
+  /// In en, this message translates to:
+  /// **'Play test sound'**
+  String get audioTestPlaySound;
+
+  /// Audio test: question after the test sound played.
+  ///
+  /// In en, this message translates to:
+  /// **'Did you hear it?'**
+  String get audioTestDidYouHear;
+
+  /// Audio test: question after the recording or echo test played your voice back.
+  ///
+  /// In en, this message translates to:
+  /// **'Did you hear your voice?'**
+  String get audioTestDidYouHearVoice;
+
+  /// Audio test: the app played a sound but the output level meter stayed flat.
+  ///
+  /// In en, this message translates to:
+  /// **'The app sent sound but the output meter did not move'**
+  String get audioTestNoOutputLevel;
+
+  /// Audio test: hints shown when the user did not hear the test sound.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the volume, the selected output device and the system output (Bluetooth, HDMI)'**
+  String get audioTestSpeakerHints;
+
+  /// Audio test: button that records the microphone for 5 seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Record 5 seconds'**
+  String get audioTestRecord5s;
+
+  /// Audio test: shown while recording; seconds is the time left.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording… {seconds} s'**
+  String audioTestRecording(int seconds);
+
+  /// Audio test: shown while the recording is played back.
+  ///
+  /// In en, this message translates to:
+  /// **'Playing back…'**
+  String get audioTestPlayingBack;
+
+  /// Audio test: button that plays the recording again.
+  ///
+  /// In en, this message translates to:
+  /// **'Play again'**
+  String get audioTestPlayAgain;
+
+  /// Audio test: the recording contains no audio.
+  ///
+  /// In en, this message translates to:
+  /// **'The recording is empty'**
+  String get audioTestRecEmpty;
+
+  /// Audio test: warning before the echo test; loudspeakers cause feedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Use headphones: with loudspeakers you will hear feedback.'**
+  String get audioTestEchoHeadphones;
+
+  /// Audio test: seconds left until the echo test stops by itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Stops in {seconds} s'**
+  String audioTestEchoSecondsLeft(int seconds);
+
+  /// Audio test: the echo test ended; reason is a technical word such as timeout or call.
+  ///
+  /// In en, this message translates to:
+  /// **'Echo test ended ({reason})'**
+  String audioTestEchoEnded(String reason);
+
+  /// Audio test: switch that lets you hear what callers would hear (voice plus music).
+  ///
+  /// In en, this message translates to:
+  /// **'Preview what callers hear'**
+  String get audioTestPreview;
+
+  /// Audio test: subtitle of the preview switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Your voice and the background music, mixed as they are sent'**
+  String get audioTestPreviewSub;
+
+  /// Audio test: label of the meter that shows the level sent to callers.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to callers'**
+  String get audioTestSendLevel;
+
+  /// Audio test: note that echo cancellation is not part of the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Echo cancellation is not applied in this preview'**
+  String get audioTestEcNotPreviewed;
+
+  /// Audio test: status label of a step that succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get audioTestPass;
+
+  /// Audio test: status label of a step that found a problem.
+  ///
+  /// In en, this message translates to:
+  /// **'Problem'**
+  String get audioTestFail;
+
+  /// Audio test: status label of a step that was not tested yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not tested'**
+  String get audioTestNotRun;
+
+  /// Audio test: status label of a step that was skipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get audioTestSkipped;
+
+  /// Audio test: status label of the step that is currently running.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing…'**
+  String get audioTestRunning;
+
+  /// Audio test: button that copies the audio diagnostics to the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy diagnostics'**
+  String get audioTestCopyDiagnostics;
+
+  /// Audio test: confirmation that the diagnostics were copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics copied'**
+  String get audioTestCopied;
+
+  /// Error notice: the engine could not open or use an audio device; message is the technical reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio device problem: {message}'**
+  String audioDeviceErrorNotice(String message);
+
+  /// Mixer hint: no real microphone could be opened, the engine uses a silent device.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone unavailable: using a silent device'**
+  String get mixerMicUnavailable;
+
+  /// Audio test, background music step: the music goes to callers only, so the user hears nothing unless the monitor is on.
+  ///
+  /// In en, this message translates to:
+  /// **'The music is sent to callers; turn on \"Hear it myself\" or the preview to hear it'**
+  String get audioTestMusicSilentHint;
+
+  /// Audio test: reason inside "Echo test ended (...)" when the 60 second limit was reached.
+  ///
+  /// In en, this message translates to:
+  /// **'it stopped after 60 s'**
+  String get audioTestEchoEndedTimeout;
+
+  /// Audio test: reason inside "Echo test ended (...)" when a call started.
+  ///
+  /// In en, this message translates to:
+  /// **'a call started'**
+  String get audioTestEchoEndedCall;
+
+  /// Audio test: reason inside "Echo test ended (...)" when the engine restarted.
+  ///
+  /// In en, this message translates to:
+  /// **'the engine restarted'**
+  String get audioTestEchoEndedShutdown;
 }
 
 class _AppLocalizationsDelegate

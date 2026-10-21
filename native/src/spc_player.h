@@ -26,6 +26,8 @@ void    spc_rs_flush(spc_rs* r, spc_rs_sink sink, void* ctx);
 void    spc_rs_free(spc_rs* r);
 
 /* ---- players ---- */
+/* Owner id of plays that belong to no call (media.playLocal): local-only, to the speaker */
+#define SPC_LOCAL_CID ((uint64_t)-1)
 /* Starts a player on call `cid`. 0 ok (play id in *id) or -1 with err filled. */
 int  spc_player_start(uint64_t cid, const char* file, int loop, float volume, int local_monitor, int mute_mic,
                       int moh, int* id, char* err, size_t en);

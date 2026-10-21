@@ -11,9 +11,10 @@ import '../services/calls_controller.dart';
 import 'audio_platform.dart';
 import '../services/engine_controller.dart';
 import '../services/settings_controller.dart';
+import 'echo_test.dart';
 import 'mic_recorder.dart';
+import 'monitor_state.dart';
 import 'musicbed.dart';
-import 'voice_isolation.dart';
 
 /// One smoothed meter: fast attack, ~300 ms release and a peak-hold marker.
 /// Pure math (no clock): [step] is fed the time since the previous sample.
@@ -85,24 +86,30 @@ class MeterChannel extends ChangeNotifier {
   }
 }
 
-/// Microphone, speaker and musicbed meters. Each channel notifies its own
-/// painter; the object itself never changes.
+/// Microphone, speaker, musicbed and "sent to callers" meters. Each channel
+/// notifies its own painter; the object itself never changes.
 class AudioMeters {
   final mic = MeterChannel();
   final speaker = MeterChannel();
   final musicbed = MeterChannel();
 
+  /// The mix sent to callers (microphone plus musicbed); only moves while the
+  /// live monitor runs.
+  final send = MeterChannel();
+
   /// Feeds one `media.levels` sample taken [dtMs] after the previous one.
-  void update(int micRaw, int speakerRaw, int bedRaw, double dtMs) {
+  void update(int micRaw, int speakerRaw, int bedRaw, double dtMs, {int sendRaw = 0}) {
     mic.step(micRaw, dtMs);
     speaker.step(speakerRaw, dtMs);
     musicbed.step(bedRaw, dtMs);
+    send.step(sendRaw, dtMs);
   }
 
   void clear() {
     mic.reset();
     speaker.reset();
     musicbed.reset();
+    send.reset();
   }
 }
 
@@ -217,6 +224,12 @@ class RasterCostMonitor {
 /// 1 Hz otherwise. A stopped engine or a failing request reads as silence;
 /// the provider never throws.
 ///
+/// While watched in the foreground it also asks the engine to keep the sound
+/// device open (`media.monitor`), without which the meters read zero outside
+/// calls. On a phone or tablet that happens only while a screen that tests the
+/// audio holds the [meterBoostProvider] (the microphone indicator would
+/// otherwise stay on); never on iOS, which has no device outside a call.
+///
 /// Widgets `ref.watch` it once (it never changes identity) and give a channel
 /// to a [LevelMeter], which repaints only when that channel's value moves.
 final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
@@ -231,16 +244,23 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   var inCall = ref.read(callsProvider).live.isNotEmpty;
   var bedActive = ref.read(musicbedProvider).active;
   var monitor = ref.read(settingsProvider).musicbedMonitor;
-  var echo = ref.read(voiceIsolationProvider).echoTest;
+  var echo = ref.read(echoTestProvider).on;
   var recording = ref.read(micRecorderProvider).recording;
   var boost = ref.read(meterBoostProvider);
+  var engineRunning = ref.read(engineProvider).running;
+  var generation = ref.read(engineProvider).generation;
   // iOS has no audio device outside a call: the monitor plays nowhere then.
   final ios = ref.read(isIosProvider);
+  final mobile = ref.read(audioMobileProvider);
+  final engineCtl = ref.read(engineProvider.notifier);
+  final monitorState = ref.read(audioMonitorStateProvider.notifier);
+  var monitorOn = false;
   bool flowing() =>
       inCall ||
       (bedActive && monitor && !ios) ||
       echo ||
       recording ||
+      monitorOn ||
       boost > 0;
   // Animated meters cost a full-window redraw per update: slow down when
   // frames are expensive (software rendering).
@@ -252,7 +272,7 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
     if (busy) return;
     busy = true;
     final dt = period.inMilliseconds.toDouble();
-    var mic = 0, spk = 0, bed = 0;
+    var mic = 0, spk = 0, bed = 0, send = 0;
     try {
       final ctl = ref.read(engineProvider.notifier);
       if (ctl.hasEngine) {
@@ -260,10 +280,11 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
         mic = l.mic;
         spk = l.speaker;
         bed = l.musicbed;
+        send = l.send;
       }
     } catch (_) {}
     busy = false;
-    if (timer != null && ref.mounted) meters.update(mic, spk, bed, dt);
+    if (timer != null && ref.mounted) meters.update(mic, spk, bed, dt, sendRaw: send);
   }
 
   // Polls only while someone listens (the last listener leaving cancels the
@@ -271,7 +292,40 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   // the app is in the foreground.
   var listened = true;
   var foreground = true;
+
+  // The live monitor: asked for only while the meters are watched in the
+  // foreground; re-asked after an engine restart (a new engine starts with the
+  // monitor off). Requests run one after the other so the last one wins.
+  var applied = false;
+  var appliedGen = generation;
+  var monChain = Future<void>.value();
+  void syncMonitor() {
+    if (generation != appliedGen) {
+      appliedGen = generation;
+      applied = false;
+    }
+    final want = listened && foreground && engineRunning && !ios && (!mobile || boost > 0);
+    monitorOn = want;
+    if (want == applied) return;
+    applied = want;
+    monChain = monChain.then((_) async {
+      try {
+        if (!engineCtl.hasEngine) {
+          applied = false;
+          if (!want) monitorState.set(null);
+          return;
+        }
+        final r = await engineCtl.engine.setMonitor(want);
+        monitorState.set(want ? r : null);
+      } catch (_) {
+        // Retried at the next trigger (a state change or an engine restart).
+        applied = !want;
+      }
+    });
+  }
+
   void sync() {
+    syncMonitor();
     if (!(listened && foreground)) {
       timer?.cancel();
       timer = null;
@@ -305,7 +359,13 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
     monitor = v;
     sync();
   });
-  ref.listen(voiceIsolationProvider.select((v) => v.echoTest), (_, v) {
+  ref.listen(engineProvider.select((e) => (e.running, e.generation)), (_, v) {
+    engineRunning = v.$1;
+    generation = v.$2;
+    if (!engineRunning) monitorState.set(null);
+    sync();
+  });
+  ref.listen(echoTestProvider.select((v) => v.on), (_, v) {
     echo = v;
     sync();
   });
@@ -352,6 +412,19 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
     binding.removeTimingsCallback(onTimings);
     timer?.cancel();
     timer = null;
+    if (applied) {
+      applied = false;
+      try {
+        if (engineCtl.hasEngine) {
+          unawaited(engineCtl.engine.setMonitor(false).then((_) {}, onError: (_) {}));
+        }
+      } catch (_) {}
+      Future.microtask(() {
+        try {
+          monitorState.set(null);
+        } catch (_) {}
+      });
+    }
   });
   return meters;
 });

@@ -14,7 +14,7 @@
 #include "spcore.h"
 #include "spc_port.h"
 
-#define SPC_VERSION "1.1.1"
+#define SPC_VERSION "1.1.2"
 #define SPC_EVENT_RING_MAX 2000
 #define SPC_MAX_CODECS 24
 #define SPC_MAX_PEERS 32
@@ -321,6 +321,9 @@ void  spc_port_destroy_release(pjmedia_port* port, pj_pool_t* pool);   /* destro
 const char* spc_media_snd_current(char* cap, size_t n, char* play, size_t m);
 int   spc_media_snd_open(void);
 int   spc_media_on_connect_error(pj_status_t st);
+void  spc_media_calls_begin(void);          /* a call starts using the mic: ends the echo test, restores the EC */
+int   spc_media_monitor_slot(void);         /* conference slot of the media.monitor sink, -1 if never created */
+int   spc_media_monitor_on(void);           /* 1 while port 0 feeds that sink (monitor enabled and connected) */
 unsigned spc_ec_options(const char* algo, int ns, int agc, int* tail_zero);
 
 /* ---- stats (spc_stats.c) ---- */

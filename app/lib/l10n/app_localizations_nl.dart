@@ -6965,4 +6965,180 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'De muziek kon niet worden gestopt. Je gesprekspartners horen haar mogelijk nog.';
+
+  @override
+  String get audioTestTitle => 'Audiotest';
+
+  @override
+  String get audioTestEntry => 'Microfoon en luidsprekers testen';
+
+  @override
+  String get audioTestEntrySub =>
+      'Controleer je apparaten, hoor jezelf en stem de achtergrondmuziek af';
+
+  @override
+  String get audioTestInCall =>
+      'Beëindig je gesprek om de audiotest uit te voeren';
+
+  @override
+  String get audioTestIosNote =>
+      'Op de iPhone zijn de microfoon en de luidspreker alleen tijdens een gesprek actief';
+
+  @override
+  String get audioTestStepDevices => 'Apparaten';
+
+  @override
+  String get audioTestStepMic => 'Microfoon';
+
+  @override
+  String get audioTestStepSpeaker => 'Luidspreker of oortjes';
+
+  @override
+  String get audioTestStepRecord => 'Opnemen en afspelen';
+
+  @override
+  String get audioTestStepEcho => 'Jezelf horen';
+
+  @override
+  String get audioTestStepMusic => 'Achtergrondmuziek';
+
+  @override
+  String get audioTestStepSummary => 'Samenvatting';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'In gebruik: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'Er kon geen audioapparaat worden geopend';
+
+  @override
+  String get audioTestMicOk => 'We horen je';
+
+  @override
+  String get audioTestMicWaiting => 'Zeg iets…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Erg zacht: ga dichterbij zitten of verhoog de microfoonversterking';
+
+  @override
+  String get audioTestMicClipping => 'Te luid: verlaag de microfoonversterking';
+
+  @override
+  String get audioTestMicSilent =>
+      'Er komt niets binnen. Controleer: de juiste microfoon is geselecteerd, hij staat in het systeem niet gedempt, de app mag de microfoon gebruiken (privacy-instellingen) en geen andere app gebruikt hem.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Geluidsinstellingen openen';
+
+  @override
+  String get audioTestOpenPrivacySettings =>
+      'Privacy-instellingen voor de microfoon openen';
+
+  @override
+  String get audioTestPlaySound => 'Testgeluid afspelen';
+
+  @override
+  String get audioTestDidYouHear => 'Heb je het gehoord?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'Heb je je stem gehoord?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'De app heeft geluid verstuurd, maar de uitvoermeter bewoog niet';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Controleer het volume, het geselecteerde uitvoerapparaat en de systeemuitvoer (Bluetooth, HDMI)';
+
+  @override
+  String get audioTestRecord5s => '5 seconden opnemen';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Opnemen… $seconds s';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Afspelen…';
+
+  @override
+  String get audioTestPlayAgain => 'Opnieuw afspelen';
+
+  @override
+  String get audioTestRecEmpty => 'De opname is leeg';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Gebruik een koptelefoon: met luidsprekers hoor je terugkoppeling.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'Stopt over $seconds s';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Echotest beëindigd ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'Voorbeeld van wat bellers horen';
+
+  @override
+  String get audioTestPreviewSub =>
+      'Je stem en de achtergrondmuziek, gemengd zoals ze worden verzonden';
+
+  @override
+  String get audioTestSendLevel => 'Naar bellers verzonden';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'Echo-onderdrukking wordt in dit voorbeeld niet toegepast';
+
+  @override
+  String get audioTestPass => 'OK';
+
+  @override
+  String get audioTestFail => 'Probleem';
+
+  @override
+  String get audioTestNotRun => 'Niet getest';
+
+  @override
+  String get audioTestSkipped => 'Overgeslagen';
+
+  @override
+  String get audioTestRunning => 'Testen…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Diagnose kopiëren';
+
+  @override
+  String get audioTestCopied => 'Diagnose gekopieerd';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Probleem met het audioapparaat: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Microfoon niet beschikbaar: er wordt een stil apparaat gebruikt';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'De muziek gaat naar de bellers; zet “Zelf horen” of het voorbeeld aan om haar te horen';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'gestopt na 60 s';
+
+  @override
+  String get audioTestEchoEndedCall => 'er is een gesprek begonnen';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'de engine is herstart';
 }

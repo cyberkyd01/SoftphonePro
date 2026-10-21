@@ -4,6 +4,24 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-21
+
+Fixes the audio meters, the echo test and silent audio-device errors, and adds an Audio test page. See [docs/RELEASE_NOTES_v1.1.2.md](docs/RELEASE_NOTES_v1.1.2.md). Installs over 1.1.1 and keeps your accounts and settings.
+
+### Fixed
+* The microphone meter stayed flat outside calls. The engine closed the sound device a second after the last call, and measured the microphone only while something was listening to it. The app now asks the engine to keep the device open and metered while a meter is on screen (always on desktop; on phones only on the Audio test and Settings > Audio pages; never on iOS).
+* The echo test was inaudible with echo cancellation on, because the canceller removed your own voice from the loopback. The engine now bypasses echo cancellation and noise suppression for the test and restores them when it ends or a call starts.
+* Audio-device errors were silent. A failed device open now shows a notice, the mixer says when it is using a silent device, and the engine retries the real device when you refresh devices, change devices or start a test.
+
+### Changed
+* In auto mode an explicit `null` capture or playback device is now honoured by the live meter, echo test, tones, local playback, the musicbed monitor and calls (it used to fall back to the system default device). Choosing `null` or `none` also ends a running echo test.
+
+### Added
+* Audio test page (Settings > Audio, Diagnostics > Audio, and the mixer): checks the devices in use, the microphone level (with hints for a silent, quiet or clipping microphone and links to the system sound and privacy settings), the speaker with a test chime, a 5 second record and play back, "hear yourself", and the background music, including a preview of what callers hear. A summary can be copied for support.
+* Live meters: the mixer, Settings > Audio and the Audio test show the microphone level without a call, plus a "sent to callers" level.
+* Echo test stops by itself after 60 seconds, and when a call starts.
+* Engine contract v1.3: `media.monitor`, `media.audioState`, `media.playLocal`, `media.playStop`, `media.loopback` with `timeoutMs`, the `chime` tone, `send` in `media.levels`, and the events `media.monitor`, `media.loopback` and `media.playDone` ([docs/ENGINE_API.md](docs/ENGINE_API.md) section 11).
+
 ## [1.1.1] - 2026-10-20
 
 A bug-fix release for Windows. See [docs/RELEASE_NOTES_v1.1.1.md](docs/RELEASE_NOTES_v1.1.1.md). Installs over 1.1.0 and keeps your accounts and settings.
@@ -144,7 +162,8 @@ Found by the independent reviews and the device runs before release:
 * Builds are not code-signed or notarised.
 * Hold music through Asterisk is the PBX's own; Ogg Opus recordings play in the app on Android and Linux only.
 
-[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/cyberkyd01/SoftphonePro/releases/tag/v1.0.0

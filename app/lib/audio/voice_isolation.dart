@@ -26,23 +26,21 @@ VoiceIsolationConfig voiceIsolationConfigOf(AppSettings s) => VoiceIsolationConf
 );
 
 class VoiceIsolationState {
-  const VoiceIsolationState({this.available, this.vad = 0, this.echoTest = false});
+  const VoiceIsolationState({this.available, this.vad = 0});
 
   /// Null until probed; false when the engine has no voice isolation.
   final bool? available;
 
   /// Latest speech probability of the microphone (0-1).
   final double vad;
-  final bool echoTest;
 
-  VoiceIsolationState copyWith({bool? available, double? vad, bool? echoTest}) => VoiceIsolationState(
+  VoiceIsolationState copyWith({bool? available, double? vad}) => VoiceIsolationState(
     available: available ?? this.available,
     vad: vad ?? this.vad,
-    echoTest: echoTest ?? this.echoTest,
   );
 }
 
-/// Availability probe, speech meter polling and the echo test for the voice
+/// Availability probe and speech meter polling for the voice
 /// isolation settings. The settings themselves are applied live by
 /// [EngineController] when the `vi*` settings change.
 class VoiceIsolationController extends Notifier<VoiceIsolationState> {
@@ -123,24 +121,6 @@ class VoiceIsolationController extends Notifier<VoiceIsolationState> {
     } finally {
       _polling = false;
     }
-  }
-
-  /// Switches the echo test off (page closing); safe to call from dispose.
-  void endEchoTest() {
-    if (!ref.mounted || !state.echoTest) return;
-    final e = _engine;
-    if (e != null) unawaited(e.loopback(false).then((_) {}, onError: (_) {}));
-    Future.microtask(() {
-      if (ref.mounted) state = state.copyWith(echoTest: false);
-    });
-  }
-
-  /// "Test with echo": plays the processed microphone back locally.
-  Future<void> setEchoTest(bool on) async {
-    final e = _engine;
-    if (e == null) return;
-    await e.loopback(on);
-    state = state.copyWith(echoTest: on);
   }
 }
 

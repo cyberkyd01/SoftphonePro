@@ -6956,4 +6956,183 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'No se pudo detener la música. Puede que siga sonando para tus interlocutores.';
+
+  @override
+  String get audioTestTitle => 'Prueba de audio';
+
+  @override
+  String get audioTestEntry => 'Probar micrófono y altavoces';
+
+  @override
+  String get audioTestEntrySub =>
+      'Comprueba tus dispositivos, escúchate y ajusta la música de fondo';
+
+  @override
+  String get audioTestInCall =>
+      'Termina tu llamada para hacer la prueba de audio';
+
+  @override
+  String get audioTestIosNote =>
+      'En iPhone, el micrófono y el altavoz solo están abiertos durante una llamada';
+
+  @override
+  String get audioTestStepDevices => 'Dispositivos';
+
+  @override
+  String get audioTestStepMic => 'Micrófono';
+
+  @override
+  String get audioTestStepSpeaker => 'Altavoz o auriculares';
+
+  @override
+  String get audioTestStepRecord => 'Grabar y reproducir';
+
+  @override
+  String get audioTestStepEcho => 'Escucharte';
+
+  @override
+  String get audioTestStepMusic => 'Música de fondo';
+
+  @override
+  String get audioTestStepSummary => 'Resumen';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'En uso: $name';
+  }
+
+  @override
+  String get audioTestNoDevice =>
+      'No se pudo abrir ningún dispositivo de audio';
+
+  @override
+  String get audioTestMicOk => 'Te escuchamos';
+
+  @override
+  String get audioTestMicWaiting => 'Di algo…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Muy bajo: acércate o sube la ganancia del micrófono';
+
+  @override
+  String get audioTestMicClipping =>
+      'Demasiado alto: baja la ganancia del micrófono';
+
+  @override
+  String get audioTestMicSilent =>
+      'No llega nada. Comprueba que: esté seleccionado el micrófono correcto, no esté silenciado en el sistema, la app tenga permiso para usar el micrófono (ajustes de privacidad) y ninguna otra app lo esté usando.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Abrir ajustes de sonido';
+
+  @override
+  String get audioTestOpenPrivacySettings =>
+      'Abrir ajustes de privacidad del micrófono';
+
+  @override
+  String get audioTestPlaySound => 'Reproducir sonido de prueba';
+
+  @override
+  String get audioTestDidYouHear => '¿Lo has oído?';
+
+  @override
+  String get audioTestDidYouHearVoice => '¿Has oído tu voz?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'La app envió sonido, pero el medidor de salida no se movió';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Comprueba el volumen, el dispositivo de salida seleccionado y la salida del sistema (Bluetooth, HDMI)';
+
+  @override
+  String get audioTestRecord5s => 'Grabar 5 segundos';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Grabando… $seconds s';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Reproduciendo…';
+
+  @override
+  String get audioTestPlayAgain => 'Reproducir de nuevo';
+
+  @override
+  String get audioTestRecEmpty => 'La grabación está vacía';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Usa auriculares: con altavoces oirás acoplamiento.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'Se detiene en $seconds s';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Prueba de eco finalizada ($reason)';
+  }
+
+  @override
+  String get audioTestPreview =>
+      'Vista previa de lo que oyen quienes te llaman';
+
+  @override
+  String get audioTestPreviewSub =>
+      'Tu voz y la música de fondo, mezcladas tal como se envían';
+
+  @override
+  String get audioTestSendLevel => 'Enviado a quienes llaman';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'La cancelación de eco no se aplica en esta vista previa';
+
+  @override
+  String get audioTestPass => 'Correcto';
+
+  @override
+  String get audioTestFail => 'Problema';
+
+  @override
+  String get audioTestNotRun => 'Sin probar';
+
+  @override
+  String get audioTestSkipped => 'Omitido';
+
+  @override
+  String get audioTestRunning => 'Probando…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Copiar diagnóstico';
+
+  @override
+  String get audioTestCopied => 'Diagnóstico copiado';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Problema con el dispositivo de audio: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Micrófono no disponible: se usa un dispositivo silencioso';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'La música se envía a quienes llaman; activa «Escucharla yo» o la vista previa para oírla';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'se detuvo tras 60 s';
+
+  @override
+  String get audioTestEchoEndedCall => 'empezó una llamada';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'el motor se reinició';
 }

@@ -455,8 +455,30 @@ abstract class JsonSipEngine implements SipEngine {
       RecordingResult.fromJson(await _r('media.recordMicStop'));
 
   @override
-  Future<void> loopback(bool enabled) =>
-      _v('media.loopback', {'enabled': enabled});
+  Future<void> loopback(bool enabled, {int timeoutMs = 0}) => _v(
+    'media.loopback',
+    {'enabled': enabled, if (enabled && timeoutMs > 0) 'timeoutMs': timeoutMs},
+  );
+
+  @override
+  Future<MonitorState> setMonitor(bool enabled) async =>
+      MonitorState.fromJson(await _r('media.monitor', {'enabled': enabled}));
+
+  @override
+  Future<AudioState> audioState() async =>
+      AudioState.fromJson(await _r('media.audioState'));
+
+  @override
+  Future<int> playLocal(String file, {double volume = 1}) async => asInt(
+    (await _r('media.playLocal', {'file': file, 'volume': volume}))['playId'],
+  );
+
+  @override
+  Future<int> playLocalStop({int? playId}) async => asInt(
+    (await _r('media.playStop', {
+      if (playId != null) 'playId': playId,
+    }))['stopped'],
+  );
 
   // ---- buddies
   @override

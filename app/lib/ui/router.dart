@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../services/settings_controller.dart';
 import 'pages/add_account.dart';
+import 'pages/audio_test/audio_test_page.dart';
 import 'pages/call_pages.dart';
 import 'pages/contacts_page.dart';
 import 'pages/keypad_page.dart';
@@ -71,6 +72,7 @@ GoRouter buildRouter({required bool onboarded, CallRouteObserver? observer}) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, s) => ThreadPage(accountId: s.uri.queryParameters['acc'] ?? '', peer: s.uri.queryParameters['peer'] ?? '', channel: s.uri.queryParameters['ch'] ?? 'sip'),
       ),
+      GoRoute(path: '/audio-test', parentNavigatorKey: rootNavigatorKey, builder: (_, __) => const AudioTestPage()),
       GoRoute(path: '/settings/accounts/:id', parentNavigatorKey: rootNavigatorKey, builder: (_, s) => AccountEditorPage(accountId: s.pathParameters['id']!)),
       ShellRoute(
         navigatorKey: _shellKey,

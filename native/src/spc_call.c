@@ -150,6 +150,7 @@ static spc_call* call_create(int slot, const pjsua_call_info* ci, int* created, 
     g_slot[slot] = c;
     spc_registry_unlock();
     pjsua_call_set_user_data(slot, (void*)(uintptr_t)c->cid);
+    spc_media_calls_begin();                 /* a call exists: no echo test, EC restored */
     {
         char lt[64], rt[64];
         spc_call_get_tags(slot, lt, sizeof(lt), rt, sizeof(rt));
@@ -873,6 +874,7 @@ static void topology_pass(void)
         t->dn_slot = c->dn_in_slot; t->dn_h = c->dn_in;
     }
     spc_registry_unlock();
+    if (n > 0) spc_media_calls_begin();       /* before the first mic connection: echo test off, EC restored */
     for (i = 0; i < n; i++) {
         pjsua_call_info ci;
         e[i].cslot = -1; e[i].active = 0; e[i].lhold = 0;
@@ -995,6 +997,10 @@ int spc_call_bed_sinks(int* out, int max)
         n++;
     }
     spc_registry_unlock();
+    {   /* the media.monitor sink (call volume), when the monitor is on */
+        int ms = spc_media_monitor_slot();
+        if (ms > 0 && spc_media_monitor_on() && k < max) out[k++] = ms;
+    }
     for (i = 0; i < n && k + 3 <= max; i++) {
         int cs = -1, act = 0, r;
         if (s[i].slot >= SPC_ID_IAX_BASE) { if (spc_iax2_call_conf(s[i].cid, &cs, &act) != 0) cs = -1; }
@@ -1617,6 +1623,7 @@ spc_call* spc_call_iax_new(int slot, int acc, const char* uid, int role)
     c->next = g_calls;
     g_calls = c;
     spc_registry_unlock();
+    spc_media_calls_begin();
     return c;
 }
 

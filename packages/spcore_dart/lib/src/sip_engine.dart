@@ -208,7 +208,26 @@ abstract class SipEngine {
     double volume = 1,
   });
   Future<void> ringStop();
-  Future<void> loopback(bool enabled);
+
+  /// Echo test: routes the microphone to the speaker with EC/NS bypassed.
+  /// [timeoutMs] (0-600000) makes the engine stop it by itself (0 = never);
+  /// a `media.loopback` event reports the end. `BUSY` during a call.
+  Future<void> loopback(bool enabled, {int timeoutMs = 0});
+
+  /// Keeps the sound device open and the microphone level live without a
+  /// call (idempotent; the caller owns the decision).
+  Future<MonitorState> setMonitor(bool enabled);
+
+  /// Diagnostic summary of the audio path.
+  Future<AudioState> audioState();
+
+  /// Plays a WAV/MP3 file on the speaker (no call); returns the playId
+  /// reported by `media.playDone`. [volume] is linear 0-4.
+  Future<int> playLocal(String file, {double volume = 1});
+
+  /// Stops one local playback ([playId]) or all of them; returns how many
+  /// were stopped.
+  Future<int> playLocalStop({int? playId});
   Future<VoiceIsolationResult> setVoiceIsolation({
     VoiceIsolationSide? mic,
     VoiceIsolationSide? incoming,

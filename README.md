@@ -55,6 +55,7 @@ Get the latest builds from the [**Releases page**](https://github.com/cyberkyd01
 * Echo cancellation (WebRTC AEC3 where available, otherwise Speex), noise suppression and a jitter buffer you can tune.
 * Hold, mute, call waiting and swap.
 * **Musicbed:** loop an MP3 or WAV file under your voice to everyone on your calls, with its own volume (0-200%) and an optional "Hear it myself" monitor. It keeps playing while you are muted.
+* **Audio test:** a guided check of your devices, microphone level, speaker, a record-and-play-back, "hear yourself" and the background music (including a preview of what callers hear), with a summary you can copy for support. Settings > Audio > Test microphone and speakers.
 * **Live audio mixer:** level bars and sliders for your microphone, speaker and musicbed, with input and output device pickers, on the keypad screen, during calls and in Settings > Audio.
 * **Hold music** from a built-in track or your own file, and **announcements**: a message played when a call connects, a notice before recording starts, and a notice played to the caller before a transfer.
 * An **audio library** for those files: import WAV or MP3, or record your own.
@@ -144,7 +145,7 @@ The full list of about 115 features, each with its status and the test that back
 
 **More guides:**
 * [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
-* [Release notes for v1.1.1](docs/RELEASE_NOTES_v1.1.1.md), [v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
+* [Release notes for v1.1.2](docs/RELEASE_NOTES_v1.1.2.md), [v1.1.1](docs/RELEASE_NOTES_v1.1.1.md), [v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built

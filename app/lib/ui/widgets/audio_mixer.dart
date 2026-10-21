@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:spcore_dart/spcore_dart.dart' show MonitorSource;
 
 import '../../audio/audio_io.dart';
 import '../../audio/audio_levels.dart';
 import '../../audio/audio_platform.dart';
 import '../../audio/audio_library.dart';
 import '../../audio/device_labels.dart';
+import '../../audio/monitor_state.dart';
 import '../../audio/musicbed.dart';
 import '../../core/theme.dart';
 import '../../l10n/l10n.dart';
@@ -100,7 +103,7 @@ class AudioMixer extends ConsumerWidget {
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _RouteSelector(label: l.mixerOutputRoute),
+                    MixerRouteSelector(label: l.mixerOutputRoute),
                     const SizedBox(height: 6),
                     Text(
                       l.mixerInputFollowsOutput,
@@ -126,6 +129,20 @@ class AudioMixer extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         mic,
+        if (ref.watch(audioMonitorStateProvider.select((m) => m?.source == MonitorSource.nul)))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              key: const Key('mixer-mic-unavailable'),
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 16, color: Theme.of(context).colorScheme.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(l.mixerMicUnavailable, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error)),
+                ),
+              ],
+            ),
+          ),
         if (micDevice != null) Padding(padding: const EdgeInsets.only(top: 6), child: micDevice),
         gap,
         speaker,
@@ -319,9 +336,10 @@ class _DevicePicker extends ConsumerWidget {
   }
 }
 
-/// Mobile: earpiece / speaker / Bluetooth / wired as chips.
-class _RouteSelector extends ConsumerWidget {
-  const _RouteSelector({required this.label});
+/// Mobile: earpiece / speaker / Bluetooth / wired as chips (also used by the
+/// Audio test page).
+class MixerRouteSelector extends ConsumerWidget {
+  const MixerRouteSelector({super.key, required this.label});
   final String label;
 
   @override
@@ -699,6 +717,13 @@ class MixerCard extends StatelessWidget {
               Icon(Icons.tune_rounded, size: 18, color: t.colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(child: Text(context.l10n.mixerTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+              IconButton(
+                key: const Key('mixer-audio-test'),
+                tooltip: context.l10n.audioTestTitle,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.fact_check_outlined, size: 20),
+                onPressed: () => context.push('/audio-test'),
+              ),
             ],
           ),
           const SizedBox(height: 12),

@@ -9419,5 +9419,234 @@
   "musicbedStopFailed": "Couldn’t stop the music. It may still be playing to your callers.",
   "@musicbedStopFailed": {
     "description": "Error notice: switching the musicbed off failed and it may still be playing to the other party."
+  },
+  "audioTestTitle": "Audio test",
+  "@audioTestTitle": {
+    "description": "Title of the Audio test page (app bar) and tooltip of the mixer shortcut."
+  },
+  "audioTestEntry": "Test microphone and speakers",
+  "@audioTestEntry": {
+    "description": "Settings > Audio and Diagnostics: row that opens the Audio test page."
+  },
+  "audioTestEntrySub": "Check your devices, hear yourself and balance background music",
+  "@audioTestEntrySub": {
+    "description": "Subtitle of the Audio test row in Settings > Audio."
+  },
+  "audioTestInCall": "Finish your call to run the audio test",
+  "@audioTestInCall": {
+    "description": "Banner on the Audio test page while a call is active."
+  },
+  "audioTestIosNote": "On iPhone the microphone and speaker are only open during a call",
+  "@audioTestIosNote": {
+    "description": "Note on the Audio test page for iPhone, where the audio device is only open during a call."
+  },
+  "audioTestStepDevices": "Devices",
+  "@audioTestStepDevices": {
+    "description": "Audio test step 1 title: choose the audio devices."
+  },
+  "audioTestStepMic": "Microphone",
+  "@audioTestStepMic": {
+    "description": "Audio test step 2 title: microphone level check."
+  },
+  "audioTestStepSpeaker": "Speaker or earphones",
+  "@audioTestStepSpeaker": {
+    "description": "Audio test step 3 title: play a sound on the speaker or earphones."
+  },
+  "audioTestStepRecord": "Record and play back",
+  "@audioTestStepRecord": {
+    "description": "Audio test step 4 title: record the microphone and play it back."
+  },
+  "audioTestStepEcho": "Hear yourself",
+  "@audioTestStepEcho": {
+    "description": "Audio test step 5 title: echo test where you hear your own voice live."
+  },
+  "audioTestStepMusic": "Background music",
+  "@audioTestStepMusic": {
+    "description": "Audio test step 6 title: background music (musicbed) balance."
+  },
+  "audioTestStepSummary": "Summary",
+  "@audioTestStepSummary": {
+    "description": "Audio test step 7 title: summary of all steps."
+  },
+  "audioTestOpened": "In use: {name}",
+  "@audioTestOpened": {
+    "description": "Audio test: the microphone device the engine actually opened.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTestNoDevice": "No audio device could be opened",
+  "@audioTestNoDevice": {
+    "description": "Audio test: no audio device could be opened by the engine."
+  },
+  "audioTestMicOk": "We hear you",
+  "@audioTestMicOk": {
+    "description": "Audio test: the microphone picks up the voice."
+  },
+  "audioTestMicWaiting": "Say something…",
+  "@audioTestMicWaiting": {
+    "description": "Audio test: prompt to speak into the microphone."
+  },
+  "audioTestMicQuiet": "Very quiet: move closer or raise the microphone gain",
+  "@audioTestMicQuiet": {
+    "description": "Audio test: the microphone signal is very weak."
+  },
+  "audioTestMicClipping": "Too loud: lower the microphone gain",
+  "@audioTestMicClipping": {
+    "description": "Audio test: the microphone signal is too loud and distorts."
+  },
+  "audioTestMicSilent": "Nothing is coming in. Check: the right microphone is selected, it is not muted in the system, the app may use the microphone (privacy settings), no other app is using it.",
+  "@audioTestMicSilent": {
+    "description": "Audio test: the microphone delivers no signal at all; lists the usual causes."
+  },
+  "audioTestOpenSoundSettings": "Open sound settings",
+  "@audioTestOpenSoundSettings": {
+    "description": "Audio test: button that opens the operating system sound settings."
+  },
+  "audioTestOpenPrivacySettings": "Open microphone privacy settings",
+  "@audioTestOpenPrivacySettings": {
+    "description": "Audio test: button that opens the operating system microphone privacy settings."
+  },
+  "audioTestPlaySound": "Play test sound",
+  "@audioTestPlaySound": {
+    "description": "Audio test: button that plays a short test sound."
+  },
+  "audioTestDidYouHear": "Did you hear it?",
+  "@audioTestDidYouHear": {
+    "description": "Audio test: question after the test sound played."
+  },
+  "audioTestDidYouHearVoice": "Did you hear your voice?",
+  "@audioTestDidYouHearVoice": {
+    "description": "Audio test: question after the recording or echo test played your voice back."
+  },
+  "audioTestNoOutputLevel": "The app sent sound but the output meter did not move",
+  "@audioTestNoOutputLevel": {
+    "description": "Audio test: the app played a sound but the output level meter stayed flat."
+  },
+  "audioTestSpeakerHints": "Check the volume, the selected output device and the system output (Bluetooth, HDMI)",
+  "@audioTestSpeakerHints": {
+    "description": "Audio test: hints shown when the user did not hear the test sound."
+  },
+  "audioTestRecord5s": "Record 5 seconds",
+  "@audioTestRecord5s": {
+    "description": "Audio test: button that records the microphone for 5 seconds."
+  },
+  "audioTestRecording": "Recording… {seconds} s",
+  "@audioTestRecording": {
+    "description": "Audio test: shown while recording; seconds is the time left.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "audioTestPlayingBack": "Playing back…",
+  "@audioTestPlayingBack": {
+    "description": "Audio test: shown while the recording is played back."
+  },
+  "audioTestPlayAgain": "Play again",
+  "@audioTestPlayAgain": {
+    "description": "Audio test: button that plays the recording again."
+  },
+  "audioTestRecEmpty": "The recording is empty",
+  "@audioTestRecEmpty": {
+    "description": "Audio test: the recording contains no audio."
+  },
+  "audioTestEchoHeadphones": "Use headphones: with loudspeakers you will hear feedback.",
+  "@audioTestEchoHeadphones": {
+    "description": "Audio test: warning before the echo test; loudspeakers cause feedback."
+  },
+  "audioTestEchoSecondsLeft": "Stops in {seconds} s",
+  "@audioTestEchoSecondsLeft": {
+    "description": "Audio test: seconds left until the echo test stops by itself.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "audioTestEchoEnded": "Echo test ended ({reason})",
+  "@audioTestEchoEnded": {
+    "description": "Audio test: the echo test ended; reason is a technical word such as timeout or call.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTestPreview": "Preview what callers hear",
+  "@audioTestPreview": {
+    "description": "Audio test: switch that lets you hear what callers would hear (voice plus music)."
+  },
+  "audioTestPreviewSub": "Your voice and the background music, mixed as they are sent",
+  "@audioTestPreviewSub": {
+    "description": "Audio test: subtitle of the preview switch."
+  },
+  "audioTestSendLevel": "Sent to callers",
+  "@audioTestSendLevel": {
+    "description": "Audio test: label of the meter that shows the level sent to callers."
+  },
+  "audioTestEcNotPreviewed": "Echo cancellation is not applied in this preview",
+  "@audioTestEcNotPreviewed": {
+    "description": "Audio test: note that echo cancellation is not part of the preview."
+  },
+  "audioTestPass": "OK",
+  "@audioTestPass": {
+    "description": "Audio test: status label of a step that succeeded."
+  },
+  "audioTestFail": "Problem",
+  "@audioTestFail": {
+    "description": "Audio test: status label of a step that found a problem."
+  },
+  "audioTestNotRun": "Not tested",
+  "@audioTestNotRun": {
+    "description": "Audio test: status label of a step that was not tested yet."
+  },
+  "audioTestSkipped": "Skipped",
+  "@audioTestSkipped": {
+    "description": "Audio test: status label of a step that was skipped."
+  },
+  "audioTestRunning": "Testing…",
+  "@audioTestRunning": {
+    "description": "Audio test: status label of the step that is currently running."
+  },
+  "audioTestCopyDiagnostics": "Copy diagnostics",
+  "@audioTestCopyDiagnostics": {
+    "description": "Audio test: button that copies the audio diagnostics to the clipboard."
+  },
+  "audioTestCopied": "Diagnostics copied",
+  "@audioTestCopied": {
+    "description": "Audio test: confirmation that the diagnostics were copied."
+  },
+  "audioDeviceErrorNotice": "Audio device problem: {message}",
+  "@audioDeviceErrorNotice": {
+    "description": "Error notice: the engine could not open or use an audio device; message is the technical reason.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "mixerMicUnavailable": "Microphone unavailable: using a silent device",
+  "@mixerMicUnavailable": {
+    "description": "Mixer hint: no real microphone could be opened, the engine uses a silent device."
+  },
+  "audioTestMusicSilentHint": "The music is sent to callers; turn on \"Hear it myself\" or the preview to hear it",
+  "@audioTestMusicSilentHint": {
+    "description": "Audio test, background music step: the music goes to callers only, so the user hears nothing unless the monitor is on."
+  },
+  "audioTestEchoEndedTimeout": "it stopped after 60 s",
+  "@audioTestEchoEndedTimeout": {
+    "description": "Audio test: reason inside \"Echo test ended (...)\" when the 60 second limit was reached."
+  },
+  "audioTestEchoEndedCall": "a call started",
+  "@audioTestEchoEndedCall": {
+    "description": "Audio test: reason inside \"Echo test ended (...)\" when a call started."
+  },
+  "audioTestEchoEndedShutdown": "the engine restarted",
+  "@audioTestEchoEndedShutdown": {
+    "description": "Audio test: reason inside \"Echo test ended (...)\" when the engine restarted."
   }
 }

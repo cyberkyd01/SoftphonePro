@@ -428,7 +428,8 @@ enum ToneKind implements WireEnum {
   congestion('congestion'),
   dial('dial'),
   waiting('waiting'),
-  dtmf('dtmf');
+  dtmf('dtmf'),
+  chime('chime');
 
   const ToneKind(this.wire);
   @override
@@ -483,4 +484,21 @@ enum PlayDoneReason implements WireEnum {
   /// Parses a wire string; unknown values yield [unknown].
   static PlayDoneReason parse(Object? v, [PlayDoneReason? fallback]) =>
       parseEnum(values, v, fallback ?? PlayDoneReason.unknown);
+}
+
+/// Where the live monitor (`media.monitor`) gets its audio from.
+enum MonitorSource implements WireEnum {
+  device('device'),
+
+  /// The engine fell back to the silent null device (wire `"null"`).
+  nul('null'),
+  none('none');
+
+  const MonitorSource(this.wire);
+  @override
+  final String wire;
+
+  /// Parses a wire string; unknown values yield [none].
+  static MonitorSource parse(Object? v, [MonitorSource? fallback]) =>
+      parseEnum(values, v, fallback ?? MonitorSource.none);
 }

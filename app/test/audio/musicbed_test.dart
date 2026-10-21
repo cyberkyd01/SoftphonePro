@@ -396,7 +396,8 @@ void main() {
 
     testWidgets('polls only while something listens: 1 Hz idle, ~15 Hz while a call is up', (tester) async {
       final e = MbEngine();
-      final a = (await tester.runAsync(() => AudioEnv.create(engine: e)))!;
+      // A phone: the desktop keeps the device open (and polls fast) whenever the meters show.
+      final a = (await tester.runAsync(() => AudioEnv.create(engine: e, overrides: [audioMobileProvider.overrideWithValue(true)])))!;
       e.levelsOverride = const MediaLevels(mic: 255, speaker: 128, musicbed: 64);
       await tester.pump(const Duration(seconds: 1));
       final before = e.levelCalls;
@@ -439,7 +440,7 @@ void main() {
 
     testWidgets('the monitor preview and a mic test also raise the rate', (tester) async {
       final e = MbEngine();
-      final a = (await tester.runAsync(() => AudioEnv.create(engine: e, settings: {..._on, 'musicbedMonitor': true})))!;
+      final a = (await tester.runAsync(() => AudioEnv.create(engine: e, settings: {..._on, 'musicbedMonitor': true}, overrides: [audioMobileProvider.overrideWithValue(true)])))!;
       final sub = a.container.listen(audioLevelsProvider, (_, __) {});
       await tester.runAsync(() => _until(a, () => a.container.read(musicbedProvider).active));
       await tester.pump(const Duration(milliseconds: 100));
@@ -485,7 +486,7 @@ void main() {
 
     testWidgets('idle costs nothing: no repaints, one poll per second at most', (tester) async {
       final e = MbEngine();
-      final a = (await tester.runAsync(() => AudioEnv.create(engine: e)))!;
+      final a = (await tester.runAsync(() => AudioEnv.create(engine: e, overrides: [audioMobileProvider.overrideWithValue(true)])))!;
       final sub = a.container.listen(audioLevelsProvider, (_, __) {});
       final meters = sub.read();
       var repaints = 0;

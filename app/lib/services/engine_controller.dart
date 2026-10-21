@@ -8,6 +8,7 @@ import 'package:spcore_dart/spcore_dart.dart';
 
 import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
+import '../audio/monitor_state.dart';
 import '../audio/voice_isolation.dart';
 import '../platform/android/android_platform_services.dart';
 import 'engine_files.dart';
@@ -15,7 +16,7 @@ import 'providers.dart';
 import 'settings_controller.dart';
 
 /// Must match `version:` in pubspec.yaml (without the build number); a test checks it.
-const String kAppVersion = '1.1.1';
+const String kAppVersion = '1.1.2';
 const String kUserAgent = 'SoftphonePro/$kAppVersion';
 
 /// Rolling log of engine events and app-side engine errors (diagnostics).
@@ -185,6 +186,8 @@ class EngineController extends Notifier<EngineState> {
   bool _starting = false;
   bool _disposed = false;
   bool _forceSimulator = false;
+  String? _lastAudioNoticeKey;
+  DateTime? _lastAudioNotice;
 
   /// `logs/engine.log` of the running engine (diagnostics export).
   String? logFilePath;
@@ -322,6 +325,10 @@ class EngineController extends Notifier<EngineState> {
     switch (e) {
       case MediaDevicesChangedEvent():
         ref.read(deviceRevisionProvider.notifier).bump();
+      case MediaErrorEvent():
+        _onMediaError(e);
+      case MediaMonitorEvent():
+        ref.read(audioMonitorStateProvider.notifier).set(e.state);
       case CallIncomingEvent():
         _liveCalls.add(e.cid);
         _refreshDevicesOnDesktop();
@@ -341,6 +348,19 @@ class EngineController extends Notifier<EngineState> {
       default:
     }
     _events.add(e);
+  }
+
+  /// An audio-device failure is never silent: tell the user (once per 30 s,
+  /// the engine can repeat the same error on every retry; a different error
+  /// is always shown).
+  void _onMediaError(MediaErrorEvent e) {
+    final now = DateTime.now();
+    final key = '${e.op}:${e.message}';
+    final last = _lastAudioNotice;
+    if (key == _lastAudioNoticeKey && last != null && now.difference(last) < const Duration(seconds: 30)) return;
+    _lastAudioNoticeKey = key;
+    _lastAudioNotice = now;
+    ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).audioDeviceErrorNotice(e.message));
   }
 
   bool get _desktop => !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
@@ -378,6 +398,9 @@ class EngineController extends Notifier<EngineState> {
     AccountRegEvent() => 'account.reg ${e.account.uid} ${e.account.regState.wire} ${e.account.regCode} ${e.account.lastError ?? ''}',
     CallStateEvent() => 'call.state ${e.cid} ${e.call.state.wire} ${e.call.stateCode}',
     CallIncomingEvent() => 'call.incoming ${e.cid} ${e.call.remoteUri}',
+    MediaErrorEvent() => 'media.error ${e.op} ${e.status} ${e.message}',
+    MediaMonitorEvent() => 'media.monitor ${e.state.source.wire} active=${e.state.active}',
+    MediaLoopbackEvent() => 'media.loopback enabled=${e.enabled} ${e.reason ?? ''}',
     _ => e.name,
   };
 

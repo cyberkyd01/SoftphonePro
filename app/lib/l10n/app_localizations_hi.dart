@@ -6890,4 +6890,179 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'संगीत बंद नहीं हो सका। हो सकता है कि कॉल पर सामने वालों को यह अब भी सुनाई दे रहा हो।';
+
+  @override
+  String get audioTestTitle => 'ऑडियो टेस्ट';
+
+  @override
+  String get audioTestEntry => 'माइक्रोफ़ोन और स्पीकर जाँचें';
+
+  @override
+  String get audioTestEntrySub =>
+      'अपने डिवाइस जाँचें, खुद को सुनें और बैकग्राउंड संगीत संतुलित करें';
+
+  @override
+  String get audioTestInCall => 'ऑडियो टेस्ट चलाने के लिए अपना कॉल समाप्त करें';
+
+  @override
+  String get audioTestIosNote =>
+      'iPhone पर माइक्रोफ़ोन और स्पीकर केवल कॉल के दौरान खुले रहते हैं';
+
+  @override
+  String get audioTestStepDevices => 'डिवाइस';
+
+  @override
+  String get audioTestStepMic => 'माइक्रोफ़ोन';
+
+  @override
+  String get audioTestStepSpeaker => 'स्पीकर या ईयरफ़ोन';
+
+  @override
+  String get audioTestStepRecord => 'रिकॉर्ड करें और सुनें';
+
+  @override
+  String get audioTestStepEcho => 'खुद को सुनें';
+
+  @override
+  String get audioTestStepMusic => 'बैकग्राउंड संगीत';
+
+  @override
+  String get audioTestStepSummary => 'सारांश';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'उपयोग में: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'कोई ऑडियो डिवाइस नहीं खुल सका';
+
+  @override
+  String get audioTestMicOk => 'हमें आपकी आवाज़ आ रही है';
+
+  @override
+  String get audioTestMicWaiting => 'कुछ बोलिए…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'बहुत धीमा: पास आएँ या माइक्रोफ़ोन गेन बढ़ाएँ';
+
+  @override
+  String get audioTestMicClipping => 'बहुत तेज़: माइक्रोफ़ोन गेन घटाएँ';
+
+  @override
+  String get audioTestMicSilent =>
+      'कुछ भी नहीं आ रहा है। जाँचें: सही माइक्रोफ़ोन चुना गया है, सिस्टम में वह म्यूट नहीं है, ऐप को माइक्रोफ़ोन इस्तेमाल करने की अनुमति है (गोपनीयता सेटिंग), और कोई दूसरा ऐप उसे इस्तेमाल नहीं कर रहा।';
+
+  @override
+  String get audioTestOpenSoundSettings => 'साउंड सेटिंग खोलें';
+
+  @override
+  String get audioTestOpenPrivacySettings =>
+      'माइक्रोफ़ोन गोपनीयता सेटिंग खोलें';
+
+  @override
+  String get audioTestPlaySound => 'टेस्ट ध्वनि चलाएँ';
+
+  @override
+  String get audioTestDidYouHear => 'क्या आपने इसे सुना?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'क्या आपने अपनी आवाज़ सुनी?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'ऐप ने ध्वनि भेजी लेकिन आउटपुट मीटर नहीं हिला';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'वॉल्यूम, चुना गया आउटपुट डिवाइस और सिस्टम आउटपुट (ब्लूटूथ, HDMI) जाँचें';
+
+  @override
+  String get audioTestRecord5s => '5 सेकंड रिकॉर्ड करें';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'रिकॉर्डिंग… $seconds से';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'चल रहा है…';
+
+  @override
+  String get audioTestPlayAgain => 'फिर से चलाएँ';
+
+  @override
+  String get audioTestRecEmpty => 'रिकॉर्डिंग खाली है';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'हेडफ़ोन लगाएँ: लाउडस्पीकर से फ़ीडबैक की आवाज़ आएगी।';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return '$seconds से में रुकेगा';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'इको टेस्ट समाप्त ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'पूर्वावलोकन: कॉल करने वाले क्या सुनते हैं';
+
+  @override
+  String get audioTestPreviewSub =>
+      'आपकी आवाज़ और बैकग्राउंड संगीत, जैसे भेजे जाते हैं वैसे मिले हुए';
+
+  @override
+  String get audioTestSendLevel => 'कॉल करने वालों को भेजा गया';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'इस पूर्वावलोकन में इको कैंसलेशन लागू नहीं होता';
+
+  @override
+  String get audioTestPass => 'ठीक';
+
+  @override
+  String get audioTestFail => 'समस्या';
+
+  @override
+  String get audioTestNotRun => 'जाँचा नहीं गया';
+
+  @override
+  String get audioTestSkipped => 'छोड़ा गया';
+
+  @override
+  String get audioTestRunning => 'जाँच हो रही है…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'डायग्नोस्टिक्स कॉपी करें';
+
+  @override
+  String get audioTestCopied => 'डायग्नोस्टिक्स कॉपी हो गए';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'ऑडियो डिवाइस की समस्या: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'माइक्रोफ़ोन उपलब्ध नहीं: मौन डिवाइस इस्तेमाल हो रहा है';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'संगीत कॉल करने वालों को भेजा जाता है; इसे सुनने के लिए \"खुद सुनें\" या पूर्वावलोकन चालू करें';
+
+  @override
+  String get audioTestEchoEndedTimeout => '60 सेकंड बाद रुक गया';
+
+  @override
+  String get audioTestEchoEndedCall => 'कॉल शुरू हुआ';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'इंजन फिर से शुरू हुआ';
 }

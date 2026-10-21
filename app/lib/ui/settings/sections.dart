@@ -33,6 +33,7 @@ import '../widgets/call_widgets.dart';
 import '../pages/recordings/recording_settings.dart';
 import '../../services/ringtones.dart';
 import '../../audio/audio_levels.dart' show MeterBoostHolder;
+import '../../audio/echo_test.dart';
 import '../../audio/device_labels.dart';
 import '../../audio/voice_isolation.dart' show strengthLabel;
 import 'audio_call_settings.dart';
@@ -155,13 +156,14 @@ class AudioSection extends ConsumerStatefulWidget {
 
 /// Mounted Audio settings keep the meters at the fast rate (they are the page).
 class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHolder<AudioSection> {
-  bool _loop = false;
   late final EngineController _engCtl;
+  late final EchoTestController _echoCtl;
 
   @override
   void initState() {
     super.initState();
     _engCtl = ref.read(engineProvider.notifier);
+    _echoCtl = ref.read(echoTestProvider.notifier);
     Future.microtask(() {
       if (mounted) ref.read(engineProvider.notifier).startDevicePolling();
     });
@@ -170,7 +172,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHold
   @override
   void dispose() {
     _engCtl.stopDevicePolling();
-    if (_loop && _engCtl.hasEngine) _engCtl.engine.loopback(false);
+    _echoCtl.stopQuiet();
     super.dispose();
   }
 
@@ -178,8 +180,11 @@ class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHold
     final ctl = ref.read(engineProvider.notifier);
     if (!ctl.hasEngine) return;
     try {
-      await ctl.engine.loopback(v);
-      setState(() => _loop = v);
+      if (v) {
+        await _echoCtl.start();
+      } else {
+        await _echoCtl.stop();
+      }
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).settingsAudioEchoTestFailed, details: '$e');
     }
@@ -198,6 +203,13 @@ class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHold
         SettingsGroup(
           title: context.l10n.settingsAudioDevices,
           children: [
+            NavTile(
+              key: const Key('audio-test-entry'),
+              icon: Icons.fact_check_rounded,
+              title: context.l10n.audioTestEntry,
+              subtitle: context.l10n.audioTestEntrySub,
+              onTap: () => context.push('/audio-test'),
+            ),
             SelectTile<String>(icon: Icons.mic_rounded, title: context.l10n.settingsAudioMicrophone, value: s.captureDev, options: opts(dev?.capture), onChanged: (v) => _s(ref).update({'captureDev': v})),
             SelectTile<String>(icon: Icons.speaker_rounded, title: context.l10n.settingsAudioSpeaker, value: s.playbackDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'playbackDev': v})),
             if (desktop) SelectTile<String>(icon: Icons.notifications_active_rounded, title: context.l10n.settingsAudioRinger, subtitle: context.l10n.settingsAudioRingerSub, value: s.ringerDev, options: opts(dev?.playback), onChanged: (v) => _s(ref).update({'ringerDev': v})),
@@ -236,7 +248,7 @@ class _AudioSectionState extends ConsumerState<AudioSection> with MeterBoostHold
                 }
               },
             ),
-            SwitchTile(icon: Icons.hearing_rounded, title: context.l10n.settingsAudioEchoTest, subtitle: context.l10n.settingsAudioEchoTestSub, value: _loop, onChanged: _toggleLoop),
+            SwitchTile(icon: Icons.hearing_rounded, title: context.l10n.settingsAudioEchoTest, subtitle: context.l10n.settingsAudioEchoTestSub, value: ref.watch(echoTestProvider).on, onChanged: _toggleLoop),
           ],
         ),
         SettingsGroup(

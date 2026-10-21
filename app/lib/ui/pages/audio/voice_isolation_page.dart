@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../../audio/audio_platform.dart';
+import '../../../audio/echo_test.dart';
 import '../../../audio/voice_isolation.dart';
 import '../../../core/theme.dart';
 import '../../../l10n/l10n.dart';
@@ -28,11 +29,13 @@ class VoiceIsolationBody extends ConsumerStatefulWidget {
 
 class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
   late final VoiceIsolationController _vi;
+  late final EchoTestController _echoCtl;
 
   @override
   void initState() {
     super.initState();
     _vi = ref.read(voiceIsolationProvider.notifier);
+    _echoCtl = ref.read(echoTestProvider.notifier);
     Future.microtask(() {
       if (!mounted) return;
       _vi.startMeter();
@@ -43,7 +46,7 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
   @override
   void dispose() {
     _vi.stopMeter();
-    _vi.endEchoTest();
+    _echoCtl.stopQuiet();
     super.dispose();
   }
 
@@ -51,7 +54,11 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
 
   Future<void> _echo(bool on) async {
     try {
-      await _vi.setEchoTest(on);
+      if (on) {
+        await _echoCtl.start();
+      } else {
+        await _echoCtl.stop();
+      }
     } on EngineException catch (e) {
       ref.read(noticeProvider.notifier).error(ref.read(l10nProvider).voiceEchoFailed, details: '$e');
     }
@@ -131,7 +138,7 @@ class _VoiceIsolationBodyState extends ConsumerState<VoiceIsolationBody> {
               icon: Icons.hearing_rounded,
               title: l.voiceEchoTest,
               subtitle: l.voiceEchoTestHint,
-              value: vi.echoTest,
+              value: ref.watch(echoTestProvider).on,
               onChanged: _echo,
             ),
           ],

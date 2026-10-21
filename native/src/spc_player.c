@@ -550,12 +550,13 @@ static void finish_play(spc_play* p, const char* reason, int emit)
     if (moh) moh_remove(cid);
     if (emit) {
         cJSON* f = cJSON_CreateObject();
-        cJSON_AddNumberToObject(f, "cid", (double)cid);
+        if (cid != SPC_LOCAL_CID) cJSON_AddNumberToObject(f, "cid", (double)cid);
         cJSON_AddNumberToObject(f, "playId", id);
         cJSON_AddStringToObject(f, "file", file);
         cJSON_AddStringToObject(f, "reason", reason);
         if (moh) cJSON_AddBoolToObject(f, "moh", 1);
-        spc_call_emit(cid, "call.playDone", f);
+        if (cid == SPC_LOCAL_CID) spc_emit("media.playDone", f);     /* a local play belongs to no call */
+        else spc_call_emit(cid, "call.playDone", f);
     }
     if (had_mute) ann_refresh(cid);
 }
@@ -940,6 +941,14 @@ void spc_musicbed_apply_end(spc_bed_pass* bp)
             g_bc.ncid = bp->ncid;
         }
         bed_apply_monitor();
+        {   /* the media.monitor sink hears the bed at its call volume ("send" level); off with the monitor so that it
+             * does not keep the sound device open */
+            int ms = spc_media_monitor_slot();
+            if (ms > 0) {
+                if (spc_media_monitor_on()) bed_connect(ms, g_bc.vol);
+                else bed_disconnect(ms);
+            }
+        }
     }
     spc_mutex_unlock(&g_pl_mtx);
 }

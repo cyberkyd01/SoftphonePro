@@ -617,3 +617,205 @@ class MusicbedState {
   @override
   String toString() => 'MusicbedState(${toJson()})';
 }
+
+/// Result of `media.monitor` and payload of the `media.monitor` event.
+class MonitorState {
+  const MonitorState({
+    this.active = false,
+    this.source = MonitorSource.none,
+    this.capture = '',
+    this.playback = '',
+  });
+
+  final bool active;
+  final MonitorSource source;
+  final String capture;
+  final String playback;
+
+  factory MonitorState.fromJson(Map<String, dynamic> j) => MonitorState(
+    active: asBool(j['active'], false),
+    source: MonitorSource.parse(j['source']),
+    capture: asString(j['capture'], ''),
+    playback: asString(j['playback'], ''),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'active': active,
+    'source': source.wire,
+    'capture': capture,
+    'playback': playback,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MonitorState && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'MonitorState(${toJson()})';
+}
+
+/// A device entry of [AudioState] (`devId`, `name`, `driver`).
+class AudioStateDevice {
+  const AudioStateDevice({this.devId = '', this.name = '', this.driver = ''});
+
+  final String devId;
+  final String name;
+  final String driver;
+
+  static AudioStateDevice? fromJsonN(Object? v) =>
+      v is Map ? AudioStateDevice.fromJson(asMap(v)) : null;
+
+  factory AudioStateDevice.fromJson(Map<String, dynamic> j) =>
+      AudioStateDevice(
+        devId: asString(j['devId'], ''),
+        name: asString(j['name'], ''),
+        driver: asString(j['driver'], ''),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'devId': devId,
+    'name': name,
+    'driver': driver,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AudioStateDevice && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'AudioStateDevice(${toJson()})';
+}
+
+/// Echo-canceller state inside [AudioState].
+class EcState {
+  const EcState({this.tailMs = 0, this.options = 0, this.bypassed = false});
+
+  final int tailMs;
+  final int options;
+
+  /// True while the echo test temporarily disables EC/NS.
+  final bool bypassed;
+
+  factory EcState.fromJson(Map<String, dynamic> j) => EcState(
+    tailMs: asInt(j['tailMs'], 0),
+    options: asInt(j['options'], 0),
+    bypassed: asBool(j['bypassed'], false),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'tailMs': tailMs,
+    'options': options,
+    'bypassed': bypassed,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is EcState && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'EcState(${toJson()})';
+}
+
+/// The last audio-device error the engine saw (`media.audioState.lastError`).
+class LastMediaError {
+  const LastMediaError({this.op = '', this.status = 0, this.message = ''});
+
+  final String op;
+  final int status;
+  final String message;
+
+  static LastMediaError? fromJsonN(Object? v) =>
+      v is Map ? LastMediaError.fromJson(asMap(v)) : null;
+
+  factory LastMediaError.fromJson(Map<String, dynamic> j) => LastMediaError(
+    op: asString(j['op'], ''),
+    status: asInt(j['status'], 0),
+    message: asString(j['message'], ''),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'op': op,
+    'status': status,
+    'message': message,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LastMediaError && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'LastMediaError(${toJson()})';
+}
+
+/// Result of `media.audioState`: a diagnostic summary of the audio path.
+class AudioState {
+  const AudioState({
+    this.source = MonitorSource.none,
+    this.capture,
+    this.playback,
+    this.clockRate = 0,
+    this.sndClockRate = 0,
+    this.ec = const EcState(),
+    this.loopback = false,
+    this.monitor = false,
+    this.lastError,
+  });
+
+  final MonitorSource source;
+  final AudioStateDevice? capture;
+  final AudioStateDevice? playback;
+  final int clockRate;
+
+  /// Clock rate of the open sound device; 0 when it is closed.
+  final int sndClockRate;
+  final EcState ec;
+  final bool loopback;
+  final bool monitor;
+  final LastMediaError? lastError;
+
+  factory AudioState.fromJson(Map<String, dynamic> j) => AudioState(
+    source: MonitorSource.parse(j['source']),
+    capture: AudioStateDevice.fromJsonN(j['capture']),
+    playback: AudioStateDevice.fromJsonN(j['playback']),
+    clockRate: asInt(j['clockRate'], 0),
+    sndClockRate: asInt(j['sndClockRate'], 0),
+    ec: j['ec'] is Map ? EcState.fromJson(asMap(j['ec'])) : const EcState(),
+    loopback: asBool(j['loopback'], false),
+    monitor: asBool(j['monitor'], false),
+    lastError: LastMediaError.fromJsonN(j['lastError']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'source': source.wire,
+    'capture': capture?.toJson(),
+    'playback': playback?.toJson(),
+    'clockRate': clockRate,
+    'sndClockRate': sndClockRate,
+    'ec': ec.toJson(),
+    'loopback': loopback,
+    'monitor': monitor,
+    'lastError': lastError?.toJson(),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AudioState && jsonEqual(toJson(), other.toJson());
+
+  @override
+  int get hashCode => jsonHash(toJson());
+
+  @override
+  String toString() => 'AudioState(${toJson()})';
+}

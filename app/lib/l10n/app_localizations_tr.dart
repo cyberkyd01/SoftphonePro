@@ -6917,4 +6917,179 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'Müzik durdurulamadı. Karşınızdakiler hâlâ duyuyor olabilir.';
+
+  @override
+  String get audioTestTitle => 'Ses testi';
+
+  @override
+  String get audioTestEntry => 'Mikrofonu ve hoparlörleri test et';
+
+  @override
+  String get audioTestEntrySub =>
+      'Cihazlarınızı kontrol edin, kendinizi dinleyin ve fon müziğini dengeleyin';
+
+  @override
+  String get audioTestInCall =>
+      'Ses testini çalıştırmak için görüşmenizi bitirin';
+
+  @override
+  String get audioTestIosNote =>
+      'iPhone’da mikrofon ve hoparlör yalnızca görüşme sırasında açıktır';
+
+  @override
+  String get audioTestStepDevices => 'Cihazlar';
+
+  @override
+  String get audioTestStepMic => 'Mikrofon';
+
+  @override
+  String get audioTestStepSpeaker => 'Hoparlör veya kulaklık';
+
+  @override
+  String get audioTestStepRecord => 'Kaydet ve oynat';
+
+  @override
+  String get audioTestStepEcho => 'Kendinizi dinleyin';
+
+  @override
+  String get audioTestStepMusic => 'Fon müziği';
+
+  @override
+  String get audioTestStepSummary => 'Özet';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'Kullanımda: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'Hiçbir ses cihazı açılamadı';
+
+  @override
+  String get audioTestMicOk => 'Sizi duyuyoruz';
+
+  @override
+  String get audioTestMicWaiting => 'Bir şey söyleyin…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Çok sessiz: yaklaşın veya mikrofon kazancını artırın';
+
+  @override
+  String get audioTestMicClipping => 'Çok yüksek: mikrofon kazancını azaltın';
+
+  @override
+  String get audioTestMicSilent =>
+      'Hiçbir ses gelmiyor. Şunları kontrol edin: doğru mikrofon seçili, sistemde sessize alınmamış, uygulamanın mikrofonu kullanma izni var (gizlilik ayarları) ve başka bir uygulama mikrofonu kullanmıyor.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Ses ayarlarını aç';
+
+  @override
+  String get audioTestOpenPrivacySettings => 'Mikrofon gizlilik ayarlarını aç';
+
+  @override
+  String get audioTestPlaySound => 'Test sesini çal';
+
+  @override
+  String get audioTestDidYouHear => 'Duydunuz mu?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'Sesinizi duydunuz mu?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'Uygulama ses gönderdi ancak çıkış göstergesi hareket etmedi';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Ses düzeyini, seçili çıkış cihazını ve sistem çıkışını (Bluetooth, HDMI) kontrol edin';
+
+  @override
+  String get audioTestRecord5s => '5 saniye kaydet';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Kaydediliyor… $seconds sn';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Oynatılıyor…';
+
+  @override
+  String get audioTestPlayAgain => 'Tekrar oynat';
+
+  @override
+  String get audioTestRecEmpty => 'Kayıt boş';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Kulaklık kullanın: hoparlörlerle geri besleme sesi duyarsınız.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return '$seconds sn içinde durur';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Yankı testi sona erdi ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'Arayanların duyduğunu önizle';
+
+  @override
+  String get audioTestPreviewSub =>
+      'Sesiniz ve fon müziği, gönderildiği şekilde karıştırılmış olarak';
+
+  @override
+  String get audioTestSendLevel => 'Arayanlara gönderilen';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'Bu önizlemede yankı engelleme uygulanmaz';
+
+  @override
+  String get audioTestPass => 'Tamam';
+
+  @override
+  String get audioTestFail => 'Sorun';
+
+  @override
+  String get audioTestNotRun => 'Test edilmedi';
+
+  @override
+  String get audioTestSkipped => 'Atlandı';
+
+  @override
+  String get audioTestRunning => 'Test ediliyor…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Tanılamayı kopyala';
+
+  @override
+  String get audioTestCopied => 'Tanılama kopyalandı';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Ses cihazı sorunu: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Mikrofon kullanılamıyor: sessiz bir cihaz kullanılıyor';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'Müzik arayanlara gönderilir; duymak için “Kendim dinleyeyim” seçeneğini veya önizlemeyi açın';
+
+  @override
+  String get audioTestEchoEndedTimeout => '60 sn sonra durdu';
+
+  @override
+  String get audioTestEchoEndedCall => 'bir görüşme başladı';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'motor yeniden başlatıldı';
 }

@@ -4,9 +4,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../platform/platform_services.dart';
+import '../services/providers.dart';
+
 /// True on iOS, where (CallKit's manual audio session) there is no audio
 /// device outside a call. A provider so tests can override it.
 final isIosProvider = Provider<bool>((_) => !kIsWeb && Platform.isIOS);
+
+/// A phone or tablet OS (Android / iOS). On those the microphone is only held
+/// open outside calls by screens that test the audio. A provider so tests can
+/// override it.
+final audioMobileProvider = Provider<bool>((ref) => ref.watch(platformServicesProvider).ringsViaOs || (!kIsWeb && isMobilePlatform));
+
+/// Name of the operating system (`Platform.operatingSystem`: `windows`,
+/// `macos`, `linux`, ...), for links into the OS sound settings. Overridable.
+final audioOsProvider = Provider<String>((_) => kIsWeb ? 'web' : Platform.operatingSystem);
 
 /// Platform extras for noise cancellation, over the existing channels:
 /// `softphonepro/desktop` (macOS) and `softphonepro/platform` (iOS, Android).

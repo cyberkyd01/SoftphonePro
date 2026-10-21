@@ -343,7 +343,7 @@ class TestMusicbedCalls(BedBase):
     def test_levels_and_per_call_levels(self):
         a, b, ca, cb = self.direct_call()
         lv = self.levels(a)
-        self.assertEqual(set(lv), {"mic", "speaker", "musicbed", "calls"})
+        self.assertEqual(set(lv), {"mic", "speaker", "musicbed", "send", "calls"})
         self.assertEqual(lv["musicbed"], 0)
         self.assertEqual([c["cid"] for c in lv["calls"]], [ca])
         a.req("media.musicbedStart", {"file": bed_file(), "volume": 0.8})

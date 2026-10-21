@@ -6707,4 +6707,170 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get musicbedStopFailed => '音楽を停止できませんでした。通話相手にまだ流れている可能性があります。';
+
+  @override
+  String get audioTestTitle => 'オーディオテスト';
+
+  @override
+  String get audioTestEntry => 'マイクとスピーカーをテスト';
+
+  @override
+  String get audioTestEntrySub => 'デバイスの確認、自分の声の確認、BGMの音量調整ができます';
+
+  @override
+  String get audioTestInCall => 'オーディオテストを行うには通話を終了してください';
+
+  @override
+  String get audioTestIosNote => 'iPhoneでは、マイクとスピーカーは通話中のみ使用されます';
+
+  @override
+  String get audioTestStepDevices => 'デバイス';
+
+  @override
+  String get audioTestStepMic => 'マイク';
+
+  @override
+  String get audioTestStepSpeaker => 'スピーカーまたはイヤホン';
+
+  @override
+  String get audioTestStepRecord => '録音して再生';
+
+  @override
+  String get audioTestStepEcho => '自分の声を聞く';
+
+  @override
+  String get audioTestStepMusic => 'BGM';
+
+  @override
+  String get audioTestStepSummary => '概要';
+
+  @override
+  String audioTestOpened(String name) {
+    return '使用中: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'オーディオデバイスを開けませんでした';
+
+  @override
+  String get audioTestMicOk => '声が届いています';
+
+  @override
+  String get audioTestMicWaiting => '何か話してください…';
+
+  @override
+  String get audioTestMicQuiet => '音が小さすぎます。近づくか、マイクのゲインを上げてください';
+
+  @override
+  String get audioTestMicClipping => '音が大きすぎます。マイクのゲインを下げてください';
+
+  @override
+  String get audioTestMicSilent =>
+      '音声が入っていません。正しいマイクが選ばれているか、システムでミュートされていないか、アプリにマイクの使用が許可されているか（プライバシー設定）、他のアプリがマイクを使用していないかを確認してください。';
+
+  @override
+  String get audioTestOpenSoundSettings => 'サウンド設定を開く';
+
+  @override
+  String get audioTestOpenPrivacySettings => 'マイクのプライバシー設定を開く';
+
+  @override
+  String get audioTestPlaySound => 'テスト音を再生';
+
+  @override
+  String get audioTestDidYouHear => '聞こえましたか？';
+
+  @override
+  String get audioTestDidYouHearVoice => '自分の声が聞こえましたか？';
+
+  @override
+  String get audioTestNoOutputLevel => 'アプリは音を送りましたが、出力メーターが動きませんでした';
+
+  @override
+  String get audioTestSpeakerHints =>
+      '音量、選択した出力デバイス、システムの出力先（Bluetooth、HDMI）を確認してください';
+
+  @override
+  String get audioTestRecord5s => '5秒間録音';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return '録音中… $seconds秒';
+  }
+
+  @override
+  String get audioTestPlayingBack => '再生中…';
+
+  @override
+  String get audioTestPlayAgain => 'もう一度再生';
+
+  @override
+  String get audioTestRecEmpty => '録音が空です';
+
+  @override
+  String get audioTestEchoHeadphones => 'ヘッドホンを使ってください。スピーカーだとハウリングが発生します。';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return '$seconds秒後に停止します';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'エコーテストが終了しました（$reason）';
+  }
+
+  @override
+  String get audioTestPreview => '相手に聞こえる音をプレビュー';
+
+  @override
+  String get audioTestPreviewSub => 'あなたの声とBGMを、送信されるとおりにミックスして再生します';
+
+  @override
+  String get audioTestSendLevel => '相手に送信される音';
+
+  @override
+  String get audioTestEcNotPreviewed => 'このプレビューではエコーキャンセルは適用されません';
+
+  @override
+  String get audioTestPass => 'OK';
+
+  @override
+  String get audioTestFail => '問題あり';
+
+  @override
+  String get audioTestNotRun => '未テスト';
+
+  @override
+  String get audioTestSkipped => 'スキップ';
+
+  @override
+  String get audioTestRunning => 'テスト中…';
+
+  @override
+  String get audioTestCopyDiagnostics => '診断情報をコピー';
+
+  @override
+  String get audioTestCopied => '診断情報をコピーしました';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'オーディオデバイスの問題: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable => 'マイクを使用できません。無音のデバイスを使用しています';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      '音楽は相手に送信されます。聞くには「自分でも聞く」またはプレビューをオンにしてください';
+
+  @override
+  String get audioTestEchoEndedTimeout => '60秒で停止しました';
+
+  @override
+  String get audioTestEchoEndedCall => '通話が始まりました';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'エンジンが再起動しました';
 }

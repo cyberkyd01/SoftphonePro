@@ -379,14 +379,18 @@ Special ids:
 | `media.setCodecPriorities` | `{order:[s], disableOthers?:b=false}` | `{}` |
 | `media.setCodecParam` | `{id:s, ptime?:i, vad?:b, fmtp?:{}, opus?:{bitrate:i, fec:b, dtx:b, cbr:b, complexity:i, maxPlaybackRate:i}}` | `{}` |
 | `media.setEc` | `{algo:s, tailMs:i, ns:b, agc:b}` | `{}` |
-| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, calls:[{cid:i, rx:i, tx:i}]}` (all 0–255); see section 10 |
+| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, send:i, calls:[{cid:i, rx:i, tx:i}]}` (all 0–255); `send` = the mic plus the musicbed as callers would get them, 0 unless `media.monitor` is on; see sections 10 and 11 |
 | `media.setMicLevel` | `{level:f}` | `{}` (0.0–2.0) |
 | `media.setSpeakerLevel` | `{level:f}` | `{}` |
-| `media.tone` | `{kind:"ringback\|busy\|congestion\|dial\|waiting\|dtmf", digits?:s, loop?:b}` | `{}`; local tone to the speaker. `waiting` is the call-waiting beep. |
+| `media.tone` | `{kind:"ringback\|busy\|congestion\|dial\|waiting\|chime\|dtmf", digits?:s, loop?:b}` | `{}`; local tone to the speaker. `waiting` is the call-waiting beep; `chime` is a short three-note test sound (523, 659, 784 Hz, never loops, `loop` is ignored). |
 | `media.toneStop` | `{}` | `{}` |
 | `media.ringStart` | `{file?:s, devId?:s="default", loop?:b=true, volume?:f=1}` | `{}`; separate ringer sound port (desktop); with no file, a built-in synthesized ring |
 | `media.ringStop` | `{}` | `{}` |
-| `media.loopback` | `{enabled:b}` | `{}`; mic → speaker echo test |
+| `media.loopback` | `{enabled:b, timeoutMs?:i=0}` | `{}`; mic → speaker echo test **without** echo cancellation / noise suppression; `BUSY` while a call exists; `timeoutMs` 0..600000 ends it by itself (0 = never); see section 11 |
+| `media.monitor` | `{enabled:b}` | `{active:b, source:"device\|null\|none", capture:s, playback:s}`; live microphone metering outside calls; see section 11 |
+| `media.audioState` | `{}` | `{source, capture:{devId,name,driver}\|null, playback:{...}\|null, clockRate:i, sndClockRate:i, ec:{tailMs:i, options:i, bypassed:b}, loopback:b, monitor:b, lastError:{op,status,message}\|null}`; diagnostics summary, section 11 |
+| `media.playLocal` | `{file:s, volume?:f=1}` | `{playId:i}`; plays a WAV/MP3 to the speaker, no call needed; `volume` 0.0–4.0; section 11 |
+| `media.playStop` | `{playId?:i}` | `{stopped:i}`; stops one local play, or all of them without `playId` |
 | `media.fileInfo`, `media.recordMicStart`, `media.recordMicStop` | | see section 9.2 |
 | `media.musicbedStart` | `{file:s, volume?:f=0.3, monitor?:b=false, monitorVolume?:f=0.5}` | `{file:s, format:"wav\|mp3", durationMs:i}`; see section 10 |
 | `media.musicbedStop` | `{}` | `{stopped:b}` |
@@ -459,7 +463,10 @@ BuddyInfo:
 | `im.status` | `{acc, uid, to, msgId, code, reason, ok:b}` |
 | `im.typing` | `{acc, uid, from, typing:b}` |
 | `media.devicesChanged` | `{}` |
-| `media.error` | `{op, status, message, fallback:"null"\|null}` |
+| `media.error` | `{op, status, message, fallback:"null"\|null}`; `op:"openDevice"` is emitted once per failure episode (not on every retry) until a real device opens again |
+| `media.monitor` | `{active:b, source:"device\|null\|none", capture:s, playback:s}`; whenever `(active, source)` changes; section 11 |
+| `media.loopback` | `{enabled:false, reason:"stopped\|timeout\|call\|shutdown"}`; the echo test ended; section 11 |
+| `media.playDone` | `{playId, file, reason:"eof\|stopped\|error"}`; a `media.playLocal` play ended (no `cid`); section 11 |
 | `media.musicbed` | `{active:b, file?:s, reason:"started"\|"stopped"\|"replaced"\|"error"\|"shutdown", message?:s}`; see section 10 |
 | `diag.natType` | `{natType:"unknown\|open\|blocked\|symmetricUdp\|fullCone\|symmetric\|restricted\|portRestricted", description, stun}` |
 | `diag.options` | `{acc, uid, code, reason, rttMs}` |
@@ -916,7 +923,7 @@ There is at most one musicbed per engine.
 | `media.musicbedStop` | `{}` | `{stopped:b}`; `false` when none was running (not an error) |
 | `media.musicbedSet` | `{volume?:f, monitor?:b, monitorVolume?:f, paused?:b}` | `{}`; `NOT_FOUND` when no musicbed runs; no field at all is `INVALID_PARAM` |
 | `media.musicbedState` | `{}` | `{active:b, file?:s, format?:s, volume:f, monitor:b, monitorVolume:f, paused:b, positionMs:i, durationMs:i, calls:[cid]}` |
-| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, calls:[{cid:i, rx:i, tx:i}]}`, all 0–255 |
+| `media.levels` | `{}` | `{mic:i, speaker:i, musicbed:i, send:i, calls:[{cid:i, rx:i, tx:i}]}`, all 0–255 (`send`: section 11) |
 
 * **Validation:** `file` is validated exactly like `call.playFile` (WAV/MP3,
   same limits; `INVALID_PARAM` when unreadable, unsupported, empty or longer than
@@ -1007,3 +1014,92 @@ There is at most one musicbed per engine.
   clock thread only copies decoded samples.
 
 Tests: `native/tests/test_musicbed.py`.
+
+## 11. Live metering, echo test and local playback (contract v1.3)
+
+Everything the "Audio test" page of the app needs, usable without a call.
+
+### Methods
+| method | params | result |
+|---|---|---|
+| `media.monitor` | `{enabled:b}` | `{active:b, source:"device\|null\|none", capture:s, playback:s}` |
+| `media.loopback` | `{enabled:b, timeoutMs?:i=0}` | `{}`; `BUSY` when enabling while a call exists; `INVALID_PARAM` for `timeoutMs` outside 0..600000 |
+| `media.audioState` | `{}` | `{source:"device\|null\|none", capture:{devId,name,driver}\|null, playback:{devId,name,driver}\|null, clockRate:i, sndClockRate:i, ec:{tailMs:i, options:i, bypassed:b}, loopback:b, monitor:b, lastError:{op,status,message}\|null}` |
+| `media.playLocal` | `{file:s, volume?:f=1}` | `{playId:i}` |
+| `media.playStop` | `{playId?:i}` | `{stopped:i}` |
+| `media.levels` | `{}` | adds `send:i` (below) |
+| `media.tone` | `{kind:"chime"}` | `{}` |
+
+* **Why a monitor.** The sound device is closed 1 s after the last bridge
+  connection goes away, and the bridge only measures the microphone while port 0
+  has a listener. `media.monitor {enabled:true}` opens the device and connects
+  the microphone to an internal sink, so `media.levels.mic` is live outside
+  calls; `{enabled:false}` disconnects it (the device closes 1 s later, unless
+  something else uses it). It is idempotent and the app owns the decision (on
+  while a level meter is visible, off otherwise); on desktop the OS shows its
+  "microphone in use" indicator while it is on. Calls are unaffected, and
+  `mic` keeps reporting the voice-isolation output while calls are active.
+  `active` is true only when the sink is connected **and** a real device is
+  open. `source` says where the microphone signal comes from: `device` (real
+  device open), `null` (the null device is attached: no device could be opened,
+  `noAudioDevice`, or manual sndMode without a real device) or `none` (closed).
+  `capture` / `playback` are the configured device ids (`default`, a `devId`,
+  `null`, `none`). In manual sndMode the monitor works once a real device was
+  opened with `media.setDevices`; with `noAudioDevice` it never becomes active.
+* **Explicit "null" devices.** `media.setDevices {capture:"null"}` (or
+  `playback:"null"`) in auto mode is honoured everywhere the engine opens the
+  sound device on its own: `media.monitor`, `media.loopback`, tones, local plays,
+  the ringer-less musicbed monitor and calls never open a real device while it is
+  selected (previously they fell back to the OS default device). `media.setDevices`
+  to the null device (or to none) also ends a running echo test (`reason:"stopped"`).
+* **Retries.** Whenever the monitor or the echo test is wanted and the null
+  device is attached, `media.monitor {enabled:true}`, `media.loopback`,
+  `media.setDevices` and `media.refreshDevices` retry the real device (a device
+  change re-wires the monitor and the echo test onto the new device). A
+  `media.error` with `op:"openDevice"` is emitted once when a device open fails
+  and the null device takes over; it is not repeated by the retries until a real
+  device has opened again. Explicit `setDevices` failures always emit it.
+  `lastError` of `media.audioState` keeps the last failure.
+* **Event `media.monitor`:** emitted by `media.monitor`, `setDevices`,
+  `refreshDevices` whenever `(active, source)` changed since the last event. It
+  is not emitted when the device is closed by the idle timer.
+* **Echo test (`media.loopback`).** Connects the microphone to the speaker with
+  the echo canceller and noise suppressor **bypassed**: the canceller would use
+  the microphone itself as the playback reference and remove the user's voice.
+  The engine zeroes the EC tail (`pjsua_set_ec(0, options)`) for the duration and
+  restores the previous settings when the test ends (`media.setEc` during the
+  test is stored and applied then). Feedback is likely on loudspeakers: the app
+  warns, and `timeoutMs` (the app uses 60000) is the safety net. Enabling an
+  already running test only replaces its timeout. The test ends with
+  `media.loopback {enabled:false, reason}`: `stopped` (`enabled:false`),
+  `timeout`, `call` (a call was created or started using the microphone; EC is
+  restored before the microphone reaches it) or `shutdown`. No event is emitted
+  for a stop that finds nothing running. It is refused with `BUSY` while any call
+  exists.
+* **`send`.** `media.levels.send` is the level of the monitor sink: the raw
+  port-0 microphone (after `setMicLevel`, before voice isolation and without EC)
+  plus the musicbed at its call volume (`musicbedSet {volume}` moves it), i.e.
+  roughly what callers would receive. 0 when the monitor is off. While the bed
+  only feeds the monitor sink (no call, no `monitor:true`), `levels.musicbed`
+  stays 0 and `send` carries the bed.
+* **Local playback.** `media.playLocal` uses the same decoder as
+  `call.playFile` (WAV/MP3 limits, `INVALID_PARAM` for a bad file or `volume`
+  outside 0.0–4.0) and plays to the speaker once, opening the device if needed.
+  Any engine-side failure is reported as `INVALID_PARAM` too (same as
+  `call.playFile`). The play ends with `media.playDone {playId, file, reason}`
+  (`eof`, `stopped`, `error`); it has no `cid`, no `call.playDone` is emitted, and
+  plays still running at `core.stop` end silently (no `media.playDone`). `media.playStop`
+  without `playId` stops all local plays and does not touch call plays.
+
+### Manual verification (live audio)
+`native/tests/test_audio_monitor.py` checks the contract with the null device.
+The audio paths need a loopback device: with VB-Audio Virtual Cable, play a tone
+into "CABLE Input", select the "CABLE Output" capture device and expect, with
+`media.levels.mic` sampled every 200 ms: 0 while idle; 40+ on average with the
+monitor on (and `sndClockRate` 0 two seconds after turning it off); 50+ on
+average during `media.loopback` with `ec.bypassed` true, `false` afterwards;
+`media.loopback {timeoutMs:3000}` ending with `reason:"timeout"`; a call started
+during the test ending it with `reason:"call"`; and `media.playLocal` of a WAV
+ending with `media.playDone {reason:"eof"}` while `levels.speaker` is above 20.
+
+Tests: `native/tests/test_audio_monitor.py`.

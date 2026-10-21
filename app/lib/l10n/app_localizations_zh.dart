@@ -6652,4 +6652,168 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicbedStopFailed => '无法停止音乐。通话对方可能仍能听到。';
+
+  @override
+  String get audioTestTitle => '音频测试';
+
+  @override
+  String get audioTestEntry => '测试麦克风和扬声器';
+
+  @override
+  String get audioTestEntrySub => '检查设备、听听自己的声音并调整背景音乐';
+
+  @override
+  String get audioTestInCall => '请先结束通话再进行音频测试';
+
+  @override
+  String get audioTestIosNote => '在 iPhone 上，麦克风和扬声器仅在通话期间开启';
+
+  @override
+  String get audioTestStepDevices => '设备';
+
+  @override
+  String get audioTestStepMic => '麦克风';
+
+  @override
+  String get audioTestStepSpeaker => '扬声器或耳机';
+
+  @override
+  String get audioTestStepRecord => '录音并回放';
+
+  @override
+  String get audioTestStepEcho => '听听自己的声音';
+
+  @override
+  String get audioTestStepMusic => '背景音乐';
+
+  @override
+  String get audioTestStepSummary => '摘要';
+
+  @override
+  String audioTestOpened(String name) {
+    return '正在使用：$name';
+  }
+
+  @override
+  String get audioTestNoDevice => '无法打开任何音频设备';
+
+  @override
+  String get audioTestMicOk => '能听到你的声音';
+
+  @override
+  String get audioTestMicWaiting => '请说点什么…';
+
+  @override
+  String get audioTestMicQuiet => '声音太小：请靠近一些或调高麦克风增益';
+
+  @override
+  String get audioTestMicClipping => '声音太大：请调低麦克风增益';
+
+  @override
+  String get audioTestMicSilent =>
+      '没有收到任何声音。请检查：是否选择了正确的麦克风、系统中是否已将其静音、应用是否有权使用麦克风（隐私设置），以及是否有其他应用正在占用它。';
+
+  @override
+  String get audioTestOpenSoundSettings => '打开声音设置';
+
+  @override
+  String get audioTestOpenPrivacySettings => '打开麦克风隐私设置';
+
+  @override
+  String get audioTestPlaySound => '播放测试声音';
+
+  @override
+  String get audioTestDidYouHear => '听到了吗？';
+
+  @override
+  String get audioTestDidYouHearVoice => '听到自己的声音了吗？';
+
+  @override
+  String get audioTestNoOutputLevel => '应用已发出声音，但输出电平表没有变化';
+
+  @override
+  String get audioTestSpeakerHints => '请检查音量、所选输出设备以及系统输出（蓝牙、HDMI）';
+
+  @override
+  String get audioTestRecord5s => '录音 5 秒';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return '正在录音… $seconds 秒';
+  }
+
+  @override
+  String get audioTestPlayingBack => '正在回放…';
+
+  @override
+  String get audioTestPlayAgain => '再次播放';
+
+  @override
+  String get audioTestRecEmpty => '录音是空的';
+
+  @override
+  String get audioTestEchoHeadphones => '请使用耳机：使用扬声器时会听到啸叫。';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return '$seconds 秒后停止';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return '回声测试已结束（$reason）';
+  }
+
+  @override
+  String get audioTestPreview => '预览对方听到的声音';
+
+  @override
+  String get audioTestPreviewSub => '你的声音与背景音乐，按实际发送的混音播放';
+
+  @override
+  String get audioTestSendLevel => '发送给对方的声音';
+
+  @override
+  String get audioTestEcNotPreviewed => '此预览不会应用回声消除';
+
+  @override
+  String get audioTestPass => '正常';
+
+  @override
+  String get audioTestFail => '有问题';
+
+  @override
+  String get audioTestNotRun => '未测试';
+
+  @override
+  String get audioTestSkipped => '已跳过';
+
+  @override
+  String get audioTestRunning => '测试中…';
+
+  @override
+  String get audioTestCopyDiagnostics => '复制诊断信息';
+
+  @override
+  String get audioTestCopied => '诊断信息已复制';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return '音频设备问题：$message';
+  }
+
+  @override
+  String get mixerMicUnavailable => '麦克风不可用：正在使用静音设备';
+
+  @override
+  String get audioTestMusicSilentHint => '音乐只发送给对方；要听到它，请开启“自己也听”或预览';
+
+  @override
+  String get audioTestEchoEndedTimeout => '60 秒后已停止';
+
+  @override
+  String get audioTestEchoEndedCall => '通话已开始';
+
+  @override
+  String get audioTestEchoEndedShutdown => '引擎已重启';
 }

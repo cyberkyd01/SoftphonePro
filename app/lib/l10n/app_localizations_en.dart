@@ -6883,4 +6883,178 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'Couldn’t stop the music. It may still be playing to your callers.';
+
+  @override
+  String get audioTestTitle => 'Audio test';
+
+  @override
+  String get audioTestEntry => 'Test microphone and speakers';
+
+  @override
+  String get audioTestEntrySub =>
+      'Check your devices, hear yourself and balance background music';
+
+  @override
+  String get audioTestInCall => 'Finish your call to run the audio test';
+
+  @override
+  String get audioTestIosNote =>
+      'On iPhone the microphone and speaker are only open during a call';
+
+  @override
+  String get audioTestStepDevices => 'Devices';
+
+  @override
+  String get audioTestStepMic => 'Microphone';
+
+  @override
+  String get audioTestStepSpeaker => 'Speaker or earphones';
+
+  @override
+  String get audioTestStepRecord => 'Record and play back';
+
+  @override
+  String get audioTestStepEcho => 'Hear yourself';
+
+  @override
+  String get audioTestStepMusic => 'Background music';
+
+  @override
+  String get audioTestStepSummary => 'Summary';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'In use: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'No audio device could be opened';
+
+  @override
+  String get audioTestMicOk => 'We hear you';
+
+  @override
+  String get audioTestMicWaiting => 'Say something…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Very quiet: move closer or raise the microphone gain';
+
+  @override
+  String get audioTestMicClipping => 'Too loud: lower the microphone gain';
+
+  @override
+  String get audioTestMicSilent =>
+      'Nothing is coming in. Check: the right microphone is selected, it is not muted in the system, the app may use the microphone (privacy settings), no other app is using it.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Open sound settings';
+
+  @override
+  String get audioTestOpenPrivacySettings => 'Open microphone privacy settings';
+
+  @override
+  String get audioTestPlaySound => 'Play test sound';
+
+  @override
+  String get audioTestDidYouHear => 'Did you hear it?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'Did you hear your voice?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'The app sent sound but the output meter did not move';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Check the volume, the selected output device and the system output (Bluetooth, HDMI)';
+
+  @override
+  String get audioTestRecord5s => 'Record 5 seconds';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Recording… $seconds s';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Playing back…';
+
+  @override
+  String get audioTestPlayAgain => 'Play again';
+
+  @override
+  String get audioTestRecEmpty => 'The recording is empty';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Use headphones: with loudspeakers you will hear feedback.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'Stops in $seconds s';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Echo test ended ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'Preview what callers hear';
+
+  @override
+  String get audioTestPreviewSub =>
+      'Your voice and the background music, mixed as they are sent';
+
+  @override
+  String get audioTestSendLevel => 'Sent to callers';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'Echo cancellation is not applied in this preview';
+
+  @override
+  String get audioTestPass => 'OK';
+
+  @override
+  String get audioTestFail => 'Problem';
+
+  @override
+  String get audioTestNotRun => 'Not tested';
+
+  @override
+  String get audioTestSkipped => 'Skipped';
+
+  @override
+  String get audioTestRunning => 'Testing…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Copy diagnostics';
+
+  @override
+  String get audioTestCopied => 'Diagnostics copied';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Audio device problem: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Microphone unavailable: using a silent device';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'The music is sent to callers; turn on \"Hear it myself\" or the preview to hear it';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'it stopped after 60 s';
+
+  @override
+  String get audioTestEchoEndedCall => 'a call started';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'the engine restarted';
 }

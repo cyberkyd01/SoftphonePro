@@ -174,6 +174,9 @@ void main() {
     test('levels: zero without calls, bed level when playing', () async {
       expect(await e.levels(), const MediaLevels());
       await e.musicbedStart('/m/a.wav', volume: 0.5);
+      // Like the engine: not audible (musicbed 0) without a call or monitor.
+      expect((await e.levels()).musicbed, 0);
+      await e.musicbedSet(monitor: true);
       final l = await e.levels();
       expect(l.musicbed, greaterThan(0));
       expect(l.mic, 0);

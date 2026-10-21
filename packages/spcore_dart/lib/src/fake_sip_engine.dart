@@ -249,6 +249,43 @@ class FakeSipEngine extends JsonSipEngine {
   double speakerLevel = 1.0;
   EcConfig ec = const EcConfig();
   bool loopbackEnabled = false;
+
+  /// `timeoutMs` of the last enabling `media.loopback` (0 = none).
+  int loopbackTimeoutMs = 0;
+
+  /// Desired state of `media.monitor` (the live meter feed).
+  bool monitorEnabled = false;
+
+  /// How many `media.monitor` requests were received.
+  int monitorCalls = 0;
+
+  /// What `media.monitor` / `media.audioState` report as the audio source.
+  MonitorSource fakeMonitorSource = MonitorSource.device;
+
+  /// Local playbacks started with `media.playLocal` and still running.
+  final localPlays = <(int id, String file)>[];
+
+  /// Every file passed to `media.playLocal`, in order (never shrinks).
+  final localPlayHistory = <String>[];
+
+  /// Returned by `media.audioState` (the flags `loopback`, `monitor` and
+  /// `ec.bypassed`/`source` are overlaid with the live fake state).
+  AudioState fakeAudioState = const AudioState(
+    capture: AudioStateDevice(
+      devId: 'default',
+      name: 'Fake microphone',
+      driver: 'fake',
+    ),
+    playback: AudioStateDevice(
+      devId: 'default',
+      name: 'Fake speaker',
+      driver: 'fake',
+    ),
+    clockRate: 16000,
+    sndClockRate: 16000,
+    ec: EcState(tailMs: 200, options: 0),
+  );
+  Timer? _loopbackTimer;
   bool ringerActive = false;
   String? activeTone;
 
@@ -266,6 +303,10 @@ class FakeSipEngine extends JsonSipEngine {
 
   /// When true, `media.levels` wobbles over time so meters visibly move.
   bool animateLevels = false;
+
+  /// When true, `media.playLocal` ends by itself after the file's
+  /// duration; by default tests drive `simulatePlayDone`.
+  bool autoFinishLocalPlays = false;
 
   /// Replaces the simulated `media.levels` result when set.
   MediaLevels? levelsOverride;
@@ -319,6 +360,7 @@ class FakeSipEngine extends JsonSipEngine {
     _disposed = true;
     _cancelAll();
     _statsTimer?.cancel();
+    _loopbackTimer?.cancel();
     await _ctrl.close();
   }
 
@@ -669,16 +711,21 @@ class FakeSipEngine extends JsonSipEngine {
                       ))
               .round()
         : 0;
-    final bed = _bedOn && !_bedPaused
+    final bedRaw = _bedOn && !_bedPaused
         ? (math.min(_bedVolume, 1.0) * (100 + w(3))).round().clamp(0, 255)
         : 0;
+    // Like the engine: the bed meter only moves when a call or its monitor
+    // plays it; otherwise it is audible only in `send`.
+    final bed = (active || _bedMonitor) ? bedRaw : 0;
+    final mon = monitorEnabled && fakeMonitorSource == MonitorSource.device;
     return MediaLevels(
-      mic: active ? 40 + w(0) : 0,
+      mic: active ? 40 + w(0) : (mon ? w(0) : 0),
       speaker: active ? 30 + w(1) : 0,
       musicbed: bed,
+      send: mon || active ? math.min(255, w(0) + bedRaw ~/ 2) : 0,
       calls: [
         for (final c in live)
-          CallLevel(cid: c.cid, rx: 30 + w(1), tx: 40 + w(0) + bed ~/ 2),
+          CallLevel(cid: c.cid, rx: 30 + w(1), tx: 40 + w(0) + bedRaw ~/ 2),
       ],
     );
   }
@@ -1154,6 +1201,16 @@ class FakeSipEngine extends JsonSipEngine {
             ringer: _devices.current.ringer,
           ),
         );
+        final cur = _devices.current;
+        final src = (cur.capture == 'none' || cur.playback == 'none')
+            ? MonitorSource.none
+            : (cur.capture == 'null' || cur.playback == 'null')
+            ? MonitorSource.nul
+            : MonitorSource.device;
+        if (src != MonitorSource.device && loopbackEnabled) {
+          simulateLoopbackEnded('stopped');
+        }
+        if (src != fakeMonitorSource) simulateMonitor(src);
         return {};
       case 'media.refreshDevices':
         _emit('media.devicesChanged', {});
@@ -1229,8 +1286,72 @@ class FakeSipEngine extends JsonSipEngine {
         ringerActive = false;
         return {};
       case 'media.loopback':
-        loopbackEnabled = asBool(p['enabled']);
+        final on = asBool(p['enabled']);
+        if (on) {
+          if (_calls.values.any((c) => c.state != CallState.disconnected)) {
+            throw _err(ErrorCode.busy, 'echo test is not available during a call');
+          }
+          final t = asInt(p['timeoutMs'], 0);
+          if (t < 0 || t > 600000) throw _invalid('bad timeoutMs');
+          loopbackTimeoutMs = t;
+          loopbackEnabled = true;
+          _loopbackTimer?.cancel();
+          _loopbackTimer = null;
+          if (t > 0) {
+            _loopbackTimer = Timer(Duration(milliseconds: t), () {
+              if (loopbackEnabled) simulateLoopbackEnded('timeout');
+            });
+          }
+        } else {
+          if (loopbackEnabled) {
+            simulateLoopbackEnded('stopped');
+          }
+        }
         return {};
+      case 'media.monitor':
+        monitorEnabled = asBool(p['enabled']);
+        monitorCalls++;
+        return _monitorState().toJson();
+      case 'media.audioState':
+        final a = fakeAudioState;
+        return AudioState(
+          source: fakeMonitorSource,
+          capture: a.capture,
+          playback: a.playback,
+          clockRate: a.clockRate,
+          sndClockRate: monitorEnabled || loopbackEnabled ? a.sndClockRate : 0,
+          ec: EcState(
+            tailMs: a.ec.tailMs,
+            options: a.ec.options,
+            bypassed: loopbackEnabled,
+          ),
+          loopback: loopbackEnabled,
+          monitor: monitorEnabled,
+          lastError: a.lastError,
+        ).toJson();
+      case 'media.playLocal':
+        final file = _str(p, 'file');
+        _fileInfo(file);
+        final vol = asDouble(p['volume'], 1.0);
+        if (vol < 0 || vol > 4) throw _invalid('bad volume');
+        final id = _nextPlayId++;
+        localPlays.add((id, file));
+        localPlayHistory.add(file);
+        if (autoFinishLocalPlays) {
+          _sched(Duration(milliseconds: _fileInfo(file).durationMs), () {
+            if (localPlays.any((e) => e.$1 == id)) simulatePlayDone(id);
+          });
+        }
+        return {'playId': id};
+      case 'media.playStop':
+        final ids = [
+          for (final e in localPlays)
+            if (p['playId'] == null || e.$1 == _int(p, 'playId')) e.$1,
+        ];
+        for (final id in ids) {
+          simulatePlayDone(id, reason: PlayDoneReason.stopped);
+        }
+        return {'stopped': ids.length};
       case 'media.setVoiceIsolation':
         for (final k in ['mic', 'incoming']) {
           if (p[k] != null && p[k] is! Map) {
@@ -1472,6 +1593,11 @@ class FakeSipEngine extends JsonSipEngine {
     _accs.clear();
     _buddies.clear();
     _started = false;
+    if (loopbackEnabled) simulateLoopbackEnded('shutdown');
+    monitorEnabled = false;
+    localPlays.clear();
+    _loopbackTimer?.cancel();
+    _loopbackTimer = null;
     _emit('core.stopped', {});
     return {};
   }
@@ -2181,6 +2307,40 @@ class FakeSipEngine extends JsonSipEngine {
         'message': message,
         'fallback': 'null',
       });
+
+  /// Ends the echo test the way the engine does (`stopped`, `timeout`,
+  /// `call`, `shutdown`) and emits `media.loopback`.
+  void simulateLoopbackEnded(String reason) {
+    loopbackEnabled = false;
+    _loopbackTimer?.cancel();
+    _loopbackTimer = null;
+    _emit('media.loopback', {'enabled': false, 'reason': reason});
+  }
+
+  /// Finishes a local playback started with `media.playLocal`.
+  void simulatePlayDone(int id, {PlayDoneReason reason = PlayDoneReason.eof}) {
+    final i = localPlays.indexWhere((e) => e.$1 == id);
+    if (i < 0) return;
+    final file = localPlays.removeAt(i).$2;
+    _emit('media.playDone', {
+      'playId': id,
+      'file': file,
+      'reason': reason.wire,
+    });
+  }
+
+  /// Changes the reported audio source and emits `media.monitor`.
+  void simulateMonitor(MonitorSource source) {
+    fakeMonitorSource = source;
+    _emit('media.monitor', _monitorState().toJson());
+  }
+
+  MonitorState _monitorState() => MonitorState(
+    active: monitorEnabled && fakeMonitorSource == MonitorSource.device,
+    source: fakeMonitorSource,
+    capture: fakeAudioState.capture?.name ?? '',
+    playback: fakeAudioState.playback?.name ?? '',
+  );
 
   void simulateLog(String msg, {int level = 3}) =>
       _emit('log', {'level': level, 'msg': msg});

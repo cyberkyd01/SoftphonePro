@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:spcore_dart/spcore_dart.dart';
 
 import '../../../audio/audio_levels.dart';
+import '../../../audio/echo_test.dart';
 import '../../../l10n/l10n.dart';
 import '../../../services/engine_controller.dart';
 import '../../widgets/level_meter.dart';
@@ -18,24 +21,25 @@ class AudioTestView extends ConsumerStatefulWidget {
 
 class _AudioTestViewState extends ConsumerState<AudioTestView> {
   bool _meter = false;
-  bool _echo = false;
   String? _tone;
   String? _error;
   EngineController? _ctl;
+  EchoTestController? _echoCtl;
 
   @override
   void initState() {
     super.initState();
     _ctl = ref.read(engineProvider.notifier);
+    _echoCtl = ref.read(echoTestProvider.notifier);
   }
 
   @override
   void dispose() {
     final c = _ctl;
     if (c != null && c.hasEngine) {
-      if (_echo) c.engine.loopback(false).catchError((_) {});
       if (_tone != null) c.engine.stopTone().catchError((_) {});
     }
+    _echoCtl?.stopQuiet();
     super.dispose();
   }
 
@@ -61,6 +65,7 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final l = context.l10n;
+    final echo = ref.watch(echoTestProvider).on;
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -69,6 +74,17 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text(_error!, style: TextStyle(color: t.colorScheme.error)),
           ),
+        SettingsGroup(
+          children: [
+            NavTile(
+              key: const Key('audio-test-open'),
+              icon: Icons.fact_check_rounded,
+              title: l.audioTestEntry,
+              subtitle: l.audioTestEntrySub,
+              onTap: () => context.push('/audio-test'),
+            ),
+          ],
+        ),
         SettingsGroup(
           title: l.diagAudioMicrophone,
           footer: l.diagAudioMicFooter,
@@ -93,11 +109,11 @@ class _AudioTestViewState extends ConsumerState<AudioTestView> {
               key: const Key('audio-echo'),
               icon: Icons.hearing_rounded,
               title: l.diagAudioEchoTest,
-              subtitle: _echo ? l.diagAudioEchoActive : l.diagAudioEchoIdle,
-              value: _echo,
-              onChanged: (v) async {
-                await _guard<void>((e) => e.loopback(v));
-                if (mounted && _error == null) setState(() => _echo = v);
+              subtitle: echo ? l.diagAudioEchoActive : l.diagAudioEchoIdle,
+              value: echo,
+              onChanged: (v) {
+                final c = ref.read(echoTestProvider.notifier);
+                unawaited(_guard<void>((e) => v ? c.start() : c.stop()));
               },
             ),
           ],

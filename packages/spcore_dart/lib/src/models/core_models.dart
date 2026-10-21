@@ -911,18 +911,24 @@ class MediaLevels {
     this.mic = 0,
     this.speaker = 0,
     this.musicbed = 0,
+    this.send = 0,
     this.calls = const [],
   });
 
   final int mic;
   final int speaker;
   final int musicbed;
+
+  /// Level of the mix that would be sent to callers (mic + musicbed); 0 when
+  /// the live monitor is off or the engine predates it (contract v1.3).
+  final int send;
   final List<CallLevel> calls;
 
   factory MediaLevels.fromJson(Map<String, dynamic> j) => MediaLevels(
     mic: asInt(j['mic'], 0),
     speaker: asInt(j['speaker'], 0),
     musicbed: asInt(j['musicbed'], 0),
+    send: asInt(j['send'], 0),
     calls: [
       for (final c in asList(j['calls']))
         if (c is Map) CallLevel.fromJson(asMap(c)),
@@ -933,6 +939,7 @@ class MediaLevels {
     'mic': mic,
     'speaker': speaker,
     'musicbed': musicbed,
+    'send': send,
     'calls': [for (final c in calls) c.toJson()],
   };
 

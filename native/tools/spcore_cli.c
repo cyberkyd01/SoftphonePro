@@ -92,7 +92,7 @@ int main(void)
 {
     char* line;
     lock_init();
-    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stdout, NULL, _IOLBF, 4096);   /* MSVC rejects size 0 (fast-fail) */
     spc_set_event_callback(on_event, NULL);
     if (spc_init(0) < 0) { fprintf(stderr, "spc_init failed\n"); return 2; }
     while ((line = read_line()) != NULL) {

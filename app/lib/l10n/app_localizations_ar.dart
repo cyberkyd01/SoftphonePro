@@ -6943,4 +6943,179 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'تعذّر إيقاف الموسيقى. قد تكون لا تزال تُسمَع للطرف الآخر في المكالمة.';
+
+  @override
+  String get audioTestTitle => 'اختبار الصوت';
+
+  @override
+  String get audioTestEntry => 'اختبار الميكروفون ومكبرات الصوت';
+
+  @override
+  String get audioTestEntrySub =>
+      'افحص أجهزتك واسمع صوتك وعدّل مستوى الموسيقى الخلفية';
+
+  @override
+  String get audioTestInCall => 'أنهِ مكالمتك لإجراء اختبار الصوت';
+
+  @override
+  String get audioTestIosNote =>
+      'على iPhone لا يكون الميكروفون ومكبر الصوت مفتوحين إلا أثناء المكالمة';
+
+  @override
+  String get audioTestStepDevices => 'الأجهزة';
+
+  @override
+  String get audioTestStepMic => 'الميكروفون';
+
+  @override
+  String get audioTestStepSpeaker => 'مكبر الصوت أو سماعات الأذن';
+
+  @override
+  String get audioTestStepRecord => 'التسجيل والتشغيل';
+
+  @override
+  String get audioTestStepEcho => 'اسمع صوتك';
+
+  @override
+  String get audioTestStepMusic => 'الموسيقى الخلفية';
+
+  @override
+  String get audioTestStepSummary => 'الملخص';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'قيد الاستخدام: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'تعذّر فتح أي جهاز صوت';
+
+  @override
+  String get audioTestMicOk => 'نسمعك';
+
+  @override
+  String get audioTestMicWaiting => 'قل شيئًا…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'الصوت منخفض جدًا: اقترب أو ارفع مستوى حساسية الميكروفون';
+
+  @override
+  String get audioTestMicClipping =>
+      'الصوت مرتفع جدًا: خفّض مستوى حساسية الميكروفون';
+
+  @override
+  String get audioTestMicSilent =>
+      'لا يصل أي صوت. تحقق من: اختيار الميكروفون الصحيح، وأنه غير مكتوم في النظام، وأن التطبيق مسموح له باستخدام الميكروفون (إعدادات الخصوصية)، وأن أي تطبيق آخر لا يستخدمه.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'فتح إعدادات الصوت';
+
+  @override
+  String get audioTestOpenPrivacySettings => 'فتح إعدادات خصوصية الميكروفون';
+
+  @override
+  String get audioTestPlaySound => 'تشغيل صوت اختبار';
+
+  @override
+  String get audioTestDidYouHear => 'هل سمعته؟';
+
+  @override
+  String get audioTestDidYouHearVoice => 'هل سمعت صوتك؟';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'أرسل التطبيق صوتًا لكن مؤشر مستوى الإخراج لم يتحرك';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'تحقق من مستوى الصوت وجهاز الإخراج المحدد وإخراج النظام (بلوتوث، HDMI)';
+
+  @override
+  String get audioTestRecord5s => 'تسجيل 5 ثوانٍ';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'جارٍ التسجيل… $seconds ث';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'جارٍ التشغيل…';
+
+  @override
+  String get audioTestPlayAgain => 'تشغيل مرة أخرى';
+
+  @override
+  String get audioTestRecEmpty => 'التسجيل فارغ';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'استخدم سماعات الرأس: مع مكبرات الصوت ستسمع صفيرًا مرتدًا.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'يتوقف خلال $seconds ث';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'انتهى اختبار الصدى ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'معاينة ما يسمعه المتصلون';
+
+  @override
+  String get audioTestPreviewSub =>
+      'صوتك والموسيقى الخلفية، ممزوجان كما يُرسلان';
+
+  @override
+  String get audioTestSendLevel => 'المُرسَل إلى المتصلين';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'لا يُطبَّق إلغاء الصدى في هذه المعاينة';
+
+  @override
+  String get audioTestPass => 'سليم';
+
+  @override
+  String get audioTestFail => 'مشكلة';
+
+  @override
+  String get audioTestNotRun => 'لم يُختبر';
+
+  @override
+  String get audioTestSkipped => 'تم التخطي';
+
+  @override
+  String get audioTestRunning => 'جارٍ الاختبار…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'نسخ التشخيصات';
+
+  @override
+  String get audioTestCopied => 'تم نسخ التشخيصات';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'مشكلة في جهاز الصوت: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'الميكروفون غير متاح: يتم استخدام جهاز صامت';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'تُرسَل الموسيقى إلى المتصلين؛ فعّل \"أسمعها بنفسي\" أو المعاينة لتسمعها';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'توقف بعد 60 ثانية';
+
+  @override
+  String get audioTestEchoEndedCall => 'بدأت مكالمة';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'أُعيد تشغيل المحرك';
 }

@@ -7001,4 +7001,181 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get musicbedStopFailed =>
       'Не удалось остановить музыку. Возможно, собеседники всё ещё её слышат.';
+
+  @override
+  String get audioTestTitle => 'Проверка звука';
+
+  @override
+  String get audioTestEntry => 'Проверить микрофон и динамики';
+
+  @override
+  String get audioTestEntrySub =>
+      'Проверьте устройства, послушайте себя и настройте фоновую музыку';
+
+  @override
+  String get audioTestInCall =>
+      'Завершите вызов, чтобы запустить проверку звука';
+
+  @override
+  String get audioTestIosNote =>
+      'На iPhone микрофон и динамик включаются только во время вызова';
+
+  @override
+  String get audioTestStepDevices => 'Устройства';
+
+  @override
+  String get audioTestStepMic => 'Микрофон';
+
+  @override
+  String get audioTestStepSpeaker => 'Динамик или наушники';
+
+  @override
+  String get audioTestStepRecord => 'Запись и воспроизведение';
+
+  @override
+  String get audioTestStepEcho => 'Послушать себя';
+
+  @override
+  String get audioTestStepMusic => 'Фоновая музыка';
+
+  @override
+  String get audioTestStepSummary => 'Итоги';
+
+  @override
+  String audioTestOpened(String name) {
+    return 'Используется: $name';
+  }
+
+  @override
+  String get audioTestNoDevice => 'Не удалось открыть ни одно аудиоустройство';
+
+  @override
+  String get audioTestMicOk => 'Мы вас слышим';
+
+  @override
+  String get audioTestMicWaiting => 'Скажите что-нибудь…';
+
+  @override
+  String get audioTestMicQuiet =>
+      'Очень тихо: приблизьтесь или увеличьте усиление микрофона';
+
+  @override
+  String get audioTestMicClipping =>
+      'Слишком громко: уменьшите усиление микрофона';
+
+  @override
+  String get audioTestMicSilent =>
+      'Сигнала нет. Проверьте: выбран ли нужный микрофон, не отключён ли он в системе, разрешён ли приложению доступ к микрофону (настройки конфиденциальности) и не использует ли его другое приложение.';
+
+  @override
+  String get audioTestOpenSoundSettings => 'Открыть настройки звука';
+
+  @override
+  String get audioTestOpenPrivacySettings =>
+      'Открыть настройки конфиденциальности микрофона';
+
+  @override
+  String get audioTestPlaySound => 'Воспроизвести тестовый звук';
+
+  @override
+  String get audioTestDidYouHear => 'Вы это слышали?';
+
+  @override
+  String get audioTestDidYouHearVoice => 'Вы слышали свой голос?';
+
+  @override
+  String get audioTestNoOutputLevel =>
+      'Приложение отправило звук, но индикатор вывода не двигался';
+
+  @override
+  String get audioTestSpeakerHints =>
+      'Проверьте громкость, выбранное устройство вывода и системный вывод (Bluetooth, HDMI)';
+
+  @override
+  String get audioTestRecord5s => 'Записать 5 секунд';
+
+  @override
+  String audioTestRecording(int seconds) {
+    return 'Запись… $seconds с';
+  }
+
+  @override
+  String get audioTestPlayingBack => 'Воспроизведение…';
+
+  @override
+  String get audioTestPlayAgain => 'Воспроизвести ещё раз';
+
+  @override
+  String get audioTestRecEmpty => 'Запись пуста';
+
+  @override
+  String get audioTestEchoHeadphones =>
+      'Используйте наушники: с динамиками будет слышен свист обратной связи.';
+
+  @override
+  String audioTestEchoSecondsLeft(int seconds) {
+    return 'Остановится через $seconds с';
+  }
+
+  @override
+  String audioTestEchoEnded(String reason) {
+    return 'Проверка эха завершена ($reason)';
+  }
+
+  @override
+  String get audioTestPreview => 'Предпросмотр: что слышат собеседники';
+
+  @override
+  String get audioTestPreviewSub =>
+      'Ваш голос и фоновая музыка в том виде, в каком они отправляются';
+
+  @override
+  String get audioTestSendLevel => 'Отправляется собеседникам';
+
+  @override
+  String get audioTestEcNotPreviewed =>
+      'В этом предпросмотре эхоподавление не применяется';
+
+  @override
+  String get audioTestPass => 'Норма';
+
+  @override
+  String get audioTestFail => 'Проблема';
+
+  @override
+  String get audioTestNotRun => 'Не проверено';
+
+  @override
+  String get audioTestSkipped => 'Пропущено';
+
+  @override
+  String get audioTestRunning => 'Проверка…';
+
+  @override
+  String get audioTestCopyDiagnostics => 'Копировать диагностику';
+
+  @override
+  String get audioTestCopied => 'Диагностика скопирована';
+
+  @override
+  String audioDeviceErrorNotice(String message) {
+    return 'Проблема с аудиоустройством: $message';
+  }
+
+  @override
+  String get mixerMicUnavailable =>
+      'Микрофон недоступен: используется беззвучное устройство';
+
+  @override
+  String get audioTestMusicSilentHint =>
+      'Музыка отправляется собеседникам; включите «Слушать самому» или предпросмотр, чтобы услышать её';
+
+  @override
+  String get audioTestEchoEndedTimeout => 'остановлено через 60 с';
+
+  @override
+  String get audioTestEchoEndedCall => 'начался вызов';
+
+  @override
+  String get audioTestEchoEndedShutdown => 'движок перезапущен';
 }

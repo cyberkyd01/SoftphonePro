@@ -1,7 +1,8 @@
-/* spc_media.c: devices, sound modes, codecs, EC, levels, tones, ringer, loopback. */
+/* spc_media.c: devices, sound modes, codecs, EC, levels, tones, ringer, live metering (monitor), loopback, local play. */
 #include "spc_internal.h"
 #include "spc_player.h"
 #include "spc_rec.h"
+#include <pjsua-lib/pjsua_internal.h>
 #include <pjmedia/tonegen.h>
 #include <pjmedia/wav_port.h>
 #include <pjmedia/null_port.h>
@@ -15,9 +16,30 @@
 pj_pool_t* spc_media_pool;
 
 static char g_cur_cap[160] = "default", g_cur_play[160] = "default", g_cur_ring[160] = "default";
-static int g_null_attached;        /* null device currently attached by us */
 static int g_real_open_manual;     /* manual mode: Dart opened a real device */
 static int g_loopback;
+/* live metering (media.monitor): port 0 -> a null sink keeps the device open and makes the bridge measure the mic */
+static int g_monitor;              /* desired (the app owns the decision) */
+static pj_pool_t* g_mon_pool;
+static pjmedia_port* g_mon_port;
+static int g_mon_slot = -1;
+static int g_mon_conn;             /* port 0 -> sink connected */
+static int g_mon_last_active, g_mon_last_src;   /* last media.monitor event: active, source (0 device, 1 null, 2 none) */
+/* echo test: EC/NS would cancel the mic against itself, so the tail is zeroed while it runs */
+static int g_ec_bypass;
+static unsigned g_ec_tail_cfg, g_ec_opts_cfg;   /* the user's EC (core.start / media.setEc): what calls must get */
+static unsigned g_lb_gen;
+/* The echo-test state (g_loopback, g_lb_gen, g_ec_bypass, g_ec_*_cfg) is touched by the worker, pjsua's timer thread,
+ * the pjsua thread (call creation) and the IAX2 thread. g_lb_mtx is a leaf: held only around those variables, never
+ * across a pjsua call. */
+static spc_mutex_t g_lb_mtx;
+static volatile long g_lb_once;
+static void lb_init_once(void) { spc_mutex_init(&g_lb_mtx); }
+static void lb_lock(void) { spc_once(&g_lb_once, lb_init_once); spc_mutex_lock(&g_lb_mtx); }
+static void lb_unlock(void) { spc_mutex_unlock(&g_lb_mtx); }
+/* device-open errors: one media.error per failure episode; the last one is kept for media.audioState */
+static int g_err_latched;
+static struct { int set; char op[24]; pj_status_t status; char message[160]; } g_last_err;
 static int g_mic_rec;            /* spc_rec id of the microphone recorder, 0 = none */
 
 /* tone */
@@ -30,6 +52,9 @@ static pjmedia_port* g_ring_port;
 static pjmedia_snd_port* g_ring_snd;
 static pjmedia_master_port* g_ring_master;
 static pjmedia_port* g_ring_null;
+
+/* the null device is attached when pjsua holds a null master port (the auto-close timer drops it by itself) */
+static int null_attached(void) { return pjsua_var.null_snd != NULL; }
 
 int spc_media_bridge_rate(void)
 {
@@ -72,10 +97,7 @@ unsigned spc_ec_options(const char* algo, int ns, int agc, int* tail_zero)
 pj_status_t spc_media_set_null_snd(void)
 {
     pj_status_t st = PJ_SUCCESS;
-    if (!g_null_attached) {
-        st = pjsua_set_null_snd_dev();
-        if (st == PJ_SUCCESS) g_null_attached = 1;
-    }
+    if (!null_attached()) st = pjsua_set_null_snd_dev();
     return st;
 }
 
@@ -88,11 +110,20 @@ const char* spc_media_snd_current(char* cap, size_t n, char* play, size_t m)
     return cap;
 }
 
-static void emit_media_error(const char* op, pj_status_t st, const char* fallback)
+/* force=0: an "openDevice" failure is reported once until a real device is seen open again (every retry would repeat
+ * it); the latch is reset when a real device opens (ensure_clock, setDevices) and when emit_monitor_state sees one */
+static void emit_media_error(const char* op, pj_status_t st, const char* fallback, int force)
 {
-    cJSON* f = cJSON_CreateObject();
+    cJSON* f;
     char em[160];
     pj_strerror(st, em, sizeof(em));
+    g_last_err.set = 1;
+    g_last_err.status = st;
+    spc_strlcpy(g_last_err.op, op, sizeof(g_last_err.op));
+    spc_strlcpy(g_last_err.message, em, sizeof(g_last_err.message));
+    if (!force && spc_strieq(op, "openDevice") && g_err_latched) return;
+    if (spc_strieq(op, "openDevice")) g_err_latched = 1;
+    f = cJSON_CreateObject();
     cJSON_AddStringToObject(f, "op", op);
     cJSON_AddNumberToObject(f, "status", st);
     cJSON_AddStringToObject(f, "message", em);
@@ -103,22 +134,31 @@ static void emit_media_error(const char* op, pj_status_t st, const char* fallbac
 /* called when connecting to port 0 failed (device open failed). Returns 1 if a retry makes sense. */
 int spc_media_on_connect_error(pj_status_t st)
 {
-    if (g_null_attached) return 0;
+    if (null_attached()) return 0;
     if (spc_media_set_null_snd() == PJ_SUCCESS) {
-        emit_media_error("openDevice", st, "null");
+        emit_media_error("openDevice", st, "null", 0);
         return 1;
     }
     return 0;
+}
+
+static void ec_bypass(int on);
+static void loopback_stop(const char* reason);
+
+/* A call is starting to use the microphone: the echo test ends and the echo canceller is back before the mic reaches it */
+void spc_media_calls_begin(void)
+{
+    loopback_stop("call");
+    ec_bypass(0);
 }
 
 void spc_media_on_call_media(int slot, int active)
 {
     (void)slot;
     if (!active) return;
+    spc_media_calls_begin();
     if ((G.snd_manual && !g_real_open_manual) || G.no_audio_device) {
-        if (!pjsua_snd_is_active() || !g_null_attached) {
-            if (!G.no_audio_device || !g_null_attached) spc_media_set_null_snd();
-        }
+        if (!null_attached()) spc_media_set_null_snd();
     }
 }
 
@@ -127,27 +167,25 @@ static int resolve_dev(const char* id, int capture, int* idx, int* special);
 int spc_media_ensure_clock(void)
 {
     if (pjsua_snd_is_active()) return 0;
-    if (G.no_audio_device || (G.snd_manual && !g_real_open_manual)) {
-        g_null_attached = 0;
+    if (G.no_audio_device || (G.snd_manual && !g_real_open_manual))
         return spc_media_set_null_snd() == PJ_SUCCESS ? 0 : -1;
-    }
     {
         pjsua_snd_dev_param prm;
         pj_status_t st;
         int ci = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, pi = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV, cs = 1, ps = 1;
         pjsua_snd_dev_param_default(&prm);
         /* honour the user's selection (media.setDevices), falling back to the OS defaults */
-        if (resolve_dev(g_cur_cap, 1, &ci, &cs) != 0 || cs >= 2) ci = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV;
-        if (resolve_dev(g_cur_play, 0, &pi, &ps) != 0 || ps >= 2) pi = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV;
+        if (resolve_dev(g_cur_cap, 1, &ci, &cs) != 0) { ci = PJMEDIA_AUD_DEFAULT_CAPTURE_DEV; cs = 1; }
+        if (resolve_dev(g_cur_play, 0, &pi, &ps) != 0) { pi = PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV; ps = 1; }
+        if (cs >= 2 || ps >= 2) return spc_media_set_null_snd() == PJ_SUCCESS ? 0 : -1;   /* the user chose null/none: never a real device */
         prm.capture_dev = ci;
         prm.playback_dev = pi;
         st = pjsua_set_snd_dev2(&prm);
         if (st != PJ_SUCCESS) {
-            g_null_attached = 0;
-            emit_media_error("openDevice", st, "null");
+            emit_media_error("openDevice", st, "null", 0);
             return spc_media_set_null_snd() == PJ_SUCCESS ? 0 : -1;
         }
-        g_null_attached = 0;
+        g_err_latched = 0;
     }
     return 0;
 }
@@ -155,10 +193,15 @@ int spc_media_ensure_clock(void)
 int spc_media_init(void)
 {
     pj_status_t st = PJ_SUCCESS;
-    g_null_attached = 0;
     g_real_open_manual = 0;
     g_loopback = 0;
     g_mic_rec = 0;
+    g_monitor = 0; g_mon_conn = 0; g_mon_last_active = 0; g_mon_last_src = 2;
+    g_ec_bypass = 0;
+    g_ec_tail_cfg = pjsua_var.media_cfg.ec_tail_len;     /* pjsua_init has applied core.start's ec config */
+    g_ec_opts_cfg = pjsua_var.media_cfg.ec_options;
+    g_err_latched = 0;
+    memset(&g_last_err, 0, sizeof(g_last_err));
     spc_strlcpy(g_cur_cap, "default", sizeof(g_cur_cap));
     spc_strlcpy(g_cur_play, "default", sizeof(g_cur_play));
     spc_strlcpy(g_cur_ring, "default", sizeof(g_cur_ring));
@@ -236,11 +279,132 @@ static void ring_stop(void)
     if (g_ring_pool) { pj_pool_release(g_ring_pool); g_ring_pool = NULL; }
 }
 
+/* ---- live metering (media.monitor) ---- */
+static void mon_destroy(void)
+{
+    pjmedia_port* port = g_mon_port;
+    pj_pool_t* pool = g_mon_pool;
+    if (g_mon_slot >= 0) { pjsua_conf_disconnect(0, g_mon_slot); pjsua_conf_remove_port(g_mon_slot); g_mon_slot = -1; }
+    g_mon_conn = 0;
+    g_mon_port = NULL; g_mon_pool = NULL;
+    spc_port_destroy_release(port, pool);
+}
+
+static void mon_create(void)
+{
+    pjsua_conf_port_info pi;
+    pj_status_t st;
+    unsigned rate = (unsigned)spc_media_bridge_rate();
+    g_mon_pool = pjsua_pool_create("spcmon", 1024, 1024);
+    if (!g_mon_pool) return;
+    if (pjsua_conf_get_port_info(0, &pi) == PJ_SUCCESS)      /* mirrors port 0 */
+        st = pjmedia_null_port_create(g_mon_pool, pi.clock_rate, pi.channel_count, pi.samples_per_frame, pi.bits_per_sample, &g_mon_port);
+    else
+        st = pjmedia_null_port_create(g_mon_pool, rate, 1, rate / 50, 16, &g_mon_port);
+    if (st == PJ_SUCCESS) st = pjsua_conf_add_port(g_mon_pool, g_mon_port, &g_mon_slot);
+    if (st != PJ_SUCCESS) { g_mon_slot = -1; mon_destroy(); }
+}
+
+int spc_media_monitor_slot(void) { return g_mon_slot; }
+int spc_media_monitor_on(void) { return g_mon_slot >= 0 && g_mon_conn; }
+
+/* source of the microphone signal: 0 real device, 1 null device, 2 none (closed) */
+static int snd_source(void) { return pjsua_snd_is_active() ? 0 : (null_attached() ? 1 : 2); }
+static const char* const g_src_name[3] = { "device", "null", "none" };
+
+static int mon_active(void) { return pjsua_snd_is_active() && g_mon_slot >= 0 && g_mon_conn && g_monitor; }
+
+static cJSON* monitor_json(void)
+{
+    cJSON* o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "active", mon_active());
+    cJSON_AddStringToObject(o, "source", g_src_name[snd_source()]);
+    cJSON_AddStringToObject(o, "capture", g_cur_cap);
+    cJSON_AddStringToObject(o, "playback", g_cur_play);
+    return o;
+}
+
+/* media.monitor event, only when (active, source) changed since the last one */
+static void emit_monitor_state(void)
+{
+    int act = mon_active() ? 1 : 0, src = snd_source();
+    if (src == 0) g_err_latched = 0;      /* a real device is open again: the next open failure is news */
+    if (act == g_mon_last_active && src == g_mon_last_src) return;
+    g_mon_last_active = act; g_mon_last_src = src;
+    spc_emit("media.monitor", monitor_json());
+}
+
+/* Reconciles the desired monitor state with the bridge; safe to call from any handler. */
+static void monitor_apply(void)
+{
+    int want = g_monitor && !G.no_audio_device && !(G.snd_manual && !g_real_open_manual);
+    if (want) {
+        spc_media_ensure_clock();                  /* also retries the real device when the null one is attached */
+        if (g_mon_slot < 0) mon_create();
+        if (g_mon_slot >= 0) {
+            pj_status_t st = pjsua_conf_connect(0, g_mon_slot);
+            if (st != PJ_SUCCESS && spc_media_on_connect_error(st)) st = pjsua_conf_connect(0, g_mon_slot);
+            g_mon_conn = st == PJ_SUCCESS;
+        }
+    } else if (g_mon_slot >= 0) {
+        pjsua_conf_disconnect(0, g_mon_slot);      /* the auto-close timer takes the device down 1 s later */
+        g_mon_conn = 0;
+    }
+    spc_call_apply_topology();                     /* the musicbed feeds (or leaves) the sink */
+    emit_monitor_state();
+}
+
+/* ---- echo test: EC bypass ---- */
+static void ec_bypass(int on)
+{
+    unsigned tail = 0, opts = 0;
+    int act = 0, again;
+    lb_lock();
+    if (on && !g_ec_bypass) { g_ec_bypass = 1; act = 1; tail = 0; opts = g_ec_opts_cfg; }
+    else if (!on && g_ec_bypass) { g_ec_bypass = 0; act = 1; tail = g_ec_tail_cfg; opts = g_ec_opts_cfg; }
+    lb_unlock();
+    if (!act) return;
+    pjsua_set_ec(tail, opts);                      /* applies to the open port and to every later open */
+    /* a concurrent restore (call start / timeout) may have landed before our bypass: re-apply the config */
+    lb_lock();
+    again = on && !g_ec_bypass; tail = g_ec_tail_cfg; opts = g_ec_opts_cfg;
+    lb_unlock();
+    if (again) pjsua_set_ec(tail, opts);
+}
+
+static void loopback_stop(const char* reason)
+{
+    cJSON* f;
+    lb_lock();
+    if (!g_loopback) { lb_unlock(); return; }
+    g_loopback = 0;
+    g_lb_gen++;
+    lb_unlock();
+    pjsua_conf_disconnect(0, 0);
+    ec_bypass(0);
+    f = cJSON_CreateObject();
+    cJSON_AddBoolToObject(f, "enabled", 0);
+    cJSON_AddStringToObject(f, "reason", reason);
+    spc_emit("media.loopback", f);
+}
+
+static void loopback_timer_cb(void* ud)
+{
+    int stale;
+    lb_lock();
+    stale = (unsigned)(uintptr_t)ud != g_lb_gen || !g_loopback;
+    lb_unlock();
+    if (!stale) loopback_stop("timeout");
+}
+
 void spc_media_shutdown(void)
 {
     spc_player_shutdown();
     spc_rec_shutdown();
-    if (g_loopback) { pjsua_conf_disconnect(0, 0); g_loopback = 0; }
+    loopback_stop("shutdown");
+    ec_bypass(0);
+    g_monitor = 0;
+    mon_destroy();
     tone_stop();
     ring_stop();
     if (spc_media_pool) { pj_pool_release(spc_media_pool); spc_media_pool = NULL; }
@@ -366,15 +530,18 @@ static int h_set_devices(cJSON* p, cJSON** res)
     if (G.no_audio_device) return SPC_OK;    /* null device always */
     if (cs == 3 && ps == 3) {
         g_real_open_manual = 0;
-        if (spc_calls_active() > 0) { g_null_attached = 0; st = spc_media_set_null_snd(); }
-        else { pjsua_set_no_snd_dev(); g_null_attached = 0; }
+        loopback_stop("stopped");
+        if (spc_calls_active() > 0) st = spc_media_set_null_snd();
+        else pjsua_set_no_snd_dev();
+        monitor_apply();
         return SPC_OK;
     }
     if (cs == 2 || ps == 2) {
-        g_null_attached = 0;
         g_real_open_manual = 0;
+        loopback_stop("stopped");
         st = spc_media_set_null_snd();
         if (st != PJ_SUCCESS) return spc_pjerr(st, "null device");
+        monitor_apply();
         return SPC_OK;
     }
     {
@@ -385,15 +552,18 @@ static int h_set_devices(cJSON* p, cJSON** res)
         if (!G.snd_manual && spc_calls_active() == 0) prm.mode |= PJSUA_SND_DEV_NO_IMMEDIATE_OPEN;
         st = pjsua_set_snd_dev2(&prm);
         if (st != PJ_SUCCESS) {
-            emit_media_error("setDevices", st, "null");
-            g_null_attached = 0;
+            emit_media_error("setDevices", st, "null", 1);
             g_real_open_manual = 0;
             spc_media_set_null_snd();
+            monitor_apply();
             return SPC_OK;
         }
-        g_null_attached = 0;
+        g_err_latched = 0;
         g_real_open_manual = 1;
     }
+    /* NO_IMMEDIATE_OPEN closes the old device without opening the new one: re-wire the monitor / echo test onto it */
+    if (g_loopback) spc_media_ensure_clock();
+    monitor_apply();
     return SPC_OK;
 }
 
@@ -402,6 +572,11 @@ static int h_refresh_devices(cJSON* p, cJSON** res)
     (void)p; (void)res;
     pjmedia_aud_dev_refresh();
     spc_emit("media.devicesChanged", NULL);
+    /* a monitor / echo test that fell back to the null device retries the real one */
+    if ((g_monitor || g_loopback) && null_attached() && !G.no_audio_device) {
+        if (g_loopback) spc_media_ensure_clock();
+        monitor_apply();
+    }
     return SPC_OK;
 }
 
@@ -553,22 +728,30 @@ static int h_set_codec_param(cJSON* p, cJSON** res)
 static int h_set_ec(cJSON* p, cJSON** res)
 {
     const char* algo = spc_jstr(p, "algo");
-    int tail = spc_jint(p, "tailMs", 200), tz;
-    unsigned opts;
+    int tail = spc_jint(p, "tailMs", 200), tz, byp;
+    unsigned opts, tail_now;
     pj_status_t st;
     (void)res;
     if (!algo) return spc_err(SPC_E_INVALID_PARAM, 0, "'algo' required");
     if (tail < 0 || tail > 1000) return spc_err(SPC_E_INVALID_PARAM, 0, "tailMs must be 0..1000");
     opts = spc_ec_options(algo, spc_jbool(p, "ns", 1), spc_jbool(p, "agc", 0), &tz);
     if (opts == 0xFFFFFFFFu) return spc_err(SPC_E_INVALID_PARAM, 0, "unknown algo '%s'", algo);
-    st = pjsua_set_ec(tz ? 0 : (unsigned)tail, opts);
-    if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_set_ec");
+    lb_lock();
+    g_ec_tail_cfg = tz ? 0 : (unsigned)tail;
+    g_ec_opts_cfg = opts;
+    byp = g_ec_bypass;                    /* echo test running: applied when it ends */
+    tail_now = g_ec_tail_cfg;
+    lb_unlock();
+    if (!byp) {
+        st = pjsua_set_ec(tail_now, opts);
+        if (st != PJ_SUCCESS) return spc_pjerr(st, "pjsua_set_ec");
+    }
     return SPC_OK;
 }
 
 static int h_levels(cJSON* p, cJSON** res)
 {
-    unsigned tx = 0, rx = 0, dtx = 0, drx = 0;
+    unsigned tx = 0, rx = 0, dtx = 0, drx = 0, stx = 0, srx = 0;
     int dn = spc_call_mic_source();
     (void)p;
     pjsua_conf_get_signal_level(0, &tx, &rx);
@@ -578,6 +761,9 @@ static int h_levels(cJSON* p, cJSON** res)
     cJSON_AddNumberToObject(*res, "mic", rx);
     cJSON_AddNumberToObject(*res, "speaker", tx);
     cJSON_AddNumberToObject(*res, "musicbed", spc_musicbed_level());
+    /* what callers would get: the mic and the musicbed as mixed into the monitor sink (0 without monitor) */
+    if (g_monitor && spc_media_monitor_on()) pjsua_conf_get_signal_level(g_mon_slot, &stx, &srx);
+    cJSON_AddNumberToObject(*res, "send", stx);
     cJSON_AddItemToObject(*res, "calls", spc_call_levels_json());
     return SPC_OK;
 }
@@ -605,7 +791,7 @@ static int h_tone(cJSON* p, cJSON** res)
     const char* kind = spc_jstr(p, "kind");
     const char* digits = spc_jstr(p, "digits");
     int loop;
-    pjmedia_tone_desc td[2];
+    pjmedia_tone_desc td[3];
     pjmedia_tone_digit dg[32];
     int nt = 0, nd = 0, rate, i;
     pj_status_t st;
@@ -618,6 +804,12 @@ static int h_tone(cJSON* p, cJSON** res)
     else if (spc_strieq(kind, "congestion")) { td[0].freq1 = 480; td[0].freq2 = 620; td[0].on_msec = 250; td[0].off_msec = 250; nt = 1; loop = 1; }
     else if (spc_strieq(kind, "dial")) { td[0].freq1 = 350; td[0].freq2 = 440; td[0].on_msec = 1000; td[0].off_msec = 0; nt = 1; loop = 1; }
     else if (spc_strieq(kind, "waiting")) { td[0].freq1 = 440; td[0].freq2 = 0; td[0].on_msec = 300; td[0].off_msec = 9700; nt = 1; loop = 0; }
+    else if (spc_strieq(kind, "chime")) {
+        td[0].freq1 = 523; td[0].on_msec = 180; td[0].off_msec = 40;
+        td[1].freq1 = 659; td[1].on_msec = 180; td[1].off_msec = 40;
+        td[2].freq1 = 784; td[2].on_msec = 260; td[2].off_msec = 0;
+        nt = 3; loop = 0;
+    }
     else if (spc_strieq(kind, "dtmf")) {
         if (!digits || !digits[0] || strlen(digits) > 32) return spc_err(SPC_E_INVALID_PARAM, 0, "'digits' required for dtmf");
         for (i = 0; digits[i]; i++) {
@@ -625,7 +817,7 @@ static int h_tone(cJSON* p, cJSON** res)
             dg[nd].digit = digits[i]; dg[nd].on_msec = 120; dg[nd].off_msec = 60; dg[nd].volume = 0; nd++;
         }
     } else return spc_err(SPC_E_INVALID_PARAM, 0, "unknown tone kind '%s'", kind);
-    if (spc_jhas(p, "loop")) loop = spc_jbool(p, "loop", loop);
+    if (spc_jhas(p, "loop") && !spc_strieq(kind, "chime")) loop = spc_jbool(p, "loop", loop);
     spc_media_ensure_clock();
     tone_stop();
     rate = spc_media_bridge_rate();
@@ -698,7 +890,7 @@ static int h_ring_start(cJSON* p, cJSON** res)
         st = pjmedia_snd_port_create_player(g_ring_pool, di, clock, ch, spf, bits, 0, &g_ring_snd);
         if (st == PJ_SUCCESS) st = pjmedia_snd_port_connect(g_ring_snd, g_ring_port);
     }
-    if (st != PJ_SUCCESS) { ring_stop(); emit_media_error("ringStart", st, NULL); return spc_pjerr(st, "ringer"); }
+    if (st != PJ_SUCCESS) { ring_stop(); emit_media_error("ringStart", st, NULL, 1); return spc_pjerr(st, "ringer"); }
     spc_strlcpy(g_cur_ring, dev, sizeof(g_cur_ring));
     return SPC_OK;
 }
@@ -707,19 +899,135 @@ static int h_ring_stop(cJSON* p, cJSON** res) { (void)p; (void)res; ring_stop();
 
 static int h_loopback(cJSON* p, cJSON** res)
 {
-    int en = 0;
+    int en = 0, tmo = 0, was;
+    unsigned gen;
     pj_status_t st;
     (void)res;
     if (!spc_jbool_strict(p, "enabled", &en)) return spc_err(SPC_E_INVALID_PARAM, 0, "'enabled' (bool) required");
-    if (en && !g_loopback) {
-        spc_media_ensure_clock();
-        st = pjsua_conf_connect(0, 0);
-        if (st != PJ_SUCCESS) return spc_pjerr(st, "loopback");
-        g_loopback = 1;
-    } else if (!en && g_loopback) {
-        pjsua_conf_disconnect(0, 0);
-        g_loopback = 0;
+    if (!spc_jint_range(p, "timeoutMs", 0, 0, 600000, &tmo)) return spc_err(SPC_E_INVALID_PARAM, 0, "'timeoutMs' must be 0..600000");
+    if (en) {
+        if (spc_calls_active() > 0) return spc_err(SPC_E_BUSY, 0, "echo test is not available during a call");
+        lb_lock();
+        was = g_loopback;
+        if (!was) g_loopback = 1;
+        gen = ++g_lb_gen;                               /* a new timeout replaces the previous one */
+        lb_unlock();
+        if (!was) {
+            spc_media_ensure_clock();
+            ec_bypass(1);
+            st = pjsua_conf_connect(0, 0);
+            if (st != PJ_SUCCESS && spc_media_on_connect_error(st)) st = pjsua_conf_connect(0, 0);
+            if (st != PJ_SUCCESS) {
+                lb_lock(); g_loopback = 0; lb_unlock();
+                ec_bypass(0);
+                return spc_pjerr(st, "loopback");
+            }
+        }
+        if (tmo > 0) pjsua_schedule_timer2(&loopback_timer_cb, (void*)(uintptr_t)gen, (unsigned)tmo);
+    } else loopback_stop("stopped");
+    return SPC_OK;
+}
+
+/* ---- media.monitor / media.audioState ---- */
+static int h_monitor(cJSON* p, cJSON** res)
+{
+    int en = 0;
+    if (!spc_jbool_strict(p, "enabled", &en)) return spc_err(SPC_E_INVALID_PARAM, 0, "'enabled' (bool) required");
+    g_monitor = en;
+    monitor_apply();
+    *res = monitor_json();
+    return SPC_OK;
+}
+
+/* {devId,name,driver} of an audio device index (default ids resolved), NULL when it is none */
+static cJSON* dev_obj(int idx, int capture)
+{
+    pjmedia_aud_dev_info info;
+    pjmedia_aud_param dp;
+    char id[300], name[200], drv[96];
+    cJSON* o;
+    if (idx == PJMEDIA_AUD_DEFAULT_CAPTURE_DEV || idx == PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV) {
+        if (pjmedia_aud_dev_default_param(idx, &dp) != PJ_SUCCESS) return NULL;
+        idx = capture ? dp.rec_id : dp.play_id;
     }
+    if (idx < 0 || pjmedia_aud_dev_get_info(idx, &info) != PJ_SUCCESS) return NULL;
+    dev_id(&info, id, sizeof(id));
+    dev_str(info.name, name, sizeof(name));
+    dev_str(info.driver, drv, sizeof(drv));
+    o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "devId", id);
+    cJSON_AddStringToObject(o, "name", name);
+    cJSON_AddStringToObject(o, "driver", drv);
+    return o;
+}
+
+static int h_audio_state(cJSON* p, cJSON** res)
+{
+    int src, ci = -3, pi = -3, cs = 0, ps = 0, have = 0, byp;
+    unsigned snd_rate = 0, tail, opts;
+    cJSON *cap = NULL, *play = NULL, *ec, *le;
+    (void)p;
+    PJSUA_LOCK();
+    src = snd_source();
+    if (pjsua_var.snd_port) {       /* the open stream: what is really in use */
+        pjmedia_aud_stream* strm = pjmedia_snd_port_get_snd_stream(pjsua_var.snd_port);
+        pjmedia_aud_param ap;
+        if (strm && pjmedia_aud_stream_get_param(strm, &ap) == PJ_SUCCESS) {
+            ci = ap.rec_id; pi = ap.play_id; snd_rate = ap.clock_rate; have = 1;
+        }
+    }
+    PJSUA_UNLOCK();
+    if (!have && src != 1) {        /* closed: the configured devices */
+        if (resolve_dev(g_cur_cap, 1, &ci, &cs) != 0 || cs >= 2) ci = cs >= 2 ? -3 : PJMEDIA_AUD_DEFAULT_CAPTURE_DEV;
+        if (resolve_dev(g_cur_play, 0, &pi, &ps) != 0 || ps >= 2) pi = ps >= 2 ? -3 : PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV;
+    }
+    if (src != 1) { cap = dev_obj(ci, 1); play = dev_obj(pi, 0); }
+    lb_lock();
+    tail = g_ec_tail_cfg; opts = g_ec_opts_cfg; byp = g_ec_bypass;
+    lb_unlock();
+    *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(*res, "source", g_src_name[src]);
+    if (cap) cJSON_AddItemToObject(*res, "capture", cap); else cJSON_AddNullToObject(*res, "capture");
+    if (play) cJSON_AddItemToObject(*res, "playback", play); else cJSON_AddNullToObject(*res, "playback");
+    cJSON_AddNumberToObject(*res, "clockRate", spc_media_bridge_rate());
+    cJSON_AddNumberToObject(*res, "sndClockRate", snd_rate);
+    ec = cJSON_AddObjectToObject(*res, "ec");
+    cJSON_AddNumberToObject(ec, "tailMs", tail);
+    cJSON_AddNumberToObject(ec, "options", opts);
+    cJSON_AddBoolToObject(ec, "bypassed", byp);
+    cJSON_AddBoolToObject(*res, "loopback", g_loopback);
+    cJSON_AddBoolToObject(*res, "monitor", g_monitor);
+    if (g_last_err.set) {
+        le = cJSON_AddObjectToObject(*res, "lastError");
+        cJSON_AddStringToObject(le, "op", g_last_err.op);
+        cJSON_AddNumberToObject(le, "status", g_last_err.status);
+        cJSON_AddStringToObject(le, "message", g_last_err.message);
+    } else cJSON_AddNullToObject(*res, "lastError");
+    return SPC_OK;
+}
+
+/* ---- local playback (media.playLocal / media.playStop): a file to the speaker, no call ---- */
+static int h_play_local(cJSON* p, cJSON** res)
+{
+    const char* file = spc_jstr(p, "file");
+    double vol = spc_jnum(p, "volume", 1.0);
+    char err[200];
+    int id = 0;
+    if (!file || !file[0]) return spc_err(SPC_E_INVALID_PARAM, 0, "'file' required");
+    if (!(vol >= 0.0 && vol <= 4.0)) return spc_err(SPC_E_INVALID_PARAM, 0, "volume must be 0.0..4.0");
+    if (spc_player_start(SPC_LOCAL_CID, file, 0, (float)vol, 1, 0, 0, &id, err, sizeof(err)) != 0)
+        return spc_err(SPC_E_INVALID_PARAM, 0, "%s", err);
+    *res = cJSON_CreateObject();
+    cJSON_AddNumberToObject(*res, "playId", id);
+    return SPC_OK;
+}
+
+static int h_play_stop(cJSON* p, cJSON** res)
+{
+    int id = 0;
+    if (!spc_jint_range(p, "playId", 0, 0, 0x7FFFFFFF, &id)) return spc_err(SPC_E_INVALID_PARAM, 0, "'playId' must be an integer >= 0");
+    *res = cJSON_CreateObject();
+    cJSON_AddNumberToObject(*res, "stopped", spc_player_stop(SPC_LOCAL_CID, id, "stopped"));
     return SPC_OK;
 }
 
@@ -872,7 +1180,8 @@ const spc_method spc_methods_media[] = {
     { "media.levels", h_levels, 0 }, { "media.setMicLevel", h_set_mic, 0 }, { "media.setSpeakerLevel", h_set_speaker, 0 },
     { "media.tone", h_tone, 0 }, { "media.toneStop", h_tone_stop, 0 },
     { "media.ringStart", h_ring_start, 0 }, { "media.ringStop", h_ring_stop, 0 },
-    { "media.loopback", h_loopback, 0 },
+    { "media.loopback", h_loopback, 0 }, { "media.monitor", h_monitor, 0 }, { "media.audioState", h_audio_state, 0 },
+    { "media.playLocal", h_play_local, 0 }, { "media.playStop", h_play_stop, 0 },
     { "media.fileInfo", h_file_info, SPC_M_PRESTART },
     { "media.recordMicStart", h_record_mic_start, 0 }, { "media.recordMicStop", h_record_mic_stop, 0 },
     { "media.musicbedStart", h_musicbed_start, 0 }, { "media.musicbedStop", h_musicbed_stop, 0 },
