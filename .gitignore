@@ -48,3 +48,6 @@ tests/linux_e2e/audio/out/*.log
 tests/linux_e2e/audio/out/*.out
 tests/linux_e2e/audio/out/*.err
 tests/linux_e2e/audio/out/*/
+
+# Gradle state (IDE imports, local builds)
+.gradle/

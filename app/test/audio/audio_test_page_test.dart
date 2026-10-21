@@ -224,7 +224,7 @@ void main() {
     await tap(tester, 'copy-diagnostics');
     await settle(tester, env.engine);
     expect(copied, isNotNull);
-    expect(copied, contains('SoftphonePro 1.1.2'));
+    expect(copied, contains('SoftphonePro $kAppVersion'));
     expect(copied, contains('Audio state:'));
     expect(copied, contains('EC settings:'));
     await tester.pumpWidget(const SizedBox());
