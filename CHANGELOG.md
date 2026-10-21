@@ -6,77 +6,9 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [1.1.2] - 2026-10-21
 
-Fixes the audio meters, the echo test and silent audio-device errors, and adds an Audio test page. See [docs/RELEASE_NOTES_v1.1.2.md](docs/RELEASE_NOTES_v1.1.2.md). Installs over 1.1.1 and keeps your accounts and settings.
-
-### Fixed
-* The microphone meter stayed flat outside calls. The engine closed the sound device a second after the last call, and measured the microphone only while something was listening to it. The app now asks the engine to keep the device open and metered while a meter is on screen (always on desktop; on phones only on the Audio test and Settings > Audio pages; never on iOS).
-* The echo test was inaudible with echo cancellation on, because the canceller removed your own voice from the loopback. The engine now bypasses echo cancellation and noise suppression for the test and restores them when it ends or a call starts.
-* Audio-device errors were silent. A failed device open now shows a notice, the mixer says when it is using a silent device, and the engine retries the real device when you refresh devices, change devices or start a test.
-
-### Changed
-* In auto mode an explicit `null` capture or playback device is now honoured by the live meter, echo test, tones, local playback, the musicbed monitor and calls (it used to fall back to the system default device). Choosing `null` or `none` also ends a running echo test.
+First public release. Windows, macOS, Linux, Android and iOS builds, plus a browser extension. See [docs/RELEASE_NOTES_v1.1.2.md](docs/RELEASE_NOTES_v1.1.2.md) for downloads, install notes and known limitations, and [docs/FEATURES.md](docs/FEATURES.md) for the status of every feature and the test behind it.
 
 ### Added
-* Audio test page (Settings > Audio, Diagnostics > Audio, and the mixer): checks the devices in use, the microphone level (with hints for a silent, quiet or clipping microphone and links to the system sound and privacy settings), the speaker with a test chime, a 5 second record and play back, "hear yourself", and the background music, including a preview of what callers hear. A summary can be copied for support.
-* Live meters: the mixer, Settings > Audio and the Audio test show the microphone level without a call, plus a "sent to callers" level.
-* Echo test stops by itself after 60 seconds, and when a call starts.
-* Engine contract v1.3: `media.monitor`, `media.audioState`, `media.playLocal`, `media.playStop`, `media.loopback` with `timeoutMs`, the `chime` tone, `send` in `media.levels`, and the events `media.monitor`, `media.loopback` and `media.playDone` ([docs/ENGINE_API.md](docs/ENGINE_API.md) section 11).
-
-## [1.1.1] - 2026-10-20
-
-A bug-fix release for Windows. See [docs/RELEASE_NOTES_v1.1.1.md](docs/RELEASE_NOTES_v1.1.1.md). Installs over 1.1.0 and keeps your accounts and settings.
-
-### Fixed
-* Windows: the microphone and speaker pickers offered only "System default", and a device could not be chosen. Windows reports audio device names in the ANSI code page (for example the `®` in "Intel® Smart Sound"); the engine passed them on as they were, and the app discarded the device list because it was not valid UTF-8. The engine now converts device names to UTF-8, and it replaces any invalid UTF-8 in a reply or event so that a message from the engine is never lost.
-
-## [1.1.0] - 2026-10-20
-
-Adds a Linux app, a musicbed and a live audio mixer. See [docs/RELEASE_NOTES_v1.1.0.md](docs/RELEASE_NOTES_v1.1.0.md) for downloads, install notes and known limitations. Installs over 1.0.0 and keeps your accounts and settings.
-
-### Added
-
-**Linux**
-* Linux desktop app (GTK runner and engine plugin) for 64-bit systems: Ubuntu 22.04+, Debian 12+ and Raspberry Pi OS (64-bit) Bookworm. Built on Ubuntu 22.04 (glibc 2.35). 32-bit Raspberry Pi OS is not supported, because Flutter has no 32-bit ARM Linux build.
-* Packages: `.deb` and portable `.tar.gz` for amd64 and arm64 (`SoftphonePro-<ver>-linux-<arch>.deb` / `.tar.gz`). The tarball includes `install-desktop-entry.sh` and `uninstall-desktop-entry.sh` for the menu entry and link handling.
-* Desktop integration: tray icon where the desktop has a StatusNotifierItem host (without one, closing the window quits), notifications with Answer/Decline, `sip:`/`sips:`/`tel:`/`callto:`/`softphonepro:` links with a default-handler setting (`xdg-mime`), single instance, start at login, headset and media play-pause through MPRIS, and global shortcuts on X11 sessions (not Wayland).
-* Passwords in the Secret Service keyring (GNOME Keyring or KWallet), with an encrypted-file fallback when there is none. Audio through ALSA, which reaches PulseAudio and PipeWire through the `default` device.
-* Not on Linux: QR camera scanning, biometric app unlock (PIN only), mDNS discovery (LAN Link uses its multicast discovery, which works with the other platforms) and system contacts.
-* Linux builds in CI for amd64 and arm64.
-
-**Musicbed and audio mixer**
-* Musicbed: pick an MP3 or WAV file from the audio library and it loops under your voice to the people on your calls. Own volume from 0 to 200%, adjustable live; optional "Hear it myself" monitor with its own volume. It keeps playing while you mute your microphone, is not sent to held calls (they get hold music), reaches every member of a local conference, is included in your side of call recordings, and pauses between calls. Settings > Audio > Musicbed, or from the mixer.
-* Engine: `media.musicbedStart`, `media.musicbedStop`, `media.musicbedSet`, `media.musicbedState` and the `media.musicbed` event, and `media.levels` for per-channel levels (contract v1.2, [docs/ENGINE_API.md](docs/ENGINE_API.md) section 10).
-* Live audio mixer: level bars and sliders for the microphone (input gain), speaker or headphones (output volume) and the musicbed, with input and output device pickers (the audio route on phones). It is on the keypad screen (a card on desktop and tablets, a collapsible strip on phones), in calls (calls panel on desktop, meters right under the call timer on phones) and in Settings > Audio. The meters update about 15 times a second while audio flows, once a second at idle, and drop to about 5 a second when the screen is drawn without a GPU.
-* Automation API: `GET /v1/audio` and `POST /v1/audio` read and set the microphone and speaker levels and the musicbed (on/off, volume, monitor, pause; the file is chosen in the app only), and the SSE stream has an `audio` event.
-
-### Changed
-* [docs/FEATURES.md](docs/FEATURES.md): rows added for the musicbed, the mixer and Linux, and the "Linux desktop app" entry (Z7) removed from the not-implemented list. It now has 114 rows.
-* The app version is 1.1.0 (build 2), so Android installs it over 1.0.0.
-
-### Fixed
-* The app chose Arabic when the system language was not one of the 13 supported ones (for example Swedish). It now falls back to English.
-* Text overflows at large text sizes, and in Arabic, on the keypad and in-call screens.
-* A flaky FFI plumbing test in `spcore_dart` and a flaky WebSocket close-frame test were made deterministic.
-* Calls failed to start on computers with no sound card (servers, VMs); the engine now falls back to its null audio device.
-* The status dot of an account that is still registering animated at 60 frames a second; it now steps at 4.
-* Found by the 1.1.0 test passes on Linux and Android before release:
-  * on Linux without `xdg-user-dirs`, recording did nothing and LAN Link failed to start; Retry after a LAN start failure did not bring back LAN calling;
-  * on Linux, Arabic navigation labels and Hindi, Chinese and Japanese text could show empty boxes (no font fallback);
-  * a keyring that was locked or not answering froze the Linux app for 25 seconds per request; the app now asks the desktop to unlock it, and keeps passwords in its encrypted file for that session if it stays locked;
-  * the missed-call notification's Show action did not open Recents; the tray tooltip raised errors on Linux;
-  * on desktop, a call card with a banner could be hidden behind the mixer; on phones the expanded mixer could be cut off; Settings > Audio broke words while a call was active; the musicbed chip claimed the bed was playing to a held call.
-
-## [1.0.0] - 2026-10-19
-
-First public release. Windows, macOS, Android and iOS builds, plus a browser extension. See [docs/RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md) for downloads, install notes and known limitations, and [docs/FEATURES.md](docs/FEATURES.md) for the status of every feature and the test behind it.
-
-### Added
-
-**Languages, privacy and desktop**
-* Localisation: the whole interface (screens, dialogs, notices, notifications, SIP error explanations) in 13 languages - English, Spanish, French, German, Brazilian Portuguese, Italian, Dutch, Russian, Turkish, Hindi, Arabic, Simplified Chinese and Japanese - with full right-to-left layout for Arabic. New Settings > Appearance > Language picker (default: follow the system). Android declares RTL support; iOS and macOS declare their languages and localise the permission prompts.
-* Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore. Safe migration both ways with a verified copy, a backup until the next start, and a recovery screen if the key is missing.
-* Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
-* Desktop headset / media play-pause button answers and hangs up (or mutes), claimed only while a call rings or is active (macOS and Windows).
 
 **Call engine (`spcore`, built on PJSIP 2.17)**
 * SIP over UDP, TCP, TLS 1.2/1.3 and WebSocket (WS/WSS, RFC 7118), IAX2 (RFC 5456), IPv4 and IPv6 settings, SRTP (SDES) and DTLS-SRTP, ICE, STUN and TURN settings.
@@ -92,10 +24,19 @@ First public release. Windows, macOS, Android and iOS builds, plus a browser ext
 * Media files: play WAV and MP3 into a call, hold music, announcements, and a microphone recorder.
 * Recording as WAV, stereo WAV (you left, caller right) and Ogg Opus.
 * Caller identity from `P-Asserted-Identity`, `Remote-Party-ID`, `Diversion`, `History-Info` and `Referred-By`.
-* A JSON engine API with a versioned contract: [docs/ENGINE_API.md](docs/ENGINE_API.md).
+* Falls back to a null audio device on computers with no sound card (servers, VMs), and retries the real device when one becomes available; device errors are reported, not silent.
+* Windows: audio device names are converted from the ANSI code page to UTF-8, so devices with names such as "Intel® Smart Sound" are listed and can be selected.
+* A JSON engine API with a versioned contract (v1.3): [docs/ENGINE_API.md](docs/ENGINE_API.md).
+
+**Audio test, live mixer and musicbed**
+* Audio test page (Settings > Audio, Diagnostics > Audio, and the mixer): checks the devices in use, the microphone level (with hints for a silent, quiet or clipping microphone and links to the system sound and privacy settings), the speaker with a test chime, a 5 second record and play back, "hear yourself", and the background music, including a preview of what callers hear. A summary can be copied for support.
+* Live audio mixer: level bars and sliders for the microphone (input gain), speaker or headphones (output volume) and the musicbed, with input and output device pickers (the audio route on phones), plus a "sent to callers" level. It is on the keypad screen (a card on desktop and tablets, a collapsible strip on phones), in calls and in Settings > Audio. The meters are live whenever they are on screen on desktop; on phones only on the Audio test and Settings > Audio pages; on iOS only during a call.
+* Echo test ("hear yourself") with echo cancellation and noise suppression bypassed while it runs, restored when it ends or a call starts. It stops by itself after 60 seconds.
+* Musicbed: pick an MP3 or WAV file from the audio library and it loops under your voice to the people on your calls. Own volume from 0 to 200%, adjustable live; optional "Hear it myself" monitor with its own volume. It keeps playing while you mute your microphone, is not sent to held calls (they get hold music), reaches every member of a local conference, is included in your side of call recordings, and pauses between calls. Settings > Audio > Musicbed, or from the mixer.
+* Automation API: `GET /v1/audio` and `POST /v1/audio` read and set the microphone and speaker levels and the musicbed (on/off, volume, monitor, pause; the file is chosen in the app only), and the SSE stream has an `audio` event.
 
 **App (Flutter, one UI for all platforms)**
-* Account setup: provider templates (Asterisk/FreePBX, 3CX, FreeSWITCH, Kamailio, Twilio, Telnyx, VoIP.ms, Vonage, WebRTC gateway, IAX2), onboarding, provisioning from a link, QR code, file or URL with variables, and export.
+* Account setup: provider templates (Asterisk/FreePBX, 3CX, FreeSWITCH, Kamailio, Twilio, Telnyx, VoIP.ms, Vonage, WebRTC gateway, IAX2), onboarding, provisioning from a link, QR code, file or URL with variables, and export. Re-provisioning updates matching accounts in place instead of adding duplicates.
 * Registration safeguards: backoff, no endless retries after 401/403/404, failover to a backup registrar.
 * Calls: keypad with T9 suggestions, speed dial (slots 1-9), call waiting, call progress tones, per-account and per-contact ringtones, DND, forwarding, auto-answer and intercom, blocklist and anonymous-call rejection, call park and pickup (including BLF pickup with Replaces), dial plan rules and E.164 rewriting, redial and call back.
 * Hold music (built in or your own), opening announcements, notices before recording and before transfers, an audio library with import and in-app recording.
@@ -105,65 +46,47 @@ First public release. Windows, macOS, Android and iOS builds, plus a browser ext
 * Messages, Presence and BLF board, voicemail indicator.
 * LAN Link: discovery, 6-digit-code pairing with an encrypted channel, chat, file drop, direct calls and intercom, and call hand-off and pull.
 * Diagnostics: call quality charts, SIP trace with ladder diagram and `.pcap` export, network wizard, audio tests, logs.
+* Localisation: the whole interface in 13 languages - English, Spanish, French, German, Brazilian Portuguese, Italian, Dutch, Russian, Turkish, Hindi, Arabic, Simplified Chinese and Japanese - with full right-to-left layout for Arabic and a language picker (default: follow the system, English when the system language is not supported).
+* Optional encryption of the local database (call history, contacts, messages, settings) with AES-256-GCM; key in the OS keystore, with safe migration both ways and a recovery screen if the key is missing.
 * App lock with a PIN and biometrics.
 * Interrupted-call journal: a call cut short by a crash shows up as "Interrupted" in the history.
 * Adaptive layout for phones, tablets and desktops, light and dark themes, accent colours.
-* Desktop (Windows and macOS): tray or menu-bar icon, notifications with Answer and Decline, global hotkeys, start at login, single instance, `sip:`/`tel:`/`callto:` handling with a "make default" setting, `--dial`, `--provision` and `--minimized`.
+* Desktop update checker: weekly check of the latest GitHub release, banner with release notes / download / skip, opt-out and Check now in Settings > About.
+* Third-party notices on the About page and in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Platforms**
+* Windows and macOS: tray or menu-bar icon, notifications with Answer and Decline, global hotkeys, start at login, single instance, `sip:`/`tel:`/`callto:` handling with a "make default" setting, `--dial`, `--provision` and `--minimized`, and the headset / media play-pause button answers and hangs up (or mutes) while a call rings or is active.
+* Linux desktop app (GTK runner and engine plugin) for 64-bit systems: Ubuntu 22.04+, Debian 12+ and Raspberry Pi OS (64-bit) Bookworm, as `.deb` and portable `.tar.gz` for amd64 and arm64. Tray icon where the desktop has a StatusNotifierItem host, notifications with Answer/Decline, `sip:`/`sips:`/`tel:`/`callto:`/`softphonepro:` links with a default-handler setting (`xdg-mime`), single instance, start at login, MPRIS media keys, global shortcuts on X11, passwords in the Secret Service keyring with an encrypted-file fallback, audio through ALSA.
 * Local automation API on `127.0.0.1` (desktop, off by default): [docs/AUTOMATION_API.md](docs/AUTOMATION_API.md).
 * Android: foreground service, full-screen incoming calls, Telecom ConnectionService, audio routing, boot start.
 * iOS: CallKit and audio session handling.
-* Third-party notices on the About page and in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **Browser extension (Chrome, Edge, Brave, Firefox)**
 * Turns phone numbers on web pages into click-to-dial links, with a context-menu entry, a quick-dial popup and options. No dependencies, no network access.
 
 **Project**
-* CI for engine tests against an Asterisk test PBX, Dart and Flutter tests, and builds for Windows, macOS, iOS and Android; release workflow that publishes the installers.
-* Documentation: user guide, architecture, engine and automation API references, build guide, QA reports for Android and macOS, and two independent review reports.
-
-### Fixed
-
-Found by the independent reviews and the device runs before release:
-* Engine review (34 findings): crashes and races on shutdown and during DTMF floods, DNS timeouts, header injection through `call.sendRequest`, number-range checks, a wrong call-security flag for TLS calls, and silently ignored TLS transport failures. Each has a regression test.
-* Android: deep links in cold and warm starts, duplicate codecs in the codec list, the transfer sheet hidden by the keyboard, `tel:` and `sip:` links not opening the keypad.
-* macOS: URL handling when the app is already running, the first `--dial` call before the account registers.
-* Registration retried endlessly after a wrong password; an engine restart could race with account synchronisation.
-* Per-contact and per-account ringtones, the recording beep, the blocklist (it matched number fragments) and emergency dialling without accounts.
-* TLS verification was on by default but no CA list shipped, so the engine could not start on Windows and iOS; the app now ships the Mozilla CA bundle and no longer falls back silently to the simulator when the engine fails to start.
-* Re-provisioning no longer adds duplicate accounts: an imported account that matches an existing one (same protocol, username, domain and registrar, host compared case-insensitively) updates it in place and keeps its id, call history links and, unless the import carries one, its password. The import confirmation says "Update N existing, add M new". Applies to `--provision` and to web link, QR, file and URL imports.
-* In-call page in landscape with a large font scale (for example 1.6) showed only the name, timer and End button: it now uses two columns that scroll, so Mute, Hold, Keypad and the other actions stay reachable. The navigation rail, dial pad and call panel of the wide layout no longer overflow at large font scales.
-* Right-to-left languages (Arabic) showed SIP addresses and numbers reordered ("127.0.0.1@1016" instead of "1016@127.0.0.1"). Technical strings (SIP URIs, numbers, IP addresses, host:port, codec names) are now isolated left-to-right in account chips and selectors, call screens, recents, contacts, speed dial, diagnostics and the LAN page.
-* Recording format setting accepts the aliases `stereo` / `wav-stereo` (WAV stereo) and `ogg` (Opus).
-* LAN: the first file offer right after pairing could stay on "Waiting for you" with no accept dialog, and a second offer was then declined as a duplicate. The pairing dialog's automatic close removed the offer dialog instead of itself. Offers now queue until the UI is ready, show one dialog at a time, and a repeated offer of a still-pending transfer re-shows its dialog instead of being declined.
-
-### Changed
-* The recording-notice setting points to Settings > Calls > Announcements, with a button to open it.
-* The welcome text no longer compares the app with premium apps.
-* Native licences are registered once at startup instead of when the About page is built.
+* CI for engine tests against an Asterisk test PBX, Dart and Flutter tests, and builds for Windows, macOS, Linux (amd64 and arm64), iOS and Android; release workflow that publishes the installers.
+* Documentation: user guide, architecture, engine and automation API references, build guide, QA reports for Linux, Android and macOS, and independent review reports.
 
 ### Security
-* Fixed before release, after the final review:
-  * a remote engine hang on malformed `History-Info` indexes;
-  * Android intents that other installed apps could use to place, provision or answer calls;
-  * an engine hang on crafted WAV files on Windows;
-  * the automation token appearing in settings exports;
-  * provisioning imports changing dangerous settings: links, QR codes, pasted text, files and Settings URL fetches now share one allowlist-based import with a single confirmation dialog; TLS pins, custom CA, DNS servers, the automation API, the app lock and all file paths cannot be imported, and auto-answer and automatic recording stay off unless ticked (only the local `--provision` command line is trusted);
-  * macOS URL events being parsed as command-line flags, `a=ice-pwd` and JSON secrets in exported traces, and LAN pairing prompts built from unescaped peer names;
-  * secrets in the diagnostic bundle's engine log.
-
-  Each fix has a regression test. See [docs/reviews/2026-10-19-final-review.md](docs/reviews/2026-10-19-final-review.md).
+Fixed before release, after the final review. Each fix has a regression test; see [docs/reviews/2026-10-19-final-review.md](docs/reviews/2026-10-19-final-review.md).
+* A remote engine hang on malformed `History-Info` indexes, and an engine hang on crafted WAV files on Windows.
+* Header injection through `call.sendRequest`.
+* Android intents that other installed apps could use to place, provision or answer calls.
+* The automation token appearing in settings exports, and secrets in the diagnostic bundle's engine log and in exported traces (`a=ice-pwd`, JSON secrets).
+* Provisioning imports changing dangerous settings: links, QR codes, pasted text, files and Settings URL fetches share one allowlist-based import with a single confirmation dialog; TLS pins, custom CA, DNS servers, the automation API, the app lock and all file paths cannot be imported, and auto-answer and automatic recording stay off unless ticked (only the local `--provision` command line is trusted).
+* macOS URL events being parsed as command-line flags, and LAN pairing prompts built from unescaped peer names.
 
 ### Known limitations
 
+* On desktop the microphone is open while the mixer's meters are on screen, so the system shows the microphone-in-use indicator then.
 * iOS cannot receive calls in the background (no PushKit/push server).
 * Video calls and ZRTP are not implemented.
 * Translations are machine-assisted. Recording audio files are not encrypted (the database can be).
-* Windows and iOS builds have not been run on a device or simulator. macOS and Android were tested as described in [docs/QA_MACOS.md](docs/QA_MACOS.md) and [docs/QA_ANDROID.md](docs/QA_ANDROID.md).
+* Linux: 64-bit only; no QR camera scanning, biometric unlock, mDNS discovery or system contacts; global shortcuts on X11 only.
 * Builds are not code-signed or notarised.
 * Hold music through Asterisk is the PBX's own; Ogg Opus recordings play in the app on Android and Linux only.
+* Device testing is uneven; see "How it was tested" in [docs/RELEASE_NOTES_v1.1.2.md](docs/RELEASE_NOTES_v1.1.2.md).
 
 [Unreleased]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.2...HEAD
-[1.1.2]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/cyberkyd01/SoftphonePro/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/cyberkyd01/SoftphonePro/releases/tag/v1.0.0
+[1.1.2]: https://github.com/cyberkyd01/SoftphonePro/releases/tag/v1.1.2

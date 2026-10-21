@@ -145,7 +145,7 @@ The full list of about 115 features, each with its status and the test that back
 
 **More guides:**
 * [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
-* [Release notes for v1.1.2](docs/RELEASE_NOTES_v1.1.2.md), [v1.1.1](docs/RELEASE_NOTES_v1.1.1.md), [v1.1.0](docs/RELEASE_NOTES_v1.1.0.md), [v1.0.0](docs/RELEASE_NOTES_v1.0.0.md) and the [changelog](CHANGELOG.md).
+* [Release notes for v1.1.2](docs/RELEASE_NOTES_v1.1.2.md) and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built
@@ -177,7 +177,7 @@ Every push goes through CI on GitHub Actions:
 
 The engine suite has also been run locally under ASan/UBSan (see [docs/reviews](docs/reviews)); that run is not part of CI.
 
-Device testing is narrower than the automated tests. For 1.1.0 the Linux app (arm64 Debian 12 and Ubuntu 24.04 containers with fake tray, notification and Secret Service hosts, plus a real gnome-keyring) and the Android app (emulator) were exercised end to end ([docs/QA_LINUX.md](docs/QA_LINUX.md), [docs/QA_ANDROID.md](docs/QA_ANDROID.md)); the Linux packages are also installed and smoke-tested in CI on both architectures. The macOS app was driven end to end for 1.0.0 ([docs/QA_MACOS.md](docs/QA_MACOS.md)). **Not tested:** Raspberry Pi hardware, Wayland, real GNOME/KDE tray hosts, real audio hardware, and Windows and iOS on a device (CI builds and launch smoke only; macOS 1.1.0 calls likewise). Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
+Device testing is narrower than the automated tests. On earlier builds of this release the Linux app (arm64 Debian 12 and Ubuntu 24.04 containers with fake tray, notification and Secret Service hosts, plus a real gnome-keyring), the Android app (emulator) and the macOS app were exercised end to end ([docs/QA_LINUX.md](docs/QA_LINUX.md), [docs/QA_ANDROID.md](docs/QA_ANDROID.md), [docs/QA_MACOS.md](docs/QA_MACOS.md)); the Linux packages are also installed and smoke-tested in CI on both architectures. The engine's audio (live meter, echo test, device switching and recovery, test chime) was tested on Windows 11 hardware with a known tone through a virtual audio cable. **Not tested:** Raspberry Pi hardware, Wayland, real GNOME/KDE tray hosts, the Windows app's screens and iOS on a device (CI builds and launch smoke only; macOS calls on this build likewise). Independent reviews of the engine and of the features are in [docs/reviews](docs/reviews).
 
 ## Known limitations
 
