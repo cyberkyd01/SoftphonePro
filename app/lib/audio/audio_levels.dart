@@ -172,6 +172,10 @@ const kMeterIdleEvery = Duration(seconds: 1);
 /// (software rendering: a VM, a remote desktop, no GPU driver): ~5 Hz.
 const kMeterLowPowerEvery = Duration(milliseconds: 200);
 
+/// The same, when only the idle live monitor runs (no call, test or
+/// recording): ~2 Hz, so an idle window doesn't cost a share of a core.
+const kMeterLowPowerIdleEvery = Duration(milliseconds: 500);
+
 /// Linux: whether Mesa draws in software (llvmpipe / softpipe worker threads
 /// in this process; their GPU work never shows in Flutter's raster times).
 bool linuxSoftwareGl({String tasks = '/proc/self/task'}) {
@@ -255,13 +259,8 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
   final engineCtl = ref.read(engineProvider.notifier);
   final monitorState = ref.read(audioMonitorStateProvider.notifier);
   var monitorOn = false;
-  bool flowing() =>
-      inCall ||
-      (bedActive && monitor && !ios) ||
-      echo ||
-      recording ||
-      monitorOn ||
-      boost > 0;
+  bool active() => inCall || (bedActive && monitor && !ios) || echo || recording || boost > 0;
+  bool flowing() => active() || monitorOn;
   // Animated meters cost a full-window redraw per update: slow down when
   // frames are expensive (software rendering).
   final raster = RasterCostMonitor();
@@ -334,9 +333,11 @@ final audioLevelsProvider = Provider.autoDispose<AudioMeters>((ref) {
     }
     final want = !flowing()
         ? kMeterIdleEvery
-        : raster.slow || softwareGl
+        : !(raster.slow || softwareGl)
+        ? kMeterPollEvery
+        : active()
         ? kMeterLowPowerEvery
-        : kMeterPollEvery;
+        : kMeterLowPowerIdleEvery;
     if (timer != null && want == period) return;
     timer?.cancel();
     period = want;

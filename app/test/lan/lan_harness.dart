@@ -46,7 +46,7 @@ class FakeFileOps extends LanFileOps {
   FakeFileOps([this.picks = const []]);
   List<String> picks;
   @override
-  Future<List<String>> pick() async => picks;
+  Future<List<String>> pick({String? title}) async => picks;
 }
 
 /// One simulated device: its own database, secrets, engine and link.

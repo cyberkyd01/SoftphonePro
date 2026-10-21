@@ -178,7 +178,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
         final d = await Clipboard.getData(Clipboard.kTextPlain);
         await _import(d?.text ?? '');
       case 'import':
-        final r = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
+        final r = await FilePicker.platform.pickFiles(dialogTitle: context.l10n.contactsMenuFile, type: FileType.any, withData: true);
         final f = r?.files.single;
         if (f?.bytes != null) await _import(String.fromCharCodes(f!.bytes!), name: f.name);
     }

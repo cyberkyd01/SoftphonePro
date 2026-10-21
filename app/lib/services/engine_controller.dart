@@ -16,7 +16,7 @@ import 'providers.dart';
 import 'settings_controller.dart';
 
 /// Must match `version:` in pubspec.yaml (without the build number); a test checks it.
-const String kAppVersion = '1.1.2';
+const String kAppVersion = '1.1.3';
 const String kUserAgent = 'SoftphonePro/$kAppVersion';
 
 /// Rolling log of engine events and app-side engine errors (diagnostics).
@@ -306,10 +306,22 @@ class EngineController extends Notifier<EngineState> {
     }
   }
 
-  Future<void> restart() async {
-    if (_starting) return;
+  /// Restarts the engine. Concurrent callers (a settings change and the LAN
+  /// controller asking for its listener) share one restart: a second one
+  /// would start a core while the first is still stopping the old one, fail
+  /// with "already started", and its cleanup would stop the running core.
+  Future<void> restart() {
+    if (_starting) return Future.value();
+    return _restarting ??= _restart().whenComplete(() => _restarting = null);
+  }
+
+  Future<void>? _restarting;
+
+  Future<void> _restart() async {
     final e = _engine;
     _engine = null;
+    // Report the restart at once, so nobody acts on the engine being stopped.
+    state = state.copyWith(phase: EnginePhase.starting);
     await _sub?.cancel();
     _sub = null;
     if (e != null) await _safeDispose(e);

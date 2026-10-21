@@ -118,7 +118,7 @@ class _ProvisioningSectionState extends ConsumerState<ProvisioningSection> {
               icon: Icons.folder_open_rounded,
               title: l.provisioningFromFile,
               onTap: () async {
-                final r = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
+                final r = await FilePicker.platform.pickFiles(dialogTitle: l.provisioningFromFile, type: FileType.any, withData: true);
                 final bytes = r?.files.single.bytes;
                 if (bytes == null || !context.mounted) return;
                 try {

@@ -5,10 +5,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
+
 /// Picks a WAV / MP3 from disk (null = cancelled). Overridden in tests.
 final audioFilePickerProvider = Provider<Future<String?> Function()>(
   (ref) => () async {
     final r = await FilePicker.platform.pickFiles(
+      dialogTitle: ref.read(l10nProvider).audioImport,
       type: FileType.custom,
       allowedExtensions: const ['wav', 'mp3'],
     );

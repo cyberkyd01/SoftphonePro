@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Final retest R1: CPU in a call with meters animating, desktop keypad 1280x800 and phone width 400x820 (10 s warm-up, 20 s sample),
-plus two screenshots 1 s apart per state. Output out/perf_final2.json and docs/qa-screenshots/v110_linux_final2_*.png"""
+plus two screenshots 1 s apart per state. Output out/perf_112_call.json and docs/qa-screenshots/v112_linux_*.png"""
 import sys, json, shutil
 import os as _os; REPO = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..', '..'))
 sys.path.insert(0, REPO + '/tests/linux_e2e/audio')
 from lib_qa import *
-A, B = 'qa-audio-a', 'qa-audio-b'
-OUT = REPO + '/docs/qa-screenshots/'
+A, B = _os.environ.get('QA_A','qa-audio-a'), _os.environ.get('QA_B','qa-audio-b')
+OUT = REPO + '/dist/qa112/'
 def cpu(n, secs=20):
     code = ("import os,time\n"
             "pid=int(os.popen('pgrep -x softphonepro').read().split()[0])\n"
@@ -16,7 +16,7 @@ def cpu(n, secs=20):
     return float(dx(n, "python3 - <<'PYEOF'\n" + code + "PYEOF"))
 W = '$(xdotool search --onlyvisible --name "^SoftphonePro$" | head -1)'
 def size(w, h): dx(A, f'W={W}; xdotool windowsize $W {w} {h}; xdotool windowmove $W 0 0'); time.sleep(2)
-def grab(name): shutil.copy(shot(A, 'tmp.png'), OUT + f'v110_linux_final2_{name}.png')
+def grab(name): shutil.copy(shot(A, 'tmp.png'), OUT + f'v112_linux_{name}.png')
 res = {}
 api(A, 'POST', '/v1/audio', {"musicbedEnabled": True, "musicbedVolume": 0.5, "musicbedMonitor": False, "musicbedPaused": False})
 dx(A, 'sox -n -r 48000 -c 1 -b 16 /tmp/trem1k.wav synth 150 sine 1000 tremolo 2 90 vol 0.5; true'); dx(B, 'sox -n -r 48000 -c 1 -b 16 /tmp/trem880.wav synth 150 sine 880 tremolo 1.5 90 vol 0.5; true')
@@ -33,4 +33,4 @@ size(400, 820); api(A, 'POST', '/v1/ui/show', {"route": "/keypad"})
 phase('phone_400x820')
 size(1280, 800)
 api(A, 'POST', f'/v1/calls/{ca}/hangup'); dx(A, 'pkill paplay'); dx(B, 'pkill paplay')
-json.dump(res, open(HOSTDIR + '/out/perf_final2.json', 'w'), indent=1)
+json.dump(res, open(HOSTDIR + '/out/perf_112_call.json', 'w'), indent=1)

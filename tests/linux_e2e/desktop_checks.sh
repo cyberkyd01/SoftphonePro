@@ -9,7 +9,7 @@
 # driven by hand with lib/*.py helpers; see RESULTS_desktop.md for the exact steps.
 C=${1:-qa-desk-a}; IP=${2:-172.30.0.31}; HERE="$(cd "$(dirname "$0")" && pwd)"
 docker rm -f "$C" >/dev/null 2>&1
-docker run -d --name "$C" --platform linux/arm64 --network spc-qa --ip "$IP" -v "$HERE:/e2e" spc-qa-desk:arm64 sleep infinity >/dev/null
+docker run -d --name "$C" --platform linux/arm64 --network spc-qa --ip "$IP" -v "$HERE:/e2e" ${IMG:-spc-qa-desk:arm64} sleep infinity >/dev/null
 docker exec "$C" rm -f /.dockerenv      # tray_manager treats /.dockerenv as a sandbox and passes a relative icon path
 D() { docker exec -u qa "$C" bash -c ". /e2e/lib/h.sh; $*"; }
 res() { printf '%-4s %s\n' "$1" "$2"; }

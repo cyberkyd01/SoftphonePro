@@ -77,9 +77,9 @@ String formatBytes(int n) {
 class LanFileOps {
   const LanFileOps();
 
-  Future<List<String>> pick() async {
+  Future<List<String>> pick({String? title}) async {
     try {
-      final r = await FilePicker.platform.pickFiles(allowMultiple: true);
+      final r = await FilePicker.platform.pickFiles(dialogTitle: title, allowMultiple: true);
       return [for (final f in r?.files ?? const <PlatformFile>[]) if (f.path != null) f.path!];
     } catch (_) {
       return const [];
@@ -110,7 +110,7 @@ class LanFileOps {
 final lanFileOpsProvider = Provider<LanFileOps>((ref) => const LanFileOps());
 
 Future<void> pickAndSendLanFile(BuildContext context, WidgetRef ref, String peerId) async {
-  final paths = await ref.read(lanFileOpsProvider).pick();
+  final paths = await ref.read(lanFileOpsProvider).pick(title: ref.read(l10nProvider).lanSendToDevice);
   final lan = ref.read(lanControllerProvider.notifier);
   for (final path in paths) {
     lan.sendFile(peerId, path);

@@ -7,7 +7,7 @@ import sys, json, glob
 import os as _os; REPO = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..', '..', '..'))
 sys.path.insert(0, REPO + '/tests/linux_e2e/audio')
 from lib_qa import *
-A, B = 'qa-audio-a', 'qa-audio-b'
+A, B = _os.environ.get('QA_A','qa-audio-a'), _os.environ.get('QA_B','qa-audio-b')
 R = []
 def rec(i, check, ok, ev): R.append(dict(id=i, check=check, result='PASS' if ok else 'FAIL', evidence=ev)); print(R[-1], flush=True)
 def cid_of(n): return api(n, 'GET', '/v1/calls')['calls'][0]['cid']

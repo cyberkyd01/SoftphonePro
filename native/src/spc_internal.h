@@ -14,7 +14,7 @@
 #include "spcore.h"
 #include "spc_port.h"
 
-#define SPC_VERSION "1.1.2"
+#define SPC_VERSION "1.1.3"
 #define SPC_EVENT_RING_MAX 2000
 #define SPC_MAX_CODECS 24
 #define SPC_MAX_PEERS 32

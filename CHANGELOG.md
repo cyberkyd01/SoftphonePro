@@ -4,6 +4,15 @@ All notable changes to SoftphonePro are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-21
+
+A bug-fix release. See [docs/RELEASE_NOTES_v1.1.3.md](docs/RELEASE_NOTES_v1.1.3.md). Installs over 1.1.2 and keeps your accounts and settings.
+
+### Fixed
+* Turning on LAN Link while the app was running stopped the calling engine ("Couldn't start the calling engine" until Retry; accounts unregistered). Two engine restarts ran at once, the settings change and LAN Link asking for its SIP listener; they now share one restart.
+* On computers that draw the screen without a GPU (virtual machines, remote desktops, Linux with Mesa's software renderer), the live level meters on the idle keypad update twice a second instead of five times, cutting their CPU use.
+* Linux: file choosers had no title ("Unnamed Window").
+
 ## [1.1.2] - 2026-10-21
 
 First public release. Windows, macOS, Linux, Android and iOS builds, plus a browser extension. See [docs/RELEASE_NOTES_v1.1.2.md](docs/RELEASE_NOTES_v1.1.2.md) for downloads, install notes and known limitations, and [docs/FEATURES.md](docs/FEATURES.md) for the status of every feature and the test behind it.

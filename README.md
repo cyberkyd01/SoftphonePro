@@ -145,7 +145,7 @@ The full list of about 115 features, each with its status and the test that back
 
 **More guides:**
 * [User guide](docs/USER_GUIDE.md): provisioning format, LAN Link, transfers, recording, audio and troubleshooting.
-* [Release notes for v1.1.2](docs/RELEASE_NOTES_v1.1.2.md) and the [changelog](CHANGELOG.md).
+* Release notes for [v1.1.3](docs/RELEASE_NOTES_v1.1.3.md) and [v1.1.2](docs/RELEASE_NOTES_v1.1.2.md), and the [changelog](CHANGELOG.md).
 * [Automation API](docs/AUTOMATION_API.md): control SoftphonePro from your CRM or scripts.
 
 ## How it's built

@@ -81,3 +81,52 @@ Image `spc-qa-desk:final` (`.deb` from merged main, Depends now include `xdg-use
 | R4c | Show/Hide menu | PASS | Menu: Hide SoftphonePro / Status / Accounts / Quit. Click Hide -> no visible window, label "Show SoftphonePro"; click Show -> visible, `Normal`, label "Hide SoftphonePro". |
 
 Not re-checked in this pass: everything else from the first pass (keyring, MPRIS, notifications Answer/Decline, hotkeys, autostart), Wayland.
+
+## v1.1.2 release check
+
+Date 2026-10-21. Released packages (`gh release download v1.1.2`, `dist/release_v112/`), no app code changed. Colima VM `spc-linux`, PBX `spc-qa-pbx`, screenshots and raw install logs in `dist/qa112/` (gitignored; `dist/qa112/install/*.txt`). New: `install/install_check.sh`, `install/tarball_check.sh`, `lib/setting_toggle.sh` (apply one setting to the running app through a second `--provision` and print engine state transitions), `lib/cpu.py`, `lib/tone_wav.py`; `desktop_checks.sh` takes `IMG=` for the image. Images `spc-qa-desk:v112` (ubuntu:24.04) and `spc-qa-desk:debian12-v112` built with `image/Dockerfile` from the released arm64 `.deb`; containers `qa112-d1` .73 (acct 1014, Ubuntu) and `qa112-d2` .74 (acct 1015, Debian 12), session as before (Xvfb + openbox + private dbus + gnome-keyring + fake SNI watcher and fake notification server).
+
+### Install matrix (fresh containers, `apt-get install ./SoftphonePro-1.1.2-linux-<arch>.deb`, then `ldd` on the binary and every `.so` under `/opt/softphonepro`, then launch as user `qa` under Xvfb + openbox with `--provision`)
+
+| arch | OS | install | ldd "not found" | `/v1/status` |
+|---|---|---|---|---|
+| arm64 | debian:12 | PASS | none | app 1.1.2, engine 1.1.2 running (1 s) |
+| arm64 | debian:13 | PASS | none | same |
+| arm64 | ubuntu:22.04 | PASS | none | same |
+| arm64 | ubuntu:24.04 | PASS | none | same |
+| amd64 (Rosetta) | debian:12 | PASS | none | same (engine "starting" for the first 1-2 s under Rosetta, then running) |
+| amd64 (Rosetta) | ubuntu:24.04 | PASS | none | same |
+| arm64 tarball | ubuntu:24.04, user `qa` (uid 1001) | PASS | none (deps pulled in by installing and removing the `.deb`) | app 1.1.2 running after 2 s; `install-desktop-entry.sh` rc 0, `.desktop` valid (`desktop-file-validate`), `Exec="<dir>/softphonepro" %u`, `xdg-mime` sip/tel -> `com.softphonepro.softphonepro.desktop`, icons copied, `uninstall-desktop-entry.sh` removes it |
+
+(stderr of the launched app shows only ALSA/JACK probe noise "jack server is not running", harmless.)
+
+### Desktop integration regression (arm64)
+
+| ID | Check | Result | Evidence |
+|---|---|---|---|
+| H0 | `desktop_checks.sh` (K1, K1b, K2, K5, T1a, T1b, S1, S2, L1, L5) | PASS 10/10 | file backend marker + restart registers; keyring marker; hanging Secret Service usable after 3.3 s; no tray: close quits, `--minimized` Iconic; autostart file written, valid, removed; sip handler; bare second launch exits fast. Output `dist/qa112/desktop_checks.txt` |
+| N2 | Notification Answer action | PASS | window hidden via tray; call 1015 -> 1014 rings; fake notifyd got `Notify summary="1015" body="Incoming call on qa1014" actions=[Answer,Answer,Decline,Decline]`; `ActionInvoked(1,"Answer")` -> call `active`, window raised |
+| M2 | MPRIS play-pause answers a ringing call | PASS | `playerctl -l` = softphonepro, `Playing`, `play-pause` -> `active`; second `play-pause` hangs up (default `mediaKeyActive`), name gone afterwards |
+| T2 | Tray Show/Hide | PASS | Hide: no visible window, menu label "Show SoftphonePro"; Show: visible, WM_STATE Normal, label "Hide SoftphonePro" |
+| L2 | `xdg-open sip:1015@172.30.0.10` / `tel:1015` into the running instance (`callLinksImmediately`) | PASS | xdg-open returns in 0.07 s, caller shows `ringing_out` to 1015, the other end `ringing_in` from 1014; one process only |
+| K3 | Locked keyring unlock prompt | PASS | keyring locked, marker `keyring`, launch: "Unlock Login Keyring" dialog (`dist/qa112/k3_locked_prompt.png`), API closed meanwhile; typing the password: API up within 1 s, `Locked=0`, account registered |
+
+### LAN Link (Ubuntu 24.04 d1 <-> Debian 12 d2, network `spc-qa`)
+
+| ID | Check | Result | Evidence |
+|---|---|---|---|
+| LAN0 | Turn on LAN Link from the UI while the engine runs | **FAIL (bug 1)** | both apps show the full-screen "Couldn't start the calling engine - core already started"; registration lost until Retry |
+| LAN1 | discovery after Retry | PASS | each lists the other (name, Available, IP), SIP chip present |
+| LAN2 | pairing, 6-digit code on both | PASS | both show `123 137`; "Codes match" on both -> Paired |
+| LAN3 | chat both ways | PASS | d2 -> d1 "Hello from Debian d2" (badge on Messages, "typing..."), d1 -> d2 "Reply from Ubuntu d1", delivered ticks |
+| LAN4 | 1 MB file d1 -> d2 | PASS | "Incoming file" dialog on d2, Accept; `sha256` identical `0e02bbd7...250032e`; file landed in `~/SoftphonePro/xfer.bin` (not `~/Downloads/SoftphonePro` as in 1.1.0: no `xdg-user-dirs` config in this image, so this is the fallback) |
+
+### Bugs (most severe first)
+
+1. **Enabling LAN Link while the engine is running kills the engine ("core already started")** (high, user-visible: all accounts unregister, calls stop, full-screen error until the user presses Retry). Not a 1.1.2 regression: reproduced identically with the 1.1.0 final build (`spc-qa-desk:final`), it was missed earlier because every earlier run had LAN enabled at launch or failed at the port.
+   Repro: any desktop session, app running and registered, LAN Link off. Click **Turn on LAN Link** on the LAN page (or the switch in Settings > LAN Link), or apply `{"settings":{"lanEnabled":true}}` with a second `softphonepro --provision`. About 3.1 s later `/v1/status` shows `"engine":{"state":"failed","error":"core already started"}` and the UI shows the blocking error page; Retry brings the engine and the whole LAN stack up. Switching `lanEnabled` to false, or changing `vad` / `ptime` (also restart keys), restarts fine. 3 of 3 UI/provision runs on Ubuntu, Debian 12, and 1.1.0.
+   Suspected cause: two concurrent `EngineController.restart()` calls. `engine_controller.dart` `_onSettings` restarts on `lanEnabled` (it is in `_restartKeys`), and `lan_controller.dart` `_ensureSipListener()` (called from `_sync()` -> `_start()` for the same setting change) sees phase `running` with `startResult.lan == null` and calls `restart()` as well. `restart()` only guards on `_starting`, not on a restart in progress: restart #1 has set `_engine = null` and is awaiting `_safeDispose` (3 s timeout), restart #2 finds `_engine == null`, skips the dispose and calls `start()` -> `core.start` while the native core is still started (`spc_core.c:916` `G.started` -> `SPC_E_ALREADY`). The `catch` in `start()` then runs `_safeDispose(h.engine)` which stops the native core that is actually in use and sets `failed`. The engine log of the failed run shows the new engine registering, then the destroy about 3 s later. Fix idea: serialise `restart()` (a single in-flight future), make `_ensureSipListener` skip when `lanEnabled` just changed (the restart already covers it) or when a restart is in flight, and do not `_safeDispose` a handle whose start failed with `already`.
+
+### Not covered in this pass
+
+Wayland, KWallet, real GNOME/KDE tray hosts and notification daemons (fake servers only), LAN pull-call, intercom and REFER hand-off, `mediaKeyActive=mute`, install over an older version, Raspberry Pi hardware.
