@@ -1,4 +1,6 @@
-# Linux QA (1.1.0)
+# Linux QA
+
+The sections from "Automated tests" on describe the first Linux pass (built as 1.1.0, before the first public release). The released 1.1.2 packages and the 1.1.3 fixes were checked afterwards; see [Release check of 1.1.2 and fix check of 1.1.3](#release-check-of-112-and-fix-check-of-113) at the end.
 
 Linux is new in 1.1.0, so none of this was inherited from 1.0.0. The release was checked in three layers: the automated suites, CI (build, install and runtime smoke on both architectures), and two end-to-end passes of the real `.deb` in containers, one for calls and audio and one for desktop integration. The full tables are in
 [`tests/linux_e2e/RESULTS_audio.md`](../tests/linux_e2e/RESULTS_audio.md) and
@@ -187,3 +189,27 @@ All taken in the containers above (Xvfb, openbox, software rendering). The black
 14. Recording from the Record button with no `~/Documents` folder (the old failure): the REC chip is on.
 
     ![Recording without Documents](qa-screenshots/v110_linux_final_r5_nodocs_recording.png)
+
+## Release check of 1.1.2 and fix check of 1.1.3
+
+The `.deb` and `.tar.gz` files published for 1.1.2 were downloaded from the Releases page and tested in the same container setup (arm64, Xvfb, PulseAudio with a virtual microphone, Asterisk 20).
+
+| Check | Result |
+|---|---|
+| Install and launch: arm64 on Debian 12, Debian 13, Ubuntu 22.04, Ubuntu 24.04; amd64 on Debian 12 and Ubuntu 24.04; the arm64 tarball as a normal user | PASS: no missing libraries, app and engine report 1.1.2 and run |
+| Musicbed at the far end (15 checks) | PASS: bed at -9.3 dBFS while muted, volume 1.0 to 0.2 drops it 14.8 dB, nothing on hold, silence when off or paused |
+| Live meters outside calls (new in 1.1.2) | PASS: the microphone meter moves on the idle keypad |
+| Echo test (new in 1.1.2) | PASS: the speaker gets the microphone (1 kHz at -14.2 dBFS), it stops on request, by itself after 60 s, and when a call starts; call audio afterwards is normal |
+| Test sound, chime, local playback (new in 1.1.2) | PASS |
+| Microphone while idle | Held open while the window is visible (the live meters), released within 4 s when it is minimised or hidden to the tray |
+| Tray, notification actions, MPRIS, `sip:`/`tel:` links, keyring unlock, start at login | PASS |
+| LAN Link between Ubuntu 24.04 and Debian 12 | PASS after Retry (pairing, chat, 1 MB file with matching SHA-256), see the bug below |
+
+**Bug found, fixed in 1.1.3:** turning on LAN Link while the app ran stopped the calling engine about 3 s later ("core already started"), every time, on both distributions (and already in 1.1.0). Two engine restarts ran at once. A 1.1.3 arm64 build was then checked: the LAN page button and a provisioning file each turned LAN Link on 3 times on Ubuntu 24.04 and 3 times on Debian 12, and LAN Link was switched off and on four times in a row with 0.3 s and 0.05 s gaps. Every time the engine restarted once and came back running in about 0.1 s, accounts re-registered, the LAN SIP listener came up, and pairing, chat and a call afterwards worked.
+
+**Meters without a GPU:** on the idle keypad (1280x800, llvmpipe) with the microphone meter moving, 1.1.2 used 23.6 % of a core; 1.1.3 uses 2.3 % (meters still live: microphone level 92). Minimised: 0.4 %, microphone released.
+
+**File choosers:** in 1.1.3 the LAN send-file chooser is titled "Send to device" (it was "Unnamed Window").
+
+Full tables: the "v1.1.2 release check" sections of [RESULTS_audio.md](../tests/linux_e2e/RESULTS_audio.md) and [RESULTS_desktop.md](../tests/linux_e2e/RESULTS_desktop.md).
+
